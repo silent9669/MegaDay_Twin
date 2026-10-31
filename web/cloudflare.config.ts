@@ -25,6 +25,7 @@ export default defineConfig({
         exportName: "AccountWorkspace",
       }),
       ADMIN_PASSWORD_HASH: bindings.secret(),
+      ADMIN_ACCOUNTS_PASSWORD_HASH: bindings.secret(),
       JUDGES_PASSWORD_HASH: bindings.secret(),
       SESSION_SECRET: bindings.secret(),
       // The Python bridge is optional in production. Declaring these as required
