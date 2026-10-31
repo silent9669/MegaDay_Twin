@@ -25,7 +25,8 @@ export function backendConnection(env: BackendEnv) {
 }
 
 export async function backendFetch(url: URL, init: RequestInit, service?: BackendService): Promise<Response> {
-  const options = { ...init, redirect: "manual" as const };
+  const options = { ...init, redirect: "manual" as const,
+    ...(init.body instanceof ReadableStream ? { duplex: "half" as const } : {}) };
   const response = service ? await service.fetch(new Request(url, options)) : await fetch(url, options);
   if (response.status >= 300 && response.status < 400) {
     throw new Error("Backend redirects are not allowed.");

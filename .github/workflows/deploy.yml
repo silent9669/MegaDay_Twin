@@ -19,7 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      deploy: ${{ steps.pending.outputs.result }}
+      deploy: ${{ fromJSON(steps.pending.outputs.result).deploy }}
+      backend: ${{ fromJSON(steps.pending.outputs.result).backend }}
     steps:
       - uses: actions/checkout@v4
       - name: Test deployment safeguards (no dependencies)
@@ -29,18 +30,21 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { needsDeployment } = require('./scripts/deployment.cjs');
-            return await needsDeployment(github, context);
+            const { deploymentChanges } = require('./scripts/deployment.cjs');
+            return await deploymentChanges(github, context);
 
   backend:
     needs: changes
-    if: needs.changes.outputs.deploy == 'true'
+    if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/deploy-backend.yml
     secrets: inherit
 
   deploy:
     needs: [changes, backend]
-    if: needs.changes.outputs.deploy == 'true'
+    if: >-
+      always() && !cancelled() && needs.changes.result == 'success' &&
+      needs.changes.outputs.deploy == 'true' &&
+      (needs.backend.result == 'success' || needs.backend.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment:

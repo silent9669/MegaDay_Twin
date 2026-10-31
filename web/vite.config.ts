@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
   return {
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     plugins: [react(), tailwindcss(), ...(mode === 'cloudflare' ? cloudflare() : [])],
-    define: mode === 'cloudflare' ? { 'import.meta.env.VITE_USE_FIXTURES': '"true"' } : {},
+    define: mode === 'cloudflare' ? { 'import.meta.env.VITE_USE_FIXTURES': '"false"' } : {},
     server: {
       port: 5173,
       proxy: {
