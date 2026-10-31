@@ -29,6 +29,7 @@ import type { StudioModelEnv } from "./model-json";
 import { fail } from "./auth";
 import { workspaceQuotaFailure } from "./workspace-errors";
 import repositoryPack from "./repository-sources.json";
+import { restockInventory, syncRestock, type RestockReceipt } from "./studio-restock";
 function isUntouchedDemo(source: Source) {
   if (!source.commit) return false;
   const demo = repositoryPack.files.find(file => file.name === source.name);
@@ -42,6 +43,7 @@ function isUntouchedDemo(source: Source) {
 declare const WebSocketPair: { new (): { 0: WorkerSocket; 1: WorkerSocket } };
 export class AccountWorkspace {
   private ctx: DurableObjectState;
+  private restockInFlight = false;
   constructor(ctx: DurableObjectState, private env: StudioModelEnv & PlannerEnv = {}) {
     this.ctx = ctx;
     const existing = new Set(ctx.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'").toArray().map(table => table.name));
@@ -155,6 +157,43 @@ export class AccountWorkspace {
     } catch (error) {
       return workspaceQuotaFailure(error) ?? fail(422, "Could not delete data. Your saved workspace is retained.");
     }
+  }
+  private async restock(request: Request): Promise<Response> {
+    if (request.method !== "POST") return fail(405, "Method not allowed.");
+    if (this.restockInFlight) return fail(429, "A restock is saving. Retry shortly.");
+    this.restockInFlight = true;
+    try {
+      const raw = await request.text();
+      if (raw.length > 1000) return fail(413, "Restock request too large.");
+      const body = JSON.parse(raw);
+      if (!Number.isSafeInteger(body.revision) || body.revision < 0 || typeof body.operationId !== "string" || !/^[a-f0-9-]{36}$/.test(body.operationId))
+        return fail(422, "A valid source revision and operation ID are required.");
+      const current = this.read("sources");
+      if (!current) return fail(422, "Import inventory before restocking.");
+      let receipt = this.read("last-restock")?.data as RestockReceipt | undefined;
+      if (!receipt || receipt.operationId !== body.operationId) {
+        if (current.revision !== body.revision) return fail(409, "Sources changed. Reload before restocking.", "REVISION_CONFLICT");
+        const result = await restockInventory(current.data, playbackHour(this.read("sandbox")?.data), body.operationId);
+        receipt = { operationId: body.operationId, revision: current.revision + 1, change: result.change, csv: result.csv, backend: "pending" };
+        const saved = this.ctx.storage.transactionSync(() => {
+          const updated = this.writeDocument("sources", result.pack, current.revision);
+          if (updated) this.writeDocument("last-restock", receipt, this.read("last-restock")?.revision ?? 0);
+          return updated;
+        });
+        if (!saved) return fail(409, "Sources changed. Reload before restocking.", "REVISION_CONFLICT");
+        this.notify("sources", saved.revision);
+      }
+      if (receipt.backend !== "synced") {
+        if (this.read("sources")?.revision !== receipt.revision) return fail(409, "Inventory changed since this restock. Review it before syncing.", "REVISION_CONFLICT");
+        try { receipt.backend = await syncRestock(receipt.csv, this.env); }
+        catch { receipt.backend = "pending"; }
+        const latest = this.read("last-restock");
+        if (latest?.data.operationId === receipt.operationId) this.write("last-restock", receipt, latest.revision);
+      }
+      return Response.json({ operationId: receipt.operationId, revision: receipt.revision, change: receipt.change, backend: receipt.backend });
+    } catch (error) {
+      return workspaceQuotaFailure(error) ?? fail(422, error instanceof Error ? error.message : "Restock failed.");
+    } finally { this.restockInFlight = false; }
   }
   private write(name: string, data: unknown, expected: number) {
     return this.ctx.storage.transactionSync(() => this.writeDocument(name, data, expected));
@@ -320,6 +359,7 @@ export class AccountWorkspace {
     // Parse archives and inventory here, not in the gateway's 10 ms CPU budget.
     if (url.pathname === "/internal/milo/chat") return savedChat(request,this.env,{decisionToolsConnected:!!backendConnection(this.env)},this);
     if (url.pathname === "/internal/studio/import") return studioImport(request, this.env);
+    if (url.pathname === "/internal/studio/restock") return this.restock(request);
     if (url.pathname === "/internal/product-labels") return productLabels(request, this, getProductLabelProvider(this.env));
     const labelOperation = /^\/internal\/product-labels\/(snapshot|claim|finish|manual)$/.exec(url.pathname)?.[1];
     if (labelOperation) return this.productLabels(request, labelOperation);

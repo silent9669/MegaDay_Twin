@@ -20,6 +20,15 @@ it("replaces unrelated assumptions with SKU facts and allows undo", () => {
   expect(screen.getByLabelText(/^Selling price/)).toHaveValue(600000);
   expect(screen.getByRole("button", { name: "Save assumptions" })).toBeEnabled();
 });
+it("reloads changed stock and recalculates while retaining price and demand assumptions", () => {
+  render(<WorksheetHarness />);
+  fireEvent.click(screen.getByRole("button", { name: "Reload stock & recalculate" }));
+  expect(screen.getByLabelText(/^Available units/)).toHaveValue(12);
+  expect(screen.getByLabelText(/^Selling price/)).toHaveValue(600000);
+  expect(screen.getByLabelText(/^Demand with ads/)).toHaveValue(83);
+  const units = screen.getByRole("row", { name: "Units sold 12 12" });
+  expect(units).toBeInTheDocument();
+});
 it("explains actual inputs, source disagreements, results and break-even without claiming a forecast", () => {
   render(<WorksheetHarness />);
   fireEvent.click(screen.getByText("How this is calculated"));

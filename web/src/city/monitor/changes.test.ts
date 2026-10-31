@@ -22,6 +22,19 @@ function data(stock: string, revision = 1, hour = 1) {
   } as Doc<Sandbox>);
 }
 describe("workspace monitor", () => {
+  it("notifies a saved restock even when stock was already positive, without repeating on replay ticks", () => {
+    const monitor = new WorkspaceMonitor();
+    const old = data("2"); old.stock[0]!.code = "GD0003";
+    monitor.observe(old);
+    const next = data("12", 2);
+    next.stock[0]!.code = "GD0003";
+    next.sources[0]!.restock = true;
+    const notice = monitor.observe(next).find(n => n.kind === "stock-restocked")!;
+    expect(notice).toMatchObject({ before: 2, after: 12, important: true });
+    expect(notice.detail).toContain("Reload inventory and analyze again");
+    expect(changeReferenceSchema.parse(notice.reference).kind).toBe("stock-restocked");
+    expect(monitor.observe({ ...next, hour: 2 })).toEqual([expect.objectContaining({ kind: "clock" })]);
+  });
   it("tracks imported general tables separately and links the exact source", () => {
     const m = new WorkspaceMonitor();
     const first = data("10");

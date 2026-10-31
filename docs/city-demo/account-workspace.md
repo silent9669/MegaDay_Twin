@@ -43,6 +43,20 @@ resurrect the deleted shop. Table deletion is available only for unmixed tables.
 Scoped baseline imports use `PUT /api/workspace/sources` with `scope: "shop"`.
 All saves/deletions retain revision checks and account authentication.
 
+**Restock GD0003 +10** increments the mini air fryer's current stock by ten units.
+During a replay it retains historical rows and adds the receipt to current/future
+inventory observations, leaving the saved shop baseline unchanged. Outside replay
+the latest shop observation and its database snapshot are updated. Unknown stock
+is rejected. The authenticated `POST /api/studio/restock` takes `{revision,
+operationId}`; retries of the same operation do not add stock again.
+
+The changed observation is sent to the existing Python inventory ingestion route.
+A failed sync is shown separately from the successful workspace save, with a retry
+that reuses the receipt. Milo announces the stock change and offers Reload inventory
+and Analyze again. Campaign refresh uses the newly ingested inputs; the workspace
+worksheet's Reload stock & recalculate updates stock while retaining other inputs.
+Restocking does not itself invent demand forecasts or guarantee a different recommendation.
+
 CSV headers/JSON shape determine the source type. Uploads replace one matching
 business table; general tables are keyed by filename. ZIP analysis retains general
 CSV/JSON tables and uses one configured model call to map unambiguous headers
