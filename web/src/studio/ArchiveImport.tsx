@@ -43,6 +43,7 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
     inFlight.current = true; onBusyChange?.(true);
     setBusy(review ? "Checking and fixing data…" : "Extracting ZIP…"); setError(""); setNotice(""); setReplayReady(false);
     if (!review) { setAnalysis(null); setNeedsSelection(false); }
+    let savingTables = false;
     try {
       if (file.size > MAX_BYTES) throw Error("ZIP exceeds 20 MiB.");
       const result = await requestJSON<ImportAnalysis>(`/api/studio/import${review ? "?review=1" : ""}`, {
@@ -60,12 +61,18 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
       setSelected(unique);
       if (unique.length !== result.tables.length) { setNeedsSelection(true); setNotice("Choose one file per business table."); }
       else {
+        savingTables = true;
         await load(result, unique);
+        savingTables = false;
         if (!review && result.tables.some(table => table.source.replay)) {
-          const backend = await requestJSON<{ configured: boolean }>("/api/data-backend/status");
-          if (backend.configured) {
-            await requestJSON("/api/v1/live/replay-archive", { method: "POST", headers: { "Content-Type": "application/zip" }, body: file });
-            setReplayReady(true);
+          try {
+            const backend = await requestJSON<{ configured: boolean }>("/api/data-backend/status");
+            if (backend.configured) {
+              await requestJSON("/api/v1/live/replay-archive", { method: "POST", headers: { "Content-Type": "application/zip" }, body: file });
+              setReplayReady(true);
+            }
+          } catch {
+            setError("Tables are saved. The optional decision-backend replay could not connect; workspace playback is available.");
           }
         }
       }
@@ -79,7 +86,7 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
           setReplayReady(true);
           setNotice(`Đã lưu ZIP replay ngày ${replay.day} · Ads trễ ${replay.adsLagHours} giờ. Các CSV cả ngày chưa được đưa vào dữ liệu phân tích.`);
         } catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : "Không lưu được ZIP replay."); }
-      } else setError(e instanceof Error ? e.message : "Import failed. Retry the ZIP.");
+      } else setError(`${savingTables ? "Could not save the imported tables. " : ""}${e instanceof Error ? e.message : "Import failed. Retry the ZIP."}`);
     }
     finally { inFlight.current = false; setBusy(""); onBusyChange?.(false); if (input.current) input.current.value = ""; }
   }

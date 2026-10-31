@@ -7,10 +7,12 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type * as queries from "../api/queries";
 import { HQWorkspace } from "./HQWorkspace";
-import { defaultHQ, type HQDocument } from "./types";
+import { defaultHQ, exampleWorksheet, type HQDocument } from "./types";
 import type { Doc } from "../studio/workspace-types";
 import type { SourcePack } from "../studio/sources";
+vi.mock("../api/queries", async (original) => ({ ...await original<typeof queries>(), useSku: () => ({ data: undefined, isPending: false, isError: false }) }));
 let saved: Doc<HQDocument>, rejectSave: boolean;
 const pack: SourcePack = {
   schema: "hackathon.sources.v1",
@@ -73,9 +75,13 @@ it("tracks two products, keeps one active, and isolates unsaved worksheet drafts
   expect(saved.data.active).toBe("workspace:A");
   fireEvent.click(screen.getByRole("tab", { name: "Comparisons" }));
   fireEvent.click(
-    screen.getByRole("button", { name: "Load reference example" }),
+    screen.getByRole("button", { name: "Load best suggestion" }),
   );
-  expect(screen.getByText("2,535,000 VND")).toBeVisible();
+  expect(screen.getByLabelText("Selling price (VND)")).toHaveValue(null);
+  for (const [label, value] of Object.entries({"Selling price (VND)": exampleWorksheet.price, "Unit cost (VND)": exampleWorksheet.cost, "Packaging / unit (VND)": exampleWorksheet.packaging, "Platform fee (%)": exampleWorksheet.feePercent, "Demand with ads (units)": exampleWorksheet.continueUnits, "Demand without ads (units)": exampleWorksheet.pauseUnits, "New ad spend (VND)": exampleWorksheet.spend})) {
+    fireEvent.change(screen.getByLabelText(label), {target: {value: String(value)}});
+  }
+  expect(screen.getByRole("cell", { name: "2,535,000 VND" })).toBeVisible();
   fireEvent.click(screen.getByRole("tab", { name: "SKU Details" }));
   fireEvent.click(screen.getByRole("tab", { name: "Comparisons" }));
   expect(screen.getByLabelText("Available units")).toHaveValue(83);

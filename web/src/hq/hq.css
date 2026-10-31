@@ -401,3 +401,30 @@
   .hq-workspace .source-metrics {grid-template-columns:1fr;}
   .hq-overview-toolbar label,.hq-product-toolbar > label {width:100%;}
 }
+
+.hq-suggestion-status {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;border-left:3px solid var(--city-green);background:var(--city-soft);font-size:12px;color:var(--city-muted);}
+.hq-suggestion-status > span {flex:1;min-width:180px;}
+.hq-evidence-list {margin:12px 0;}
+.hq-evidence-list > div {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--city-line);font-size:13px;}
+.hq-evidence-list dd {margin:0;min-width:0;}
+.hq-evidence-list dd span {display:block;color:var(--city-muted);font-size:12px;margin-top:4px;overflow-wrap:anywhere;}
+.hq-calculation-options {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;}
+.hq-calculation-options section {padding:16px;background:var(--city-soft);border-radius:8px;}
+.hq-calculation-options h4 {margin-top:0;}
+.hq-calculation-options ol {padding-left:20px;list-style:decimal;}
+.hq-calculation-options li {margin-top:10px;font-size:13px;overflow-wrap:anywhere;}
+.hq-unit-economics {margin-bottom:24px;}
+.hq-unit-economics h3 {margin-bottom:12px;}
+.hq-unit-economics caption {text-align:left;padding:12px;color:var(--city-muted);font-size:12px;}
+.hq-unit-economics thead {background:var(--city-green);color:var(--city-paper);}
+.hq-unit-economics tbody th {font-weight:400;width:56%;}
+.hq-unit-economics td {font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+.hq-unit-economics tr:nth-child(even),.hq-unit-economics tbody tr:last-child {background:var(--city-soft);}
+.hq-unit-economics tbody tr:last-child th {font-weight:650;}
+.hq-unit-economics p {font-size:12px;color:var(--city-muted);margin-top:12px;}
+@container (max-width:700px) {
+  .hq-calculation-options {grid-template-columns:1fr;}
+}
+@container (max-width:400px) {
+  .hq-evidence-list > div {grid-template-columns:1fr;gap:4px;}
+}
