@@ -71,7 +71,7 @@ Code trong app chỉ import type qua `src/api/types.ts`. Sau khi sinh từ backe
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run gen:api` | Sinh `src/api/schema.d.ts` |
 
-Trước khi push: `npm run lint && npm run typecheck && npm test && npm run build`. CI (`.github/workflows/ci.yml`) chạy chuỗi này và kiểm bản build Cloudflare khi PR đụng `web/`.
+Trước khi push: `npm run check` (deployment regression tests, eslint, vitest, typechecked Cloudflare build, deployment dry run). Full CI chỉ chạy khi gọi thủ công.
 
 ## Cloudflare
 
@@ -106,28 +106,37 @@ is required to build or validate a dry run. FastAPI/DuckDB remains a separate
 service; absent `DATA_BACKEND_URL`, existing operations use clearly labeled
 fixtures and Milo does not execute campaigns or stock mutations.
 
-GitHub Actions runs the backend, web and mock-data checks and exposes the required
-`ci` status for `main`. After that gate passes on a push to `main`, a promotion job
-copies the exact commit to the automation-only `cloudflare-production` branch.
-Cloudflare Workers Builds watches that branch and automatically pulls, builds and
-deploys `web/`. GitHub Actions does not hold Cloudflare deployment credentials.
-The Cloudflare Build configuration uses `npm run build:cloudflare` followed by
-`npm run deploy:cloudflare`. PRs and pushes check only changed components;
-frontend CI runs one typechecked Cloudflare build. Web/config or bundled-data
-changes trigger promotion; docs-only and backend-only changes do not redeploy
-the frontend. A manual workflow run checks every component and, on `main`,
-retries promotion and deployment verification for that commit. PR path detection
-uses the GitHub API without a checkout; web CI prepares its source pack once.
+Run `node scripts/check.mjs` from the repository root before merging. Select
+`web`, `backend`, or `mock-data` for focused feedback; omit targets for all checks.
+The web checks prepare sources once and typecheck once as part of the Cloudflare
+build. Fixture validation generates into a temporary directory and compares the
+file list and contents without modifying the checkout.
 
-Teammates: open a PR to `main`, wait for the `ci` check, then merge. Do not merge
-or push to `cloudflare-production` directly. The `deploy` job waits up to ten
-minutes for the matching `Workers Builds: megadaytwin` check from Cloudflare's
-GitHub App, then verifies live D1 health, login and private-route access. Failed,
-cancelled or missing builds fail the job; branch promotion alone is not success.
-GitHub's `production` environment records this result, with a link to the
-Cloudflare build in the job summary. Skipped unrelated jobs do not skip deploy;
-failed CI and PRs cannot deploy. An older manual run cannot replace newer `main`.
-Runtime secrets and the D1/AccountWorkspace bindings remain on the Worker.
+Full GitHub CI is manual (`ci.yml`, **Run workflow**) and runs the same checks.
+It does not deploy. Remove the old required `ci` status from the `main` branch
+protection when adopting this workflow; a manual workflow cannot satisfy an
+automatic merge gate. Keep the other branch protection settings.
+
+The separate `deploy.yml` workflow checks every push to `main` for web, bundled-data,
+or deployment-script changes since `cloudflare-production`; it can also be run
+manually on `main`. Comparing against production catches pending web changes even
+if a docs-only merge overtakes their queued deployment.
+It runs dependency-free deployment regression tests, promotes the exact current
+commit to `cloudflare-production`, and lets Cloudflare Workers Builds install,
+build and deploy `web/`. GitHub no longer repeats the dependency install, full
+test suites, and Cloudflare build before deployment. Backend-only and docs-only
+pushes do not deploy unless relevant changes are still pending. GitHub holds no Cloudflare deployment credentials.
+Cloudflare still uses `npm run build:cloudflare` and `npm run deploy:cloudflare`.
+
+The production job waits for the matching successful Cloudflare build and verifies
+live D1 health, login and private-route access. Failed, cancelled or missing builds
+fail the job; promotion alone is not deployment success. Production updates are
+serialized, and an older queued/manual run cannot promote over newer `main`.
+Manual dispatch rechecks the matching build and live health; it does not force a
+fresh Cloudflare build when that commit has already been promoted. Retry a failed
+build in Cloudflare Workers Builds before rechecking.
+Do not push to `cloudflare-production` directly. Runtime secrets and the
+D1/AccountWorkspace bindings remain on the Worker.
 
 Rollback: redeploy a known-good `megadaytwin` version and keep the
 `megadaytwin.dangphuc.me` custom domain attached to it. The old Workers,

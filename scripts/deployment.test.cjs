@@ -1,0 +1,133 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { needsDeployment, promote, waitForBuild, verifyProduction } = require('./deployment.cjs');
+
+const context = { repo: { owner: 'example', repo: 'demo' }, sha: 'current', ref: 'refs/heads/main' };
+const build = (overrides = {}) => ({
+  id: 1, head_sha: 'current', status: 'completed', conclusion: 'success',
+  app: { slug: 'cloudflare-workers-and-pages' }, details_url: 'https://example.test/build',
+  ...overrides,
+});
+
+test('a docs merge still deploys web changes pending since the production commit', async () => {
+  const github = { rest: { repos: { compareCommitsWithBasehead: async (options) => {
+    assert.equal(options.basehead, 'cloudflare-production...current');
+    return { data: { files: [{ filename: 'web/src/App.tsx' }, { filename: 'README.md' }] } };
+  } } } };
+  assert.equal(await needsDeployment(github, context), true);
+});
+
+for (const [name, files, expected] of [
+  ['docs and backend only', [{ filename: 'README.md' }, { filename: 'backend/app/main.py' }], false],
+  ['already promoted', [], false],
+  ['bundled data', [{ filename: 'mock-data/out/demo/orders.csv' }], true],
+  ['deployment workflow', [{ filename: '.github/workflows/deploy.yml' }], true],
+  ['deployment script', [{ filename: 'scripts/deployment.cjs' }], true],
+  ['file moved out of web', [{ filename: 'archive/old.ts', previous_filename: 'web/old.ts' }], true],
+  ['truncated comparison', Array.from({ length: 300 }, (_, n) => ({ filename: `docs/${n}.md` })), true],
+  ['missing comparison', undefined, true],
+]) {
+  test(`deployment selection: ${name}`, async () => {
+    const github = { rest: { repos: {
+      compareCommitsWithBasehead: async () => ({ data: { files } }),
+    } } };
+    assert.equal(await needsDeployment(github, context), expected);
+  });
+}
+
+test('manual dispatch verifies production even when no changes are pending', async () => {
+  assert.equal(await needsDeployment({}, { ...context, eventName: 'workflow_dispatch' }), true);
+});
+
+test('promotes the exact main commit without force', async () => {
+  let updated;
+  await promote({ rest: {
+    repos: { getBranch: async () => ({ data: { commit: { sha: 'current' } } }) },
+    git: { updateRef: async (value) => { updated = value; } },
+  } }, context);
+  assert.deepEqual(updated, { ...context.repo, ref: 'heads/cloudflare-production', sha: 'current', force: false });
+});
+
+test('rejects old commits and non-main refs without promoting', async () => {
+  let promoted = false;
+  const github = { rest: {
+    repos: { getBranch: async () => ({ data: { commit: { sha: 'newer' } } }) },
+    git: { updateRef: async () => { promoted = true; } },
+  } };
+  await assert.rejects(promote(github, context), /newer main/);
+  await assert.rejects(promote(github, { ...context, ref: 'refs/heads/feature' }), /main/);
+  assert.equal(promoted, false);
+});
+
+function poll(batches) {
+  let time = 0;
+  let calls = 0;
+  const github = {
+    rest: { checks: { listForRef() {} } },
+    paginate: async (_, options) => {
+      assert.equal(options.ref, context.sha);
+      assert.equal(options.check_name, 'Workers Builds: megadaytwin');
+      return batches[Math.min(calls++, batches.length - 1)];
+    },
+  };
+  return {
+    github, calls: () => calls,
+    clock: { now: () => time, sleep: async (ms) => { time += ms; } },
+  };
+}
+
+test('waits for the latest matching Cloudflare build, ignoring other apps and commits', async () => {
+  const p = poll([
+    [build({ id: 2, status: 'in_progress', conclusion: null }), build()],
+    [build({ id: 2 }), build({ id: 3, head_sha: 'older', conclusion: 'failure' }),
+      build({ id: 4, app: { slug: 'other' }, conclusion: 'failure' })],
+  ]);
+  assert.equal(await waitForBuild(p.github, context, p.clock), 'https://example.test/build');
+  assert.equal(p.calls(), 2);
+});
+
+for (const conclusion of ['failure', 'cancelled', 'timed_out', 'skipped', 'neutral']) {
+  test(`rejects a ${conclusion} Cloudflare build`, async () => {
+    const p = poll([[build({ conclusion })]]);
+    await assert.rejects(waitForBuild(p.github, context, p.clock), /Cloudflare deployment/);
+  });
+}
+
+test('times out when the matching build never completes', async () => {
+  const p = poll([[build({ status: 'in_progress', conclusion: null })]]);
+  await assert.rejects(waitForBuild(p.github, context, p.clock), /Timed out/);
+  assert.equal(p.calls(), 60);
+});
+
+const responses = () => ({
+  '/healthz': Response.json({ status: 'ok', db: 'ok' }),
+  '/login': new Response('login'),
+  '/api/workspace/chats': new Response(null, { status: 401 }),
+  '/city-demo': new Response(null, { status: 307, headers: { location: '/login' } }),
+});
+const request = (routes) => async (url, options) => {
+  assert.equal(options.redirect, 'manual');
+  assert.ok(options.signal instanceof AbortSignal);
+  return routes[new URL(url).pathname];
+};
+
+test('verifies live D1 health, login and authentication gates without following redirects', async () => {
+  await verifyProduction(request(responses()));
+});
+
+for (const [path, response] of [
+  ['/healthz', Response.json({ status: 'ok', db: 'error' })],
+  ['/healthz', Response.json({ status: 'ok', db: 'ok' }, { status: 503 })],
+  ['/login', new Response(null, { status: 500 })],
+  ['/api/workspace/chats', Response.json([])],
+  ['/city-demo', new Response('private city')],
+  ['/city-demo', new Response(null, { status: 307, headers: { location: '/broken' } })],
+]) {
+  test(`rejects unhealthy production response for ${path} (${response.status})`, async () => {
+    await assert.rejects(verifyProduction(request({ ...responses(), [path]: response })));
+  });
+}
+
+test('fails on network errors instead of reporting deployment success', async () => {
+  await assert.rejects(verifyProduction(async () => { throw new Error('network unavailable'); }), /network/);
+});

@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'jsdom',
+      // Use jsdom storage, not Node 25+ file-backed experimental Web Storage.
+      execArgv: ['--no-experimental-webstorage'],
       globals: true,
       setupFiles: ['./src/test/setup.ts'],
       // Component tests run against the JSON fixtures, never a live backend.
