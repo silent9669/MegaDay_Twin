@@ -181,6 +181,14 @@ normalizes readable, nonnegative VND amounts using the existing money contract.
 It never invents missing values, resolves ambiguous SKU identities, drops rows or
 assumes timezones. The result shows applied repairs and remaining diagnostics.
 An unchanged review does not rewrite sources or clear demand labels.
+Timezone-free ad timestamps are informational: preserve the original clock values
+and configure replay timing in the campaign flow. AI review reports remaining
+issues that need input separately from successful repairs; it does not invent a timezone.
+AI can also return explicit cell corrections for reviewed rows. The server verifies
+the original cell value, preserves identities, source clocks, quantities and money,
+checks for new data errors, and returns corrected tables for automatic saving.
+Reviews use bounded samples (the first rows plus diagnostic rows); deterministic
+format repairs scan the full table. Neither path replaces tables with invented rows.
 Cell edits retain revision-checked autosave. SQLite
 `studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
 with the source document revision. Unchanged table rows are not rewritten; no
