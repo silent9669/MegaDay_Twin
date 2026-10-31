@@ -16,6 +16,21 @@ export function createRiver(scene: T.Scene) {
   water.rotation.x = -Math.PI / 2;
   water.position.set(56.5, -0.18, 0);
   river.add(water);
+  // Small deterministic normal tile gives the wide river fine ripples without more geometry.
+  const normalPixels = new Uint8Array(64 * 64 * 4);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const i = (y * 64 + x) * 4;
+    normalPixels[i] = 128 + Math.sin(x * Math.PI / 8 + Math.sin(y * Math.PI / 16)) * 35;
+    normalPixels[i + 1] = 128 + Math.cos(y * Math.PI / 8) * 25;
+    normalPixels[i + 2] = 250; normalPixels[i + 3] = 255;
+  }
+  const ripples = new T.DataTexture(normalPixels, 64, 64);
+  ripples.wrapS = ripples.wrapT = T.RepeatWrapping;
+  ripples.magFilter = ripples.minFilter = T.LinearFilter;
+  ripples.repeat.set(6, 28);
+  ripples.needsUpdate = true;
+  water.material.normalMap = ripples;
+  water.material.normalScale.set(0.3, 0.3);
   const positions = water.geometry.attributes.position!;
   const base = Float32Array.from(positions.array);
   const boatMaterial = new T.MeshStandardMaterial({
@@ -88,6 +103,7 @@ export function createRiver(scene: T.Scene) {
   wakes.frustumCulled = false;
   const o = new T.Object3D();
   function update(time: number, motion: boolean) {
+    ripples.offset.set(time * 0.006, time * 0.012);
     for (let i = 0; i < positions.count; i++) {
       const x = base[i * 3]!,
         y = base[i * 3 + 1]!;
@@ -97,6 +113,7 @@ export function createRiver(scene: T.Scene) {
       );
     }
     positions.needsUpdate = true;
+    water.geometry.computeVertexNormals();
     boats.forEach((boat, i) => {
       const direction = i === 1 ? -1 : 1;
       boat.position.set(
@@ -122,5 +139,8 @@ export function createRiver(scene: T.Scene) {
     wakes.visible = motion;
     wakes.instanceMatrix.needsUpdate = true;
   }
-  return { update };
+  return { update, setNight: (night: boolean) => {
+    water.material.color.set(night ? "#294c60" : "#799e8d");
+    wakes.material.opacity = night ? 0.18 : 0.35;
+  } };
 }

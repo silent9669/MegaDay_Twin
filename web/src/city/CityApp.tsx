@@ -13,6 +13,8 @@ import {
   Megaphone,
   MessageCircle,
   Minus,
+  Moon,
+  Sun,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -45,6 +47,7 @@ import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
 import { Tutorial } from "./Tutorial";
 import { TOUR, TOUR_KEY } from "./tutorial-steps";
 import { useWorkspaceMonitor } from "./monitor/useWorkspaceMonitor";
+import type { Landmark } from "./map-labels";
 import { Brand, BrandMark } from "./Brand";
 const DISTRICTS = [
   { id: "hq", name: "MegaDay HQ", icon: Building2 },
@@ -74,6 +77,18 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   );
   const [chatOpen, setChatOpen] = useState(false);
   const viewSettings = settings.document?.data ?? defaultSettings;
+  const appearance = viewSettings.appearance ?? "morning";
+  useEffect(() => {
+    const previousTheme = document.documentElement.dataset.theme;
+    document.body.dataset.cityAppearance = appearance;
+    document.documentElement.dataset.theme = appearance === "night" ? "dark" : "light";
+    return () => {
+      delete document.body.dataset.cityAppearance;
+      if (previousTheme) document.documentElement.dataset.theme = previousTheme;
+      else delete document.documentElement.dataset.theme;
+    };
+  }, [appearance]);
+  const [savingSettings, setSavingSettings] = useState(false);
   const feed = useMemo(
     () =>
       sourceView(
@@ -100,6 +115,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   const reduced = useRef(false);
   const state: WorldState = {
     ...viewSettings,
+    appearance,
     motion: viewSettings.motion,
     orders: feed.orderRows,
     adRows: feed.adRows,
@@ -183,13 +199,16 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     return () => window.removeEventListener("keydown", key);
   }, [workspace, tour, chatOpen]);
   const setSettings = async (next: ViewSettings) => {
-    if (!settings.document) return;
+    if (!settings.document || savingSettings) return;
+    setSavingSettings(true);
     try {
       await settings.save(next, settings.document.revision);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Settings were not saved.");
       await settings.reload();
+    } finally {
+      setSavingSettings(false);
     }
   };
   function finishTour() {
@@ -254,8 +273,14 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               : "Commerce city"}
         </span>
         <div className="city-account">
+          <button className="city-appearance" aria-label="Night mode" aria-pressed={appearance === "night"}
+            disabled={!settings.document || savingSettings}
+            onClick={() => void setSettings({ ...viewSettings, appearance: appearance === "night" ? "morning" : "night" })}>
+            {appearance === "night" ? <Moon size={16} /> : <Sun size={16} />}
+            <span>{appearance === "night" ? "Night" : "Morning"}</span>
+          </button>
           <span className={`connection-dot ${connected ? "connected" : ""}`} />
-          <span>{connected ? "Account synced" : "Connecting…"}</span>
+          <span className="city-connection-label">{connected ? "Account synced" : "Connecting…"}</span>
           <span className="city-demo-badge">Sandbox</span>
         </div>
       </header>
@@ -341,6 +366,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
           </button>
         </div>
       </nav>
+      {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
         {studio ? (
           <DataStudio />
@@ -418,6 +444,15 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               </section>
             )}
             <div className="city-camera">
+              <select aria-label="Explore landmarks" defaultValue="" onChange={e => {
+                const place = e.currentTarget.value as Landmark;
+                enter(null); worldRef.current?.focusLandmark(place); e.currentTarget.value = "";
+              }}>
+                <option value="" disabled>Explore</option>
+                <option value="river">River & bridge</option>
+                <option value="bitexco">Bitexco</option>
+                <option value="landmark81">Landmark 81</option>
+              </select>
               <button
                 aria-label="Reset camera"
                 title="Reset camera"
@@ -565,7 +600,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                                     ? "Shopee Ads building is built"
                                     : `${viewSettings.platforms.includes(p) ? "Remove" : "Add"} ${PLATFORMS[p].name} building`
                                 }
-                                disabled={!settings.document || p === "shopee"}
+                                disabled={!settings.document || savingSettings || p === "shopee"}
                                 onClick={() =>
                                   void setSettings({
                                     ...viewSettings,
@@ -627,7 +662,12 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               </Sheet>
             )}
             {tour !== null && (
-              <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />
+              <Tutorial step={tour} onStep={tourStep} onFinish={finishTour}
+                actionDisabled={TOUR[tour]?.action === "appearance" && (!settings.document || savingSettings)}
+                onAction={() => {
+                  if (TOUR[tour]?.action === "river") worldRef.current?.focusRiver();
+                  else void setSettings({ ...viewSettings, appearance: appearance === "night" ? "morning" : "night" });
+                }} />
             )}
           </>
         )}
@@ -649,22 +689,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       <div className="monitor-live sr-only" role="status" aria-live="polite">
         {updates.toast?.title ?? ""}
       </div>
-      {updates.toast && (
-        <aside className="workspace-toast" aria-label="Workspace update">
-          <div>
-            <strong>{updates.toast.title}</strong>
-            <p>{updates.toast.detail}</p>
-          </div>
-          <button
-            onClick={() => window.dispatchEvent(new Event("workspace:updates"))}
-          >
-            Review
-          </button>
-          <button aria-label="Dismiss update" onClick={updates.dismissToast}>
-            <X size={16} />
-          </button>
-        </aside>
-      )}
       <dialog
         ref={settingsDialog}
         className="city-settings"
@@ -688,7 +712,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             <input
               type="checkbox"
               checked={viewSettings.signals}
-              disabled={!settings.document}
+              disabled={!settings.document || savingSettings}
               onChange={(e) =>
                 void setSettings({ ...viewSettings, signals: e.target.checked })
               }
@@ -700,12 +724,17 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         </section>
         <section>
           <h3>Rendering</h3>
+          <label><span>Appearance</span><select aria-label="Appearance" value={appearance}
+            disabled={!settings.document || savingSettings}
+            onChange={e => void setSettings({ ...viewSettings, appearance: e.target.value as ViewSettings["appearance"] })}>
+            <option value="morning">Morning</option><option value="night">Night</option>
+          </select></label>
           <label>
             <span>City motion</span>
             <input
               type="checkbox"
               checked={viewSettings.motion}
-              disabled={!settings.document}
+              disabled={!settings.document || savingSettings}
               onChange={(e) =>
                 void setSettings({ ...viewSettings, motion: e.target.checked })
               }
@@ -715,7 +744,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             <span>Render quality</span>
             <select
               value={viewSettings.quality}
-              disabled={!settings.document}
+              disabled={!settings.document || savingSettings}
               onChange={(e) =>
                 void setSettings({
                   ...viewSettings,

@@ -1,16 +1,25 @@
 import type { District } from "./world";
-export const TOUR_KEY = "megaday.city.tour.v2";
+export const TOUR_KEY = "megaday.city.tour.v3";
 export const TOUR: {
   place: District | null;
   target: string;
   title: string;
   text: string;
+  action?: "river" | "appearance";
 }[] = [
   {
     place: null,
     target: '[aria-label="View city"]',
     title: "Explore Saigon",
-    text: "Drag to orbit. Scroll or use + and − to zoom. District buttons work without 3D.",
+    action: "river",
+    text: "Tap a floating label to fly there. Drag to orbit; pinch or use + and − to zoom. Explore opens the river, Bitexco and Landmark 81.",
+  },
+  {
+    place: null,
+    target: '[aria-label="Night mode"]',
+    title: "Morning to night",
+    action: "appearance",
+    text: "Try the sun button: the city lights and interface change together. Your account remembers this view; source time stays unchanged.",
   },
   {
     place: "warehouse",
@@ -40,6 +49,6 @@ export const TOUR: {
     place: null,
     target: '.city-nav-tools [aria-label="Open PM assistant"]',
     title: "Meet Milo",
-    text: "Updates tracks changes while the app is open. Choose Explain to attach a change to a chat.",
+    text: "Milo speaks when important data changes. Review opens Updates; Explain attaches the change to your draft. Send asks Milo to explain it.",
   },
 ];

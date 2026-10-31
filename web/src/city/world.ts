@@ -3,12 +3,14 @@ import { loadArchitecture, surfaceTexture, disposeObject } from "./scene-assets"
 import { landscape } from "./landscape";
 import { createRiver } from "./river";
 import { cityMotion } from "./city-motion";
+import { createMapLabels, type Landmark, type MapPlace } from "./map-labels";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import { createPlatformSign } from "./platform-sign";
 export type District = "hq" | "warehouse" | "ads" | "homes";
 export type WorldState = {
+  appearance?: "morning" | "night";
   signals: boolean;
   motion: boolean;
   quality: "balanced" | "high";
@@ -21,12 +23,12 @@ const LOCATIONS: Record<District, [number, number, number]> = {
   hq: [0, 0, -3],
   warehouse: [-18, 0, 13],
   ads: [19, 0, -19],
-  homes: [-19, 0, -18],
+  homes: [-19, 0, 2],
 };
 export function createCity(
   host: HTMLElement,
   state: WorldState,
-  pick: (district: District) => void,
+  pick: (district: District | null) => void,
 ) {
   const scene = new T.Scene();
   scene.background = new T.Color("#eaf0e8");
@@ -66,10 +68,42 @@ export function createCity(
   });
   sun.shadow.normalBias = 0.05;
   scene.add(sun);
-  const architecture = loadArchitecture(scene, host);
+  const architecture = loadArchitecture(scene, host, () => state.appearance === "night");
   const movers = cityMotion(scene);
   const river = createRiver(scene);
   const palms = landscape(scene);
+  const glowCanvas = document.createElement("canvas");
+  glowCanvas.width = glowCanvas.height = 64;
+  const glowContext = glowCanvas.getContext("2d")!;
+  const gradient = glowContext.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, "#ffd78c88"); gradient.addColorStop(1, "#ffd78c00");
+  glowContext.fillStyle = gradient; glowContext.fillRect(0, 0, 64, 64);
+  const glowTexture = new T.CanvasTexture(glowCanvas);
+  glowTexture.colorSpace = T.SRGBColorSpace;
+  const lampPools = new T.InstancedMesh(new T.PlaneGeometry(5, 5),
+    new T.MeshBasicMaterial({ map: glowTexture, transparent: true, depthWrite: false, toneMapped: false }), 8);
+  const lampTransform = new T.Object3D();
+  [[-10,-25],[-10,4],[11,5],[11,26],[-30,9],[30,-8],[4,11],[-4,23]].forEach(([x,z], i) => {
+    lampTransform.position.set(x! + 0.7, 0.31, z!); lampTransform.rotation.x = -Math.PI / 2;
+    lampTransform.updateMatrix(); lampPools.setMatrixAt(i, lampTransform.matrix);
+  });
+  scene.add(lampPools);
+  function setAppearance() {
+    const night = state.appearance === "night";
+    const sky = night ? "#101e2d" : "#eaf0e8";
+    (scene.background as T.Color).set(sky);
+    (scene.fog as T.Fog).color.set(sky);
+    ambient.color.set(night ? "#93b4d8" : "#fff9e5");
+    ambient.groundColor.set(night ? "#354951" : "#9eacaf");
+    ambient.intensity = night ? 1.1 : 1.8;
+    sun.color.set(night ? "#aac9ff" : "#fff4d7");
+    sun.intensity = night ? 0.8 : 2.6;
+    lampPools.visible = night;
+    river.setNight(night);
+    architecture.setNight(night);
+    host.dataset.appearance = night ? "night" : "morning";
+  }
+  setAppearance();
   const materials = new Map<string, T.MeshStandardMaterial>();
   const mat = (color: string) => {
     let m = materials.get(color);
@@ -115,6 +149,7 @@ export function createCity(
   box(scene, 76, 0.06, 0, 20, .12, 98, "#d8dfd1");
   for(const x of [-38,43,69]) box(scene,x,.14,0,3.8,.12,94,"#788b91");
   for(const z of [-35,35]) box(scene,-3,.14,z,96,.12,3.8,"#788b91");
+  box(scene,76,.14,35,20,.12,3.8,"#788b91");
   // Riverfront promenade, kept clear of the traffic lanes.
   box(scene,46,.18,0,2,.2,96,"#e3dbc1");
   box(scene,67,.18,0,2,.2,96,"#e3dbc1");
@@ -148,42 +183,7 @@ export function createCity(
   region("hq", 0, -2, 9.5, 9, "#d2e6df");
   region("warehouse", -19, 17, 20, 15, "#d9dec4");
   region("ads", 20, -18, 18, 17, "#e9d9c7");
-  region("homes", -20, -19, 20, 15, "#dfdddf");
-  const labelTextures: T.Texture[] = [];
-  const label = (
-    text: string,
-    x: number,
-    y: number,
-    z: number,
-    width: number,
-    color = "#214b43",
-  ) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 768;
-    canvas.height = 128;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#fffdf4";
-    ctx.fillRect(0, 0, 768, 128);
-    ctx.fillStyle = color;
-    ctx.font = "bold 58px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(text, 384, 85);
-    const texture = new T.CanvasTexture(canvas);
-    texture.colorSpace = T.SRGBColorSpace;
-    texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    labelTextures.push(texture);
-    const mesh = new T.Mesh(
-      new T.PlaneGeometry(width, width / 6),
-      new T.MeshBasicMaterial({ map: texture, side: T.DoubleSide }),
-    );
-    mesh.position.set(x, y, z);
-    scene.add(mesh);
-    return mesh;
-  };
-  label("MEGADAY TWIN", 0, 5.8, .25, 6.8);
-  label("BITEXCO",40,21,-16,5);
-  label("SAIGON RIVER",56.5,.7,38,11);
-  label("FULFILLMENT", -20, 6.2, 21.6, 10);
+  region("homes", -19, 2, 19, 6, "#dfdddf");
   const stockCubes = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), mat('#d3b88d'), 48);
   const stockTransform = new T.Object3D();
   for (let i = 0; i < 48; i++) {
@@ -275,7 +275,6 @@ export function createCity(
     }
   };
   updatePlatforms();
-  label("ADS PLATFORM", 20, 0.8, -8.5, 13);
   // Trees use shared instanced geometry.
   const trunks = new T.InstancedMesh(
     new T.CylinderGeometry(0.15, 0.2, 1.6, 6),
@@ -327,18 +326,28 @@ export function createCity(
   }
   const signals = new T.Group();
   scene.add(signals);
-  const tokens = Array.from({ length: 5 }, (_, i) => {
-    const mesh = new T.Mesh(
-      new T.OctahedronGeometry(0.45),
-      new T.MeshStandardMaterial({
-        color: ["#dfb65b", "#91bbac", "#e69c81"][i % 3],
-        emissive: "#7c7950",
-        emissiveIntensity: 0.1,
-      }),
-    );
-    signals.add(mesh);
-    return mesh;
+  const flowRoutes = [
+    [LOCATIONS.homes, LOCATIONS.hq],
+    [LOCATIONS.hq, LOCATIONS.warehouse],
+    [LOCATIONS.ads, LOCATIONS.hq],
+  ].map(([from, to]) => {
+    const start = new T.Vector3(from![0], 2.3, from![2]);
+    const end = new T.Vector3(to![0], 2.3, to![2]);
+    const control = start.clone().lerp(end, .5); control.y = 10;
+    const curve = new T.QuadraticBezierCurve3(start, control, end);
+    const line = new T.Line(new T.BufferGeometry().setFromPoints(curve.getPoints(32)),
+      new T.LineDashedMaterial({ color: "#a9c9aa", transparent: true, opacity: .45, dashSize: .65, gapSize: .8 }));
+    line.computeLineDistances(); signals.add(line);
+    return curve;
   });
+  const tokens = flowRoutes.map((_, i) => {
+    const mesh = new T.Mesh(new T.SphereGeometry(.22, 8, 6),
+      new T.MeshBasicMaterial({ color: ["#f0cd82", "#b8e4c3", "#e5ae91"][i], toneMapped: false }));
+    signals.add(mesh); return mesh;
+  });
+  const hqPulse = new T.Mesh(new T.RingGeometry(4.6, 4.72, 48),
+    new T.MeshBasicMaterial({ color: "#a9d1ae", transparent: true, opacity: .4, side: T.DoubleSide, depthWrite: false }));
+  hqPulse.rotation.x = -Math.PI / 2; hqPulse.position.set(0, .49, -3); signals.add(hqPulse);
   for (const [color, list] of buckets) {
     const merged = mergeGeometries(list);
     if (merged) {
@@ -366,6 +375,13 @@ export function createCity(
     const hit = ray.intersectObjects(targetMeshes, false)[0];
     if (hit) pick(hit.object.userData.district);
   };
+  const onHover = (e: PointerEvent) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.set((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1);
+    ray.setFromCamera(mouse, camera);
+    renderer.domElement.style.cursor = ray.intersectObjects(targetMeshes, false).length ? "pointer" : "grab";
+  };
+  renderer.domElement.addEventListener("pointermove", onHover);
   renderer.domElement.addEventListener("pointerdown", onDown);
   renderer.domElement.addEventListener("pointerup", onClick);
   const observer = new ResizeObserver(() => {
@@ -378,6 +394,18 @@ export function createCity(
   observer.observe(host);
   let destination: T.Vector3 | null = null,
     eye: T.Vector3 | null = null;
+  let activePlace: MapPlace | null = null;
+  const focusLandmark = (place: Landmark) => {
+    activePlace = place;
+    const point = place === "river" ? [55, 1, 24] : place === "bitexco" ? [40, 9, -19] : [77, 17, -9];
+    destination = new T.Vector3(...point as [number, number, number]);
+    eye = destination.clone().add(place === "river" ? new T.Vector3(34, 34, 42) : place === "landmark81" ? new T.Vector3(55, 35, 65) : new T.Vector3(35, 25, 45));
+  };
+  const mapLabels = createMapLabels(host, place => {
+    if (place === "river" || place === "bitexco" || place === "landmark81") {
+      pick(null); focusLandmark(place);
+    } else pick(place);
+  });
   const timer = new T.Timer();
   timer.connect(document);
   let time = 0,
@@ -405,20 +433,15 @@ export function createCity(
     water.scale.setScalar(1 + Math.sin(time * .7) * .008);
     signals.visible = state.signals && state.orders + state.adRows > 0;
     tokens.forEach((token, i) => {
-      const period = 9 + i * 4,
-        elapsed = (time + i * 2.7) % period;
-      token.visible = elapsed < 3 && state.motion;
-      const a = i % 2 ? LOCATIONS.ads : LOCATIONS.homes,
-        b = i % 2 ? LOCATIONS.hq : LOCATIONS.warehouse,
-        progress = Math.min(1, elapsed / 3);
-      token.position.set(
-        T.MathUtils.lerp(a[0], b[0], progress),
-        3 + Math.sin(progress * Math.PI) * 5,
-        T.MathUtils.lerp(a[2], b[2], progress),
-      );
-      token.rotation.y = time;
+      const elapsed = (time + i * 2.7) % 10;
+      token.visible = elapsed < 4 && state.motion;
+      flowRoutes[i]!.getPoint(Math.min(1, elapsed / 4), token.position);
     });
+    const pulse = (time % 4) / 4;
+    hqPulse.scale.setScalar(state.motion ? 1 + pulse * .45 : 1);
+    hqPulse.material.opacity = state.motion ? (1 - pulse) * .45 : .2;
     renderer.render(scene, camera);
+    mapLabels.update(camera, activePlace);
     if (frame++ % 60 === 0) {
       host.dataset.drawCalls = String(renderer.info.render.calls);
       host.dataset.triangles = String(renderer.info.render.triangles);
@@ -427,6 +450,7 @@ export function createCity(
     }
   });
   const focus = (district: District | null) => {
+    activePlace = district;
     const point = district ? LOCATIONS[district] : [12, 0, -2];
     destination = new T.Vector3(...(point as [number, number, number]));
     if (district === "ads") destination.y = 3;
@@ -438,6 +462,8 @@ export function createCity(
   };
   return {
     focus,
+    focusRiver: () => focusLandmark("river"),
+    focusLandmark,
     zoom: (amount: number) => {
       camera.position
         .sub(controls.target)
@@ -446,6 +472,7 @@ export function createCity(
     },
     update: (next: WorldState) => {
       state = next;
+      setAppearance();
       renderer.setPixelRatio(
         Math.min(devicePixelRatio, state.quality === "high" ? 2 : 1.5),
       );
@@ -455,12 +482,13 @@ export function createCity(
       timer.dispose();
       controls.dispose();
       observer.disconnect();
+      renderer.domElement.removeEventListener("pointermove", onHover);
       renderer.domElement.removeEventListener("pointerdown", onDown);
       renderer.domElement.removeEventListener("pointerup", onClick);
-      architecture();
+      mapLabels.dispose();
+      architecture.dispose();
       disposeObject(scene);
       materials.forEach(m => m.dispose());
-      labelTextures.forEach(t => t.dispose());
       platformSigns.forEach(sign => sign.dispose());
       renderer.dispose();
       renderer.forceContextLoss();

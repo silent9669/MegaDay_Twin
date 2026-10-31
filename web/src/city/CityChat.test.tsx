@@ -161,8 +161,10 @@ it('keeps updates quiet and attaches bounded evidence only when an explanation i
   render(<MemoryRouter><CityChat updates={updates}/></MemoryRouter>);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.some(([path])=>path==='/api/pm/chat')).toBe(false);
-  await open();
-  fireEvent.click(screen.getByRole('tab',{name:/Updates/}));
+  expect(screen.getByLabelText('Workspace update')).toHaveTextContent('Stock reached zero');
+  fireEvent.click(screen.getByRole('button', { name: 'Review update' }));
+  expect(updates.dismissToast).toHaveBeenCalledOnce();
+  await screen.findByRole('tab', { name: /Updates/ });
   expect(updates.markRead).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button',{name:'Explain'}));
   expect(screen.getByRole('textbox',{name:'Message Milo'})).toHaveValue('Explain this workspace change: Stock reached zero. SKU1: 10 → 0');

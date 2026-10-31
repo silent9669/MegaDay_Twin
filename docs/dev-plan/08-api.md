@@ -627,6 +627,8 @@ shared `admin` account; clients cannot choose a tenant. Each document returns
 `{revision, updatedAt, data}`; PUT requires `{revision, data}` and returns 409 on
 stale writes. WebSocket messages contain `{name, revision}` and trigger refetch.
 
+Settings add `appearance: "morning" | "night"`. Omitted values default to `morning` for existing accounts. This saved view preference changes city lighting and UI colors only; it does not change the sandbox hour.
+
 `GET /api/pm/models` returns models accessible to the configured key.
 `POST /api/pm/chat` accepts `{sessionId, lastMessageId, changeReference?}`, loads saved messages,
 and persists the reply before returning. It does not accept client-supplied conversation history. Failed generation leaves the saved user message available

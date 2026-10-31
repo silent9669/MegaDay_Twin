@@ -6,10 +6,14 @@ export function Tutorial({
   step,
   onStep,
   onFinish,
+  onAction,
+  actionDisabled,
 }: {
   step: number;
   onStep: (step: number) => void;
   onFinish: () => void;
+  onAction?: () => void;
+  actionDisabled?: boolean;
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [viewport, setViewport] = useState({
@@ -51,7 +55,7 @@ export function Tutorial({
     : Math.min(viewport.w - width - 16, Math.max(16, (rect?.right ?? 80) + 18));
   const top = mobile
     ? undefined
-    : Math.max(80, Math.min(viewport.h - 270, (rect?.top ?? 100) - 12));
+    : Math.max(70, Math.min(viewport.h - 330, (rect?.top ?? 100) - 12));
   return (
     <>
       {rect && (
@@ -87,6 +91,9 @@ export function Tutorial({
           {TOUR[step]!.title}
         </h2>
         <p>{TOUR[step]!.text}</p>
+        {TOUR[step]!.action && onAction && <button className="tour-action" onClick={onAction} disabled={actionDisabled}>
+          {TOUR[step]!.action === "river" ? "View river & bridge" : "Switch morning / night"}
+        </button>}
         <footer>
           <button onClick={onFinish}>Skip</button>
           <button disabled={step === 0} onClick={() => onStep(step - 1)}>

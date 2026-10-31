@@ -1,4 +1,4 @@
-/* global document, innerWidth, requestAnimationFrame */
+/* global document, innerWidth, requestAnimationFrame, getComputedStyle */
 import { chromium } from "playwright";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -44,6 +44,34 @@ try {
     () => document.querySelector(".city-canvas")?.dataset.assets === "ready",
   );
   await page.screenshot({ path: out + "city-1440.png" });
+  const originalAppearance = await page.getByRole("button", { name: "Night mode", exact: true }).getAttribute("aria-pressed");
+  const setNight = async (night) => {
+    const toggle = page.getByRole("button", { name: "Night mode", exact: true });
+    if ((await toggle.getAttribute("aria-pressed") === "true") !== night) await toggle.click();
+    await page.waitForFunction(value => document.querySelector(".city-canvas")?.dataset.appearance === value, night ? "night" : "morning");
+    await page.waitForFunction(() => !document.querySelector('[aria-label="Night mode"]').disabled);
+  };
+  const clockBefore = await page.evaluate(async () => (await (await fetch("/api/workspace/sandbox")).json()).revision);
+  const originalCanvas = await page.locator(".city-canvas canvas").elementHandle();
+  await setNight(true);
+  assert(await originalCanvas.evaluate(el => el.isConnected), "Appearance recreated the canvas");
+  assert.equal(await page.evaluate(async () => (await (await fetch("/api/workspace/sandbox")).json()).revision), clockBefore, "Appearance changed the source clock");
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector(".city-canvas")?.dataset.assets === "ready" && document.querySelector(".city-canvas")?.dataset.appearance === "night");
+  assert.equal(await page.getByRole("button", { name: "Night mode", exact: true }).getAttribute("aria-pressed"), "true", "Night preference lost after reload");
+  await page.screenshot({ path: out + "city-night-1440.png" });
+  await page.getByRole("button", { name: "Visit Landmark 81", exact: true }).click();
+  await page.waitForTimeout(2200);
+  assert.equal(await page.getByRole("button", { name: "Visit Landmark 81", exact: true }).getAttribute("aria-current"), "true");
+  await page.screenshot({ path: out + "landmark81-night.png" });
+  await page.getByRole("link", { name: "View city", exact: true }).click();
+  await page.waitForTimeout(1800);
+  await page.getByRole("button", { name: "Visit MegaDay Twin", exact: true }).click();
+  await page.getByRole("button", { name: "Open HQ", exact: true }).waitFor();
+  await page.screenshot({ path: out + "hq-night.png" });
+  await page.getByRole("link", { name: "View city", exact: true }).click();
+  results.appearance = { persisted: true, panels: [] };
+
   for (const [width, height] of [
     [1440, 900],
     [1024, 768],
@@ -75,6 +103,9 @@ try {
       `Inspector outside ${width}`,
     );
     await page.screenshot({ path: out + `warehouse-${width}.png` });
+    assert.equal(await page.locator(".district-workspace").evaluate(el => getComputedStyle(el).colorScheme), "dark");
+    results.appearance.panels.push({ width, scheme: "dark" });
+
     await page.getByRole("button", { name: "Close workspace" }).click();
     await page
       .getByRole("button", { name: "Open PM assistant", exact: true })
@@ -123,11 +154,15 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Replay tutorial" }).click();
-  for (let i = 0; i < 5; i++)
+  await page.getByRole("button", { name: "View river & bridge" }).click();
+  await page.waitForTimeout(1600);
+  await page.screenshot({ path: out + "river-night.png" });
+
+  for (let i = 0; i < 6; i++)
     await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Done", exact: true }).click();
   assert.equal(
-    await page.evaluate(() => localStorage.getItem("megaday.city.tour.v2")),
+    await page.evaluate(() => localStorage.getItem("megaday.city.tour.v3")),
     "complete",
   );
   await page.waitForTimeout(1500);
@@ -162,6 +197,13 @@ try {
     createHash("sha256").update(b).digest("hex");
   assert(results.reducedMotionStatic, "Reduced motion still animates");
   await page.screenshot({ path: out + "city-reduced-motion.png" });
+  await setNight(false);
+  await page.screenshot({ path: out + "city-morning-1440.png" });
+  const morning = await canvas.screenshot();
+  await page.waitForTimeout(400);
+  assert.equal(createHash("sha256").update(morning).digest("hex"), createHash("sha256").update(await canvas.screenshot()).digest("hex"), "Morning animates under reduced motion");
+  results.appearance.reducedMotionBothModes = true;
+  await setNight(originalAppearance === "true");
   await page.emulateMedia({ reducedMotion: "no-preference" });
   const second = await context.newPage();
   await second.goto(base + "/mock-data");
@@ -219,9 +261,18 @@ try {
       "Update opened chat",
     );
     assert.equal(calls.length, 0, "Update called AI");
+    assert.equal(await page.locator('.pm-companion[data-speaking="true"]').count(), 1);
+    const bubble = await page.getByRole("complementary", { name: "Workspace update" }).boundingBox();
+    assert(bubble.x >= 0 && bubble.y >= 0 && bubble.x + bubble.width <= 1440 && bubble.y + bubble.height <= 900, "Milo speech bubble outside viewport");
+    await page.screenshot({ path: out + "milo-notification.png" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileBubble = await page.getByRole("complementary", { name: "Workspace update" }).boundingBox();
+    assert(mobileBubble.x >= 0 && mobileBubble.y >= 0 && mobileBubble.x + mobileBubble.width <= 390 && mobileBubble.y + mobileBubble.height <= 844, "Milo speech bubble outside mobile viewport");
+    await page.screenshot({ path: out + "milo-notification-mobile.png" });
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page
       .getByRole("complementary", { name: "Workspace update" })
-      .getByRole("button", { name: "Review" })
+      .getByRole("button", { name: "Review update" })
       .click();
     await page
       .getByRole("region", { name: "Workspace updates" })

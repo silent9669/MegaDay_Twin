@@ -54,15 +54,24 @@ export function cityMotion(scene: T.Scene) {
   const glass = batch(new T.BoxGeometry(1.42, 0.48, 0.7), "#527b78", 3);
   const pedestrianBodies = batch(
     new T.CapsuleGeometry(0.19, 0.45, 3, 6),
-    "#c79e84",
-    14,
+    "#ffffff",
+    24,
   );
-  const heads = batch(new T.SphereGeometry(0.22, 8, 6), "#d4b48c", 14);
-  const legs = batch(new T.CapsuleGeometry(0.075, 0.46, 2, 5), "#47645c", 28);
-  const arms = batch(new T.CapsuleGeometry(0.065, 0.36, 2, 5), "#c79e84", 28);
+  const heads = batch(new T.SphereGeometry(0.22, 8, 6), "#d4b48c", 24);
+  const legs = batch(new T.CapsuleGeometry(0.075, 0.46, 2, 5), "#47645c", 48);
+  const arms = batch(new T.CapsuleGeometry(0.065, 0.36, 2, 5), "#c79e84", 48);
+  const hair = batch(new T.SphereGeometry(0.225, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.55), "#332e2a", 24);
+  const shoes = batch(new T.BoxGeometry(0.16, 0.12, 0.29), "#eee1cb", 48);
+  const bags = batch(new T.BoxGeometry(0.26, 0.35, 0.13), "#a58861", 24);
+  const shirts = ["#548477", "#d6b76e", "#e4d9c2", "#b77760", "#68869a", "#8e8c71"];
+  for (let i = 0; i < 24; i++) {
+    pedestrianBodies.setColorAt(i, new T.Color(shirts[i % shirts.length]));
+    heads.setColorAt(i, new T.Color(i % 3 === 0 ? "#c39c80" : "#f1d8b5"));
+  }
   const route = roundedRoute(31, 28, 4),
     walk = roundedRoute(28.3, 25.4, 3),
     length = route.getLength();
+  const walkLength = walk.getLength();
   const place = (
     mesh: T.InstancedMesh,
     index: number,
@@ -114,16 +123,24 @@ export function cityMotion(scene: T.Scene) {
         place(hubs, start + w, x, 0.3, z, heading, 0, (time * speed) / 0.28);
       }
     }
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 24; i++) {
       const t =
-        ((time * 0.5 + (i * walk.getLength()) / 14) % walk.getLength()) /
-        walk.getLength();
+        ((time * 0.5 + (i * walkLength) / 14) % walkLength) /
+        walkLength;
       walk.getPointAt(t, position);
       walk.getTangentAt(t, direction);
+      if (i >= 14) {
+        const travel = (time * .6 + (i - 14) * 12.6) % 126;
+        position.set(i % 2 ? 67.1 : 46, .23, -38 + (travel < 63 ? travel : 126 - travel));
+        direction.set(0, 0, travel < 63 ? 1 : -1);
+      }
       const heading = Math.atan2(direction.x, direction.z),
         stride = motion ? Math.sin(time * 4 + i) * 0.45 : 0;
-      place(pedestrianBodies, i, 0, 1.02, 0, heading);
-      place(heads, i, 0, 1.6, 0, heading);
+      const bounce = motion ? Math.abs(Math.sin(time * 4 + i)) * 0.035 : 0;
+      place(pedestrianBodies, i, 0, 1.02 + bounce, 0, heading);
+      place(heads, i, 0, 1.6 + bounce, 0, heading);
+      place(hair, i, 0, 1.61 + bounce, 0, heading);
+      place(bags, i, 0.16, 0.95 + bounce, -0.22, heading);
       for (let n = 0; n < 2; n++) {
         const swing = stride * (n ? 1 : -1);
         place(
@@ -136,6 +153,7 @@ export function cityMotion(scene: T.Scene) {
           0,
           swing,
         );
+        place(shoes, i * 2 + n, n ? 0.12 : -0.12, 0.12 + Math.max(0, Math.sin(swing)) * 0.12, Math.sin(swing) * 0.4 + 0.05, heading);
         place(
           arms,
           i * 2 + n,
@@ -150,6 +168,7 @@ export function cityMotion(scene: T.Scene) {
     }
     hubs.visible = near;
     arms.visible = near;
+    bags.visible = near;
     root.children.forEach((m) => {
       if (m instanceof T.InstancedMesh) m.instanceMatrix.needsUpdate = true;
     });

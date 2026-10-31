@@ -8,6 +8,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   ArrowUp,
+  ArrowRight,
   Bell,
   Maximize2,
   Minimize2,
@@ -262,55 +263,27 @@ export function CityChat({
     setTimeout(() => input.current?.focus(), 0);
   }
 
+  const speaking = !open && !!updates?.toast;
+  const avatarState = pending ? "thinking" : speaking ? "notification" : "greeting";
   const launcher = (
-    <button
-      ref={trigger}
-      className="pm-launcher"
-      aria-label="Open PM assistant"
-      aria-expanded={open}
-      aria-controls="city-pm-chat"
-      onClick={() => setOpen(!open)}
-    >
-      <span className="pm-avatar" aria-hidden="true">
-        <MiloAvatar
-          state={
-            pending
-              ? "thinking"
-              : error
-                ? "error"
-                : updates?.unread
-                  ? "notification"
-                  : open
-                    ? "greeting"
-                    : "idle"
-          }
-        />
-      </span>
-      {!!updates?.unread && (
-        <span
-          className="pm-unread"
-          aria-label={`${updates.unread} unread updates`}
-        >
-          {updates.unread}
+    <div className="pm-companion" data-speaking={speaking}>
+      <button ref={trigger} className="pm-launcher" aria-label="Open PM assistant"
+        aria-expanded={open} aria-controls="city-pm-chat" onClick={() => setOpen(!open)}>
+        <span className="pm-avatar" aria-hidden="true"><img src="/assets/milo/avatar.png" alt="" /></span>
+        {!!updates?.unread && <span className="pm-unread" aria-label={`${updates.unread} unread updates`}>{updates.unread}</span>}
+        <span className="pm-preview" aria-hidden="true">
+          <MiloAvatar key={speaking ? updates?.toast?.id : avatarState} state={avatarState} />
         </span>
+      </button>
+      {speaking && updates?.toast && (
+        <aside className="milo-dialogue" aria-label="Workspace update">
+          <button className="milo-dialogue-close" aria-label="Dismiss update" onClick={updates.dismissToast}><X size={15} /></button>
+          <strong>{updates.toast.title}</strong>
+          <p>{updates.toast.detail}</p>
+          <button className="milo-review" onClick={() => { setTab("updates"); setOpen(true); updates.dismissToast(); }}>Review update <ArrowRight size={14} /></button>
+        </aside>
       )}
-      <span className="pm-preview" aria-hidden="true">
-        <MiloAvatar
-          state={
-            pending
-              ? "thinking"
-              : error
-                ? "error"
-                : updates?.unread
-                  ? "notification"
-                  : open
-                    ? "greeting"
-                    : "idle"
-          }
-        />
-        <span className="pm-caption">Milo</span>
-      </span>
-    </button>
+    </div>
   );
 
   return (

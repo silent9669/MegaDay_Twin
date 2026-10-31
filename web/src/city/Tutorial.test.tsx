@@ -31,3 +31,13 @@ it("remains usable when an anchor is missing and restores keyboard focus after S
   expect(trigger).toHaveFocus();
   trigger.remove();
 });
+it("offers an explicit lighting action without advancing or changing preferences automatically", () => {
+  const action = vi.fn(), next = vi.fn();
+  const view = render(<Tutorial step={1} onStep={next} onFinish={vi.fn()} onAction={action} />);
+  expect(action).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Switch morning / night" }));
+  expect(action).toHaveBeenCalledOnce();
+  expect(next).not.toHaveBeenCalled();
+  view.rerender(<Tutorial step={1} onStep={next} onFinish={vi.fn()} onAction={action} actionDisabled />);
+  expect(screen.getByRole("button", { name: "Switch morning / night" })).toBeDisabled();
+});
