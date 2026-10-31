@@ -344,12 +344,14 @@ export class AccountWorkspace {
       if (overrides?.length) data = await this.labeledSources(data as SourcePack, overrides);
       const previousSources = name === "sources" ? this.read("sources")?.data as SourcePack | undefined : undefined;
       const replayChanged = name === "sources" && (data as SourcePack).files.some(file => file.replay && !previousSources?.files.some(old => old.kind === file.kind && JSON.stringify(old.replay) === JSON.stringify(file.replay)));
+      const replayRemoved = name === "sources" && previousSources?.files.some(file => file.replay) && !(data as SourcePack).files.some(file => file.replay);
       const saved = this.ctx.storage.transactionSync(() => {
         const result = this.writeDocument(name, data, body.revision);
         if (result && replayChanged) this.writeDocument("sandbox", { hour: 0, event: "observe", startedAt: new Date().toISOString() }, this.read("sandbox")?.revision ?? 0);
+        if (result && replayRemoved) this.writeDocument("sandbox", defaultSandbox, this.read("sandbox")?.revision ?? 0);
         return result;
       });
-      if (saved && replayChanged) this.notify("sandbox", this.read("sandbox")!.revision);
+      if (saved && (replayChanged || replayRemoved)) this.notify("sandbox", this.read("sandbox")!.revision);
       if (!saved)
         return fail(
           409,

@@ -13,19 +13,21 @@ normalization, SKU matching, forecasting, simulation, permissions and economics.
   Accessible map option. A WebGL failure still leaves district controls usable.
 - No 11.11 monitor or Engine workspace in the product navigation or Data Studio.
 - Data Studio starts empty and supports up to 24 business/general tables, records,
-  diagnostics and ZIP/CSV/JSON imports. A sandbox clock appears for repository demo
-  sources only. The clock filters demo observations; it never executes
+  diagnostics and ZIP/CSV/JSON imports. Import shop folder loads the six baseline
+  tables in one click and saves them to the account. A sandbox clock appears for
+  replay sources. The clock filters event observations; it never executes
   campaigns, changes source inventory or fabricates economic conclusions.
 - Chat has one compact identity/header, readable Markdown, contained table/code
   scrolling, prompt chips and one composer focus ring. The assistant is advisory.
 
 ## Imported tables and six business formats
 
-Optional demo observations are the three files under `mock-data/out/demo/live_11_11`;
-costs, campaign structure and sale rules are their three parent reference files.
-Sources are fetched server-side from this GitHub repository at one resolved main
-commit. Paths are fixed, not user-controlled. A sanitized build-time pack from
-the same repository is the offline GitHub fallback. Initial load creates an empty
+Import shop folder loads the six root files under `mock-data/out/demo`, excluding
+`live_11_11` and ground truth. The sanitized, compressed pack is generated during
+the build and served by authenticated `GET /api/studio/shop`; no folder picker,
+GitHub fetch or local filesystem access is needed. It replaces matching business
+tables and preserves unrelated tables. Replacing all replay sources stops the
+account playback clock in the same save transaction. Initial load creates an empty
 account workspace only if it does not exist. Older accounts remove exact repository
 defaults once (including only-derived labels); uploads and edits are preserved.
 Data Studio offers confirmed deletion of one table or all tables with revision checks.
@@ -35,9 +37,9 @@ business table; general tables are keyed by filename. ZIP analysis retains gener
 CSV/JSON tables and uses one configured model call to map unambiguous headers
 and review each schema with bounded samples. Sample review results are advisory;
 deterministic format checks still inspect all records.
-Duplicate business source types in one batch require selection. Shop-folder imports prefer
-the live observation files and parent references, excluding history, ground truth
-and replay metadata. Canonical six-file packs round-trip. Contact columns/keys
+Duplicate business source types in one batch require selection. Import the separate
+11.11 ZIP after loading the baseline to start event playback. Canonical six-file
+packs round-trip. Contact columns/keys
 are stripped and contacts in notes masked before cloud storage. Original files
 are read-only. Diagnostics expose row, column and code; unknown costs remain
 unknown, negative stock is flagged and notes never become instructions.
