@@ -296,7 +296,7 @@ def test_scan_product_raises_on_variants_in_stock_and_merge_dedupes() -> None:
 
 
 # ---------------------------------------------------------------------- champions
-def _r(model: str, bt: str, w: float, pb: float = 0.2) -> ScoreRow:
+def _r(model: str, bt: str, w: float | None, pb: float | None = 0.2) -> ScoreRow:
     return ScoreRow(model, bt, "on_dinh", "double_day", 10, 60, w, 0.0, 0.1, pb, 0.1, 0.8)
 
 
@@ -308,6 +308,51 @@ def test_champion_rule1_tie_uses_pinball() -> None:
     champs, _ = select_champions(rows, ORDER)
     assert champs[("on_dinh", "double_day")] == "b"
     assert [r.model_id for r in rows if r.is_champion] == ["b"]
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["forward", "reversed"])
+@pytest.mark.parametrize(
+    ("wape_a", "pinball_a", "wape_b", "pinball_b", "expected"),
+    [
+        (0.30, 0.20, 0.30, 0.0, "b"),
+        (0.30, 0.20, 0.31, 0.0, "b"),
+        (0.30, 0.0, 0.31, 0.20, "a"),
+        (0.0, 0.20, 0.0, 0.0, "b"),
+        (0.30, None, 0.30, 0.0, "b"),
+        (0.30, None, 0.31, 0.0, "b"),
+        (0.30, None, 0.30, 0.20, "b"),
+        (0.30, 0.20, 0.40, 0.0, "a"),
+        (None, 0.20, None, 0.0, "b"),
+        (None, None, None, 0.0, "b"),
+    ],
+    ids=[
+        "equal-wape-zero-pinball",
+        "near-wape-zero-pinball-challenger",
+        "near-wape-zero-pinball-leader",
+        "zero-wape",
+        "equal-wape-missing-versus-zero",
+        "near-wape-missing-versus-zero",
+        "missing-versus-positive",
+        "outside-wape-tie",
+        "sparse-zero-pinball",
+        "sparse-missing-versus-zero",
+    ],
+)
+def test_champion_preserves_zero_scores(
+    wape_a: float | None,
+    pinball_a: float | None,
+    wape_b: float | None,
+    pinball_b: float | None,
+    expected: str,
+    reverse: bool,
+) -> None:
+    rows = [_r("a", "b1", wape_a, pb=pinball_a), _r("b", "b1", wape_b, pb=pinball_b)]
+    if reverse:
+        rows.reverse()
+    champions, changes = select_champions(rows, ORDER)
+    assert champions[("on_dinh", "double_day")] == expected
+    assert [row.model_id for row in rows if row.is_champion] == [expected]
+    assert len(changes) == 1 and changes[0].new == expected
 
 
 def test_challenger_needs_two_consecutive_wins() -> None:

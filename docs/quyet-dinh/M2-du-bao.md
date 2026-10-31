@@ -214,3 +214,20 @@ Báo động giả (đo bằng đáp án: `up` khi λ thật 6 giờ gần nhấ
 - iROAS CD002 = 4,42 ở **cả hai** bản (ước lượng ads không đọc dự báo), nên 4,49 → 4,42 không do M2.
 
 Bản quét `whatif_full.*` (~17:30) chạy giữa lúc code censoring/phân nhóm đang sửa dở (khi đó đang thử ADI theo ngày còn hàng, H2, làm đổi nhóm một số SKU); `none_meets_goal` của [4g] không tái hiện với code cuối. Không sửa tài liệu pitch.
+
+## I. FC-09 · Giữ điểm sai số bằng 0 khi chọn mô hình (31/10/2026)
+
+`registry._best` trước đây dùng `pinball_50 or inf` cho xếp hạng và phân xử hai
+mô hình có WAPE gần nhau. Điểm pinball bằng 0 bị coi như thiếu dữ liệu, khiến
+mô hình có sai số cao hơn được chọn; với điểm thiếu, kết quả còn có thể phụ thuộc
+thứ tự đầu vào.
+
+Chỉ `None` được thay bằng vô cực. Điểm 0 được giữ nguyên trong cả hai bước.
+Giữ nguyên ngưỡng chênh WAPE, quy tắc thay champion sau hai backtest liên tiếp,
+schema và API. Kết quả đã lưu không tự tính lại; thay đổi áp dụng khi chạy backtest
+và chọn mô hình tiếp theo.
+
+Test hồi quy chạy qua `select_champions`: WAPE bằng nhau/gần nhau, WAPE bằng 0,
+pinball bằng 0 hoặc thiếu, nhóm dùng pinball thay WAPE, và trường hợp ngoài
+ngưỡng phân xử. Mỗi trường hợp chạy cả hai thứ tự đầu vào (20 ca). Trước sửa:
+11 lỗi / 9 đạt; sau sửa: toàn bộ 43 test trong `test_pure.py` đạt.
