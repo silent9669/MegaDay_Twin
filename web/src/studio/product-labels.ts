@@ -2,14 +2,27 @@ import { z } from "zod";
 import { hashText, inspect, normalize, type SourceKind, type SourcePack } from "./sources";
 
 export const DEMAND_LABELS = {
-  moi: "Mới",
-  ban_thua: "Bán thưa",
-  mua_vu: "Mùa vụ",
-  trend: "Trend",
-  on_dinh: "Ổn định",
+  Trendy: "Trendy",
+  Seasonal: "Seasonal",
+  Normal: "Normal",
 } as const;
 export type DemandLabel = keyof typeof DEMAND_LABELS;
 export const MAX_LABEL_PRODUCTS = 2000;
+
+export const labelContextSchema = z.object({
+  market: z.string().trim().min(1).max(100),
+  asOf: z.iso.date(),
+  evidence: z.array(z.object({
+    productCode: z.string().trim().min(1).max(300),
+    observedAt: z.iso.date(),
+    source: z.string().trim().min(1).max(300),
+    observation: z.string().trim().min(1).max(2000),
+  }).strict()).max(100),
+}).strict().superRefine((context, ctx) => {
+  if (context.evidence.some(e => e.observedAt > context.asOf))
+    ctx.addIssue({ code: "custom", message: "Evidence dates cannot follow the assessment date." });
+});
+export type LabelContext = z.infer<typeof labelContextSchema>;
 
 /** Source-scoped candidates, not confirmed canonical SKU matches. */
 export type LabelProduct = {
@@ -25,10 +38,11 @@ export type LabelInput = {
   sourceRevision: number;
   sourceFingerprint: string;
   products: LabelProduct[];
+  context?: LabelContext;
 };
 export const productLabelSchema = z.object({
   productId: z.string().min(1).max(2000),
-  group: z.enum(["moi", "ban_thua", "mua_vu", "trend", "on_dinh"]).nullable(),
+  group: z.enum(["Trendy", "Seasonal", "Normal"]).nullable(),
   reason: z.string().trim().min(1).max(1000),
   confidence: z.number().min(0).max(1).optional(),
 }).strict();
@@ -38,6 +52,7 @@ export const labelProviderResponseSchema = z.object({
 }).strict();
 export const labelRunSchema = z.object({
   id: z.string().uuid(),
+  context: labelContextSchema.optional(),
   sourceRevision: z.number().int().nonnegative(),
   sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   provider: z.string().min(1).max(150),
@@ -110,5 +125,5 @@ export async function sourceFingerprint(pack: SourcePack): Promise<string> {
   return hashText(JSON.stringify(pack.files.map((source) => [source.kind, source.hash]).sort(([a], [b]) => a!.localeCompare(b!))));
 }
 export async function buildLabelInput(pack: SourcePack, sourceRevision: number): Promise<LabelInput> {
-  return { sourceRevision, sourceFingerprint: await sourceFingerprint(pack), products: extractLabelProducts(pack) };
+  return { sourceRevision, sourceFingerprint: await sourceFingerprint(pack), products: extractLabelProducts({ ...pack, files: pack.files.filter(f => f.kind === "inventory") }).filter(p => p.identity === "internal_code") };
 }

@@ -50,7 +50,7 @@ export const SOURCE_DEFS = [
     required: ["cam_ket", "khung_flash_sale"],
   },
 ] as const;
-export type SourceKind = (typeof SOURCE_DEFS)[number]["kind"];
+export type SourceKind = (typeof SOURCE_DEFS)[number]["kind"] | "general";
 export type Issue = {
   level: "error" | "warning" | "info";
   code: string;
@@ -138,8 +138,8 @@ export function inspect(
     }
     const first = Array.isArray(payload) ? payload[0] : payload;
     if (!first || typeof first !== "object" || Array.isArray(first))
-      throw Error(`${name}: expected a campaign array or sale-rules object.`);
-    columns = Object.keys(first);
+      throw Error(`${name}: expected an object or an array of records.`);
+    columns = [...new Set((Array.isArray(payload) ? payload : [first]).flatMap(row => row && typeof row === "object" ? Object.keys(row) : []))];
     kind = SOURCE_DEFS.find(
       (d) =>
         ["campaigns", "sale_program"].includes(d.kind) &&
@@ -202,15 +202,14 @@ export function inspect(
         })),
     );
   }
-  if (!kind)
-    throw Error(
-      `${name}: unknown source format. Required headers: ${SOURCE_DEFS.map((d) => `${d.name} (${d.required.join(", ")})`).join("; ")}.`,
-    );
-  const definition = SOURCE_DEFS.find((d) => d.kind === kind)!;
+  kind ??= "general";
+  if (!columns.length || columns.length > 100 || columns.some(c => !c || c.length > 200))
+    throw Error(`${name}: expected 1–100 named columns (at most 200 characters each).`);
+  const definition = SOURCE_DEFS.find((d) => d.kind === kind);
   const seen = new Set<string>();
   rows.forEach((row, i) => {
     const rowNumber = i + (payload === undefined ? 2 : 1);
-    for (const key of definition.required)
+    for (const key of definition?.required ?? [])
       if (!(key in row))
         addIssues({
           level: "error",
@@ -338,7 +337,7 @@ export async function makeSource(
       : JSON.stringify(result.payload, null, 2);
   return {
     kind: result.kind,
-    name: SOURCE_DEFS.find((d) => d.kind === result.kind)!.file,
+    name: SOURCE_DEFS.find((d) => d.kind === result.kind)?.file ?? name.replace(/[/\\]/g, "__"),
     text: sanitized,
     hash: await hashText(sanitized),
     origin: origin.slice(0, 300),
@@ -355,9 +354,9 @@ export async function validatePack(input: unknown): Promise<SourcePack> {
     ) ||
     !("files" in input) ||
     !Array.isArray(input.files) ||
-    input.files.length !== 6
+    input.files.length > 24
   )
-    throw Error("A data pack needs exactly the six CSV/JSON source files.");
+    throw Error("A data pack accepts up to 24 CSV/JSON tables.");
   let size = 0;
   const files: Source[] = [];
   for (const entry of input.files) {
@@ -365,6 +364,7 @@ export async function validatePack(input: unknown): Promise<SourcePack> {
       !entry ||
       typeof entry.name !== "string" ||
       typeof entry.text !== "string" ||
+      !/\.(csv|json)$/i.test(entry.name) || entry.name.length > 1000 ||
       /[/\\]/.test(entry.name)
     )
       throw Error("Invalid source entry.");
@@ -381,9 +381,9 @@ export async function validatePack(input: unknown): Promise<SourcePack> {
       ),
     );
   }
-  if (new Set(files.map((f) => f.kind)).size !== 6)
+  if (new Set(files.map(sourceKey)).size !== files.length)
     throw Error(
-      "Duplicate source type: include one of each of the six sources.",
+      "Duplicate table: choose one file per business source or general table name.",
     );
   return { schema: "hackathon.sources.v1", files };
 }
@@ -405,9 +405,29 @@ export function selectUploads(
       throw Error(`Multiple ${def.name} sources. Choose one shop folder.`);
     if (candidates[0]) result.push(candidates[0].i);
   }
-  if (result.length !== 6)
+  if (!result.length)
     throw Error(
-      "Select the shop folder containing live_11_11 and the three parent reference files.",
+      "No supported business files found in this folder.",
     );
   return result;
+}
+
+/** General tables are independent; business tables retain their existing canonical identity. */
+export const sourceKey = (source: Source) => source.kind === "general" ? `general:${source.name}` : source.kind;
+export function mergeSources(existing: Source[], incoming: Source[]) {
+  const merged = new Map(existing.map(source => [sourceKey(source), source]));
+  for (const source of incoming) merged.set(sourceKey(source), source);
+  if (merged.size > 24) throw Error("A workspace accepts up to 24 tables.");
+  return [...merged.values()];
+}
+export const DEMAND_COLUMN = "Demand label";
+export async function withoutDemandLabels(pack: SourcePack): Promise<SourcePack> {
+  return { ...pack, files: await Promise.all(pack.files.map(async source => {
+    if (source.kind !== "inventory") return source;
+    const parsed = inspect(source.name, source.text);
+    if (!parsed.columns.includes(DEMAND_COLUMN)) return source;
+    const columns = parsed.columns.filter(c => c !== DEMAND_COLUMN);
+    const text = Papa.unparse({ fields: columns, data: parsed.rows });
+    return { ...source, text, hash: await hashText(text) };
+  })) };
 }

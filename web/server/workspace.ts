@@ -10,13 +10,13 @@ import {
   chatArchiveSchema,
   defaultChatArchive,
 } from "../src/studio/workspace-types";
-import { validatePack, MAX_BYTES } from "../src/studio/sources";
+import Papa from "papaparse";
+import { validatePack, MAX_BYTES, inspect, sourceKey, hashText, normalize, DEMAND_COLUMN, withoutDemandLabels } from "../src/studio/sources";
 import type { SourcePack } from "../src/studio/sources";
 import {
   labelRunSchema, sourceFingerprint, type LabelRun,
 } from "../src/studio/product-labels";
 import { LABEL_LEASE_MS } from "./product-label-provider";
-import { repositorySources } from "./repository";
 import { fail } from "./auth";
 declare const WebSocketPair: { new (): { 0: WorkerSocket; 1: WorkerSocket } };
 export class AccountWorkspace {
@@ -29,6 +29,8 @@ export class AccountWorkspace {
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS chunks (name TEXT, position INTEGER, content TEXT NOT NULL, PRIMARY KEY(name, position))",
     );
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_tables (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, columns_json TEXT NOT NULL, source_revision INTEGER NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_rows (table_id TEXT NOT NULL, position INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY(table_id, position))");
   }
   private read(name: string) {
     const meta = this.ctx.storage.sql
@@ -50,34 +52,45 @@ export class AccountWorkspace {
       data: JSON.parse(chunks.map((c) => c.content).join("")),
     };
   }
-  private write(name: string, data: unknown, expected: number) {
-    return this.ctx.storage.transactionSync(() => {
-      const old = this.ctx.storage.sql
-        .exec<{ revision: number }>(
-          "SELECT revision FROM documents WHERE name = ?",
-          name,
-        )
-        .toArray()[0];
-      if ((old?.revision ?? 0) !== expected) return null;
-      const revision = expected + 1,
-        updatedAt = new Date().toISOString(),
-        text = JSON.stringify(data);
-      this.ctx.storage.sql.exec("DELETE FROM chunks WHERE name = ?", name);
-      for (let i = 0; i < text.length; i += 100000)
-        this.ctx.storage.sql.exec(
-          "INSERT INTO chunks VALUES (?, ?, ?)",
-          name,
-          i / 100000,
-          text.slice(i, i + 100000),
-        );
-      this.ctx.storage.sql.exec(
-        "INSERT INTO documents VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET revision = excluded.revision, updated_at = excluded.updated_at",
+  private writeDocument(name: string, data: unknown, expected: number) {
+    const old = this.ctx.storage.sql
+      .exec<{ revision: number }>(
+        "SELECT revision FROM documents WHERE name = ?",
         name,
-        revision,
-        updatedAt,
+      )
+      .toArray()[0];
+    if ((old?.revision ?? 0) !== expected) return null;
+    const revision = expected + 1,
+      updatedAt = new Date().toISOString(),
+      text = JSON.stringify(data);
+    this.ctx.storage.sql.exec("DELETE FROM chunks WHERE name = ?", name);
+    for (let i = 0; i < text.length; i += 100000)
+      this.ctx.storage.sql.exec(
+        "INSERT INTO chunks VALUES (?, ?, ?)",
+        name,
+        i / 100000,
+        text.slice(i, i + 100000),
       );
-      return { revision, updatedAt, data };
-    });
+    this.ctx.storage.sql.exec(
+      "INSERT INTO documents VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET revision = excluded.revision, updated_at = excluded.updated_at",
+      name,
+      revision,
+      updatedAt,
+    );
+    if (name === "sources") this.materialize(data as SourcePack, revision);
+    return { revision, updatedAt, data };
+  }
+  private write(name: string, data: unknown, expected: number) {
+    return this.ctx.storage.transactionSync(() => this.writeDocument(name, data, expected));
+  }
+  private materialize(pack: SourcePack, revision: number) {
+    this.ctx.storage.sql.exec("DELETE FROM studio_rows");
+    this.ctx.storage.sql.exec("DELETE FROM studio_tables");
+    for (const source of pack.files) {
+      const parsed = inspect(source.name, source.text), id = sourceKey(source);
+      this.ctx.storage.sql.exec("INSERT INTO studio_tables VALUES (?, ?, ?, ?, ?)", id, source.name, source.kind, JSON.stringify(parsed.columns), revision);
+      parsed.rows.forEach((row, index) => this.ctx.storage.sql.exec("INSERT INTO studio_rows VALUES (?, ?, ?)", id, index, JSON.stringify(row)));
+    }
   }
   private notify(name: string, revision: number) {
     for (const socket of this.ctx.getWebSockets()) {
@@ -123,7 +136,7 @@ export class AccountWorkspace {
       if (previous?.sourceRevision === sources.revision && previous.sourceFingerprint === fingerprint) {
         if (previous.status === "running" && Date.parse(previous.startedAt) + LABEL_LEASE_MS > Date.now())
           return fail(409, "Labeling is already running. Refresh its status shortly.", "LABEL_RUN_ACTIVE");
-        if (previous.status === "completed" && previous.provider === candidate.provider)
+        if (previous.status === "completed" && previous.provider === candidate.provider && JSON.stringify(previous.context) === JSON.stringify(candidate.context))
           return Response.json({ acquired: false, run: previous });
       }
       // Start time comes from this object, not from the caller's clock.
@@ -131,16 +144,39 @@ export class AccountWorkspace {
     } else {
       if (!previous || previous.id !== candidate.id || previous.status !== "running" ||
           previous.provider !== candidate.provider || previous.sourceRevision !== candidate.sourceRevision ||
-          previous.sourceFingerprint !== candidate.sourceFingerprint || candidate.status === "running")
+          previous.sourceFingerprint !== candidate.sourceFingerprint || JSON.stringify(previous.context) !== JSON.stringify(candidate.context) || candidate.status === "running")
         return fail(409, "A newer labeling run superseded this result.", "LABEL_RUN_SUPERSEDED");
       candidate.startedAt = previous.startedAt;
       candidate.completedAt = new Date().toISOString();
     }
-    const saved = this.write("product-labels", { run: candidate }, current?.revision ?? 0);
+    let labeledPack: SourcePack | null = null;
+    if (operation === "finish" && ["completed", "partial"].includes(candidate.status)) {
+      const labels = new Map(candidate.results.map(r => [r.productId, r.group]));
+      labeledPack = { ...sources.data, files: await Promise.all((sources.data as SourcePack).files.map(async source => {
+        if (source.kind !== "inventory") return source;
+        const parsed = inspect(source.name, source.text);
+        const code = parsed.columns.find(c => normalize(c) === normalize("Mã nội bộ"))!;
+        const columns = [...parsed.columns.filter(c => c !== DEMAND_COLUMN), DEMAND_COLUMN];
+        const rows = parsed.rows.map(row => ({ ...row, [DEMAND_COLUMN]: labels.get(JSON.stringify(["inventory", "internal_code", String(row[code] ?? "").trim()])) ?? "" }));
+        const text = Papa.unparse({ fields: columns, data: rows });
+        return { ...source, text, hash: await hashText(text) };
+      })) };
+      candidate.sourceFingerprint = await sourceFingerprint(labeledPack!);
+      candidate.sourceRevision = sources.revision + 1;
+    }
+    // Hashing yields: recheck both revisions before the atomic source/run commit.
+    if (this.read("sources")?.revision !== sources.revision || this.read("product-labels")?.revision !== current?.revision)
+      return fail(409, "Workspace changed while labeling. Retry with the latest sources.", "LABEL_SOURCES_CHANGED");
+    const saved = this.ctx.storage.transactionSync(() => {
+      if (labeledPack) this.writeDocument("sources", labeledPack, sources.revision);
+      return this.writeDocument("product-labels", { run: candidate }, current?.revision ?? 0);
+    });
     if (!saved) return fail(409, "Labeling status changed. Refresh and try again.");
+    if (labeledPack) this.notify("sources", candidate.sourceRevision);
     this.notify("product-labels", saved.revision);
     return Response.json({ acquired: true, run: candidate });
   }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url),
       name = url.pathname.split("/").pop() ?? "";
@@ -171,7 +207,7 @@ export class AccountWorkspace {
       if (!document) {
         const data =
           name === "sources"
-            ? (await repositorySources()).pack
+            ? { schema: "hackathon.sources.v1", files: [] }
             : name === "settings"
               ? defaultSettings
               : name === "chats"
@@ -195,7 +231,7 @@ export class AccountWorkspace {
         return fail(422, "A valid revision is required.");
       const data =
         name === "sources"
-          ? await validatePack(body.data)
+          ? await withoutDemandLabels(await validatePack(body.data))
           : name === "settings"
             ? settingsSchema.parse(body.data)
             : name === "chats"

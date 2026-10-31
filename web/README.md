@@ -154,60 +154,74 @@ Xem `.env.example`. Chỉ biến có tiền tố `VITE_` vào bundle, nên **kh�
 | `VITE_DEV_USER`, `VITE_DEV_USER_NAME`, `VITE_DEV_ROLE` | `u-ops-1`, `Lan`, `operator` | Gửi qua header `X-User`/`X-Role` (08 §1) |
 | `OPENAPI_URL` | trống | URL cho `gen:api` |
 
-## Nối tool gán nhóm nhu cầu cho Data Studio
+## ZIP import and warehouse demand labels
 
-Khung đã có, adapter mặc định **chưa cấu hình**. Điểm cần implement là
-`getProductLabelProvider(env)` trong `server/product-label-provider.ts`:
-trả về `{ id, classify(input, signal) }` khi có cấu hình thật, ngược lại trả `null`.
-`classify` nhận `LabelInput` từ `src/studio/product-labels.ts` và trả về:
+Run `npm run dev:cloudflare` for Data Studio and account storage; ordinary Vite
+proxies to the separate Python backend. Set Worker values in ignored `.dev.vars`
+for local development. The API key is a Cloudflare secret; model IDs are text
+bindings in `cloudflare.config.ts` (never use `VITE_*` for credentials):
 
-```json
-{
-  "labels": [
-    { "productId": "<echo exact input.products[i].id>", "group": "mua_vu", "reason": "Evidence supplied by the provider", "confidence": 0.82 }
-  ]
-}
-```
+- `OPENAI_API_KEY`: existing OpenAI credential.
+- `OPENAI_MODEL_IMPORT`: defaults to `gpt-6-luna`; requires Responses structured output.
+  Falls back to `OPENAI_MODEL` if supplied. Recognized tables work without AI.
+- `OPENAI_MODEL_DECISION`: defaults to `gpt-6-luna`, configured independently. No automatic chat-model fallback for product classification.
 
-`group` chỉ nhận `moi`, `ban_thua`, `mua_vu`, `trend`, `on_dinh`, hoặc `null`
-khi chưa kết luận được. `reason` bắt buộc; `confidence` tùy chọn, trong [0,1].
-Có thể trả một phần danh sách; sản phẩm còn thiếu giữ trạng thái chưa phân loại.
-Mã lạ, mã trùng, nhãn sai, lý do rỗng hay confidence ngoài khoảng bị từ chối.
-Đặt timeout trong adapter, tôn trọng `AbortSignal`, giữ key ở Worker secrets và
-không đưa tên/ghi chú sản phẩm thành chỉ dẫn cho mô hình. Không thêm key vào UI.
-Khung hiện không giả định URL, hãng cung cấp, payload HTTP hoặc API key nào.
+New accounts start with an empty Data Studio. Existing saved sources are preserved.
 
-Hai endpoint đã nằm sau session và kiểm tra same-origin:
+Data Studio → **Import ZIP** extracts UTF-8 CSV/JSON on the Worker and previews
+recognized tables, general tables and proposed mappings. Select one file per business source type and any general tables, review
+column mappings and sample rows, then **Load tables to workspace**. The existing
+revision-checked autosave persists the selected tables to AccountWorkspace. SQLite
+`studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
+with the source document revision; no user or model SQL is executed. The
+map uses the saved inventory. Other source types retain their current data.
+The demo clock only filters repository demo inventory, not uploaded snapshots.
 
-- `GET /api/product-labels`: candidates của nguồn đã lưu, trạng thái cấu hình,
-  lần chạy gần nhất và cờ stale.
-- `POST /api/product-labels` với `{ "sourceRevision": 7 }`: chạy adapter cho đúng
-  phiên bản đã lưu. Không nhận nhãn hay file từ client trong request này.
+`POST /api/studio/import` accepts raw ZIP bytes and returns `{ tables, skipped,
+model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
+100 archive entries, 24 CSV/JSON files. Paths with traversal are rejected;
+answer-key/hidden files and unsupported types are excluded. Known contracts
+are parsed deterministically. Unknown flat CSV/JSON tables send headers only (without contact
+columns) to the model. Every mapping must use existing columns and satisfy a
+supported table contract; row values are never model-generated. Unmapped tables remain general tables. JSON objects and arrays of records are
+supported (nested values remain JSON); spreadsheets are not supported. Existing direct CSV/JSON and folder import remain available.
 
-Nguồn được lưu trước; import thành công mới kích hoạt một lần gán nhãn khi
-adapter đã cấu hình. Mở demo/reload không tự gọi tool. Có nút chạy/thử lại;
-tool lỗi không làm thất bại việc lưu file. Kết quả lưu riêng trong Durable Object,
-không cho browser ghi trực tiếp. Claim và finish kiểm tra revision/fingerprint,
-chống chạy trùng và kết quả trả chậm. Giới hạn hiện tại 2.000 candidates,
-30 giây mỗi lần chạy, lease 35 giây; không có hàng đợi background bền vững.
+Map → **Warehouse** → **Open workspace** → **Label data** classifies saved
+inventory products only. Enter market and assessment date. **Evidence** accepts
+product code, observation date, source and observation. Each model batch gets
+only evidence for its products. No web search is performed; metadata and manual
+evidence do not imply measured demand. Labels are `Trendy`, `Seasonal`, `Normal`,
+or `null` with an explanation of missing evidence. The Vietnamese prompt lives
+in `server/demand-prompt.ts`; these labels do not change forecast groups or ads.
 
-Candidates được rút từ tên sản phẩm trong đơn hàng, tồn kho và giá vốn. Ads,
-cấu trúc chiến dịch, chương trình sale không cung cấp tên đủ tin cậy để tự tạo
-thêm sản phẩm; cả sáu nguồn vẫn nằm trong fingerprint. ID giữ riêng platform
-SKU, mã nội bộ và tên nhập tay; **chưa đối soát SKU xuyên nguồn**. Adapter chỉ
-nhận tên, mã, tên khác và số bản ghi, không nhận file gốc, contact hoặc ghi chú.
-Để kết luận nhóm nhu cầu theo lịch sử, bên tích hợp phải bổ sung hợp đồng dữ liệu
-và bằng chứng phù hợp: tên sản phẩm đơn lẻ không chứng minh được trend/bán thưa.
+- `GET /api/product-labels`: inventory candidates, configuration, latest run, stale flag.
+- `POST /api/product-labels`: `{ sourceRevision, context: { market, asOf,
+  evidence: [{ productCode, observedAt, source, observation }] } }`.
 
-Nhãn tool hiện là kết quả riêng trong Data Studio, **chưa ghi vào Python forecast**.
-Theo lựa chọn người dùng, classifier hiện tại tiếp tục hoạt động. Công việc còn
-lại của bên tích hợp: adapter thật, secrets/config, đối soát canonical SKU và
-cơ chế áp dụng nhãn vào backend có quyền sửa tay/audit/backtest tương ứng.
+Both routes require authentication and same-origin writes. Classification runs
+only on button click, uses batches of 25 (up to three concurrent calls), and has
+a 120-second timeout. At most 2,000 candidates and 100 evidence records are
+accepted. Long jobs can time out; there is no background queue. Results retain
+assessment context, model/prompt version and source fingerprint in account
+storage. Invalid/duplicate/unknown results are rejected. Concurrent calls are
+leased, changed sources reject late results, and a completed identical request
+is reused. Changed assessment context can start a new run. Legacy five-group
+results are stale and must be regenerated. Failures never erase source data.
 
-Kiểm tra với `npm run check`. Browser QA: chạy Vite cổng 5186 rồi
-`node qa/studio/labels.mjs` (có thể đặt `STUDIO_QA_CHANNEL=msedge`). Bài browser
-dùng API giả lập; test server dùng SQLite thật với provider giả, không gọi tool
-hay ghi production. Ảnh và kết quả nằm trong `qa/runs/product-labels/` ở gốc repo.
+Successful/partial runs atomically add a read-only `Demand label` column to the
+inventory CSV and SQLite records. Blank values are unclassified; missing-evidence
+reasons remain in the run. The column appears in Data Studio, Warehouse and CSV
+exports. Editing/reimporting sources clears derived labels; browser uploads cannot
+forge them. The existing Python bridge forwards only its six supported business
+formats, without the derived label column; general tables stay in the workspace.
+
+Checks: `npm run check`; run `node qa/studio/serve.mjs` to serve the built
+Worker locally on port 5187, then `node qa/studio/labels.mjs` for the browser
+flow. The local QA login is `admin` / `studio-local-test` (or set
+`STUDIO_QA_PASSWORD` for both scripts). Credentials and data stay in ignored
+`.cloudflare/studio-qa/`; screenshots and results go to `qa/runs/studio-import/`.
+The script resets and writes synthetic tables only on localhost. Provider
+contract tests stub the OpenAI response; they do not prove a live model call.
 
 ## Cấu trúc
 

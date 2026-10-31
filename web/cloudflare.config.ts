@@ -25,6 +25,8 @@ export default defineConfig({
       JUDGES_PASSWORD_HASH: bindings.secret(),
       SESSION_SECRET: bindings.secret(),
       OPENAI_API_KEY: bindings.secret(),
+      OPENAI_MODEL_IMPORT: bindings.text("gpt-6-luna"),
+      OPENAI_MODEL_DECISION: bindings.text("gpt-6-luna"),
       LOGIN_LIMITER: bindings.rateLimit({
         namespace: "2001",
         simple: { limit: 10, period: 60 },
