@@ -22,7 +22,7 @@ describe("warehouse demand labels", () => {
     expect(screen.getByText("0")).toBeInTheDocument();
     await waitFor(() => expect(request).toHaveBeenCalled());
   });
-  it("shows stocked products only and keeps label settings collapsed", async () => {
+  it("shows stocked products with search and label action, without settings", async () => {
     request.mockResolvedValue(response);
     render(<ProductLabels sourceRevision={1} blocked={false} inventory={[
       { code: "A", name: "Cup", stock: 2, asOf: "" },
@@ -32,7 +32,9 @@ describe("warehouse demand labels", () => {
     await screen.findByText("Cup");
     expect(screen.queryByText("Sold out")).not.toBeInTheDocument();
     expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
-    expect(screen.getByText("Label settings").closest("details")).not.toHaveAttribute("open");
+    expect(screen.queryByText("Label settings")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Search products")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Market")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Refresh product labels" })).not.toBeInTheDocument();
   });
   it("reveals and highlights a Milo source selection after searching and paging", async () => {
@@ -55,18 +57,16 @@ describe("warehouse demand labels", () => {
     render(<ProductLabels sourceRevision={1} blocked={false} />);
     await screen.findByText("Cup");
     expect(request.mock.calls.every(([, options]) => options?.method !== "POST")).toBe(true);
-    fireEvent.change(screen.getByLabelText("Assessment date"), { target: { value: context.asOf } });
     fireEvent.click(screen.getByRole("button", { name: "Label data" }));
-    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/product-labels", expect.objectContaining({ method: "POST", body: JSON.stringify({ sourceRevision: 1, context }) })));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/product-labels", expect.objectContaining({ method: "POST", body: JSON.stringify({ sourceRevision: 1, context: { ...context, asOf: new Date().toISOString().slice(0, 10) } }) })));
   });
   it("keeps unknown products unclassified and explains missing evidence", async () => {
     request.mockResolvedValue({ ...response, run: { id: "run", provider: "test", context, sourceRevision: 1, sourceFingerprint: response.sourceFingerprint, status: "partial", startedAt: "2026-10-31T00:00:00Z", completedAt: "2026-10-31T00:01:00Z", error: null, results: [{ productId: "A", group: null, reason: "Need dated demand evidence" }] } });
     render(<ProductLabels sourceRevision={1} blocked={false} />);
     await screen.findByText("Need dated demand evidence");
     expect(screen.getByText("Unclassified")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Market"), { target: { value: "Thailand" } });
-    expect(screen.queryByText("Need dated demand evidence")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Labels need updating");
+    fireEvent.click(screen.getByRole("button", { name: "Label data" }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/product-labels", expect.objectContaining({ method: "POST", body: JSON.stringify({ sourceRevision: 1, context }) })));
   });
   it("blocks unavailable models and unsaved sources", async () => {
     request.mockResolvedValue({ ...response, configured: false });

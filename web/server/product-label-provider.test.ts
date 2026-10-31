@@ -19,7 +19,7 @@ it("requires a separate decision model and keeps missing evidence unclassified",
   expect(body.input).toContain("Vietnam");
 });
 it("batches products without mixing their evidence or accepting missing results", async () => {
-  const csv = "Mã nội bộ,Tồn thực tế,Tên hàng\n" + Array.from({ length: 26 }, (_, i) => `P${i},2,Cup ${i}`).join("\n");
+  const csv = "Mã nội bộ,Tồn thực tế,Tên hàng\n" + Array.from({ length: 51 }, (_, i) => `P${i},2,Cup ${i}`).join("\n");
   const input = await buildLabelInput({ schema: "hackathon.sources.v1", files: [await makeSource("inventory.csv", csv, "upload")] }, 1);
   const calls: { products: { id: string; reference: string }[]; context: { evidence: { productCode: string }[] } }[] = [];
   vi.stubGlobal("fetch", vi.fn<typeof globalThis.fetch>(async (_url, init) => {
@@ -31,5 +31,17 @@ it("batches products without mixing their evidence or accepting missing results"
   await provider.classify({ ...input, context: { market: "Vietnam", asOf: "2026-10-31", evidence: [{ productCode: "P0", observedAt: "2026-10-30", source: "Report", observation: "Demand observations for P0" }] } }, new AbortController().signal);
   expect(calls).toHaveLength(2);
   expect(calls.every(c => c.context.evidence.every(e => c.products.some(p => p.reference === e.productCode)))).toBe(true);
-  expect(calls.flatMap(c => c.products)).toHaveLength(26);
+  expect(calls.flatMap(c => c.products)).toHaveLength(51);
+});
+it("retains successful batches when one model call fails", async () => {
+  const csv = "Mã nội bộ,Tồn thực tế,Tên hàng\n" + Array.from({ length: 51 }, (_, i) => `P${i},2,Cup ${i}`).join("\n");
+  const input = await buildLabelInput({ schema: "hackathon.sources.v1", files: [await makeSource("stock.csv", csv, "upload")] }, 1);
+  let calls = 0;
+  vi.stubGlobal("fetch", vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    if (++calls === 1) return new Response("sensitive upstream text", { status: 429 });
+    const batch = JSON.parse(JSON.parse(init!.body as string).input).untrusted_evidence;
+    return Response.json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ labels: batch.products.map((p: { id: string }) => ({ productId: p.id, group: null, reason: "Needs evidence", confidence: 0 })) }) }] }] });
+  }));
+  const result = await getProductLabelProvider({ OPENAI_API_KEY: "test", OPENAI_MODEL_DECISION: "test" })!.classify({ ...input, context: { market: "Vietnam", asOf: "2026-11-12", evidence: [] } }, new AbortController().signal);
+  expect(result).toMatchObject({ labels: [expect.objectContaining({ reason: "Needs evidence" })] });
 });

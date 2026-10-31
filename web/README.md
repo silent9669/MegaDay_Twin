@@ -171,32 +171,36 @@ from older accounts by exact filename/hash and demo provenance; uploaded/edited
 tables are preserved. **Delete table** and **Delete all data** remove saved tables
 and their SQLite records after confirmation. Removing inventory also removes its label run.
 
-Data Studio → **Import ZIP** extracts UTF-8 CSV/JSON on the Worker and previews
-recognized tables, general tables and proposed mappings. Select one file per business source type and any general tables, review
-column mappings and sample rows, then **Load tables to workspace**. Loading ZIP tables saves immediately to AccountWorkspace with revision checks.
+Drop a ZIP anywhere in Data Studio (or use **Import ZIP**) to extract UTF-8
+CSV/JSON and immediately save recognized and general tables. If several files
+match the same business table, choose one before saving. Import does not wait
+for AI. **Review & fix with AI** reviews the current saved tables and applies
+validated column mappings with revision checks; failed review leaves them unchanged.
 Cell edits retain revision-checked autosave. SQLite
 `studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
 with the source document revision. Unchanged table rows are not rewritten; no
 user or model SQL is executed. The
-map uses the saved inventory. Other source types retain their current data.
-The demo clock only filters repository demo inventory, not uploaded snapshots.
+map uses saved inventory. HQ shows imported table, order, ad and stocked-product
+counts; Neighborhood shows searchable, paginated imported orders. The demo clock
+only filters repository demo data, not uploaded inventory or orders.
 
 `POST /api/studio/import` accepts raw ZIP bytes and returns `{ tables, skipped,
 model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
 100 archive entries, 24 CSV/JSON files. Paths with traversal are rejected;
-answer-key/hidden files and unsupported types are excluded. Known contracts
-are parsed deterministically. One model call reviews every table using its schema,
+answer-key/hidden files, `_replay.json` playback metadata and unsupported types
+are excluded. Known contracts are parsed deterministically. With `?review=1`,
+one model call reviews every table using its schema,
 diagnostic codes and at most two sample rows (12 columns, 80 characters per value,
 contact fields removed). The same call maps unknown flat CSV/JSON headers.
-Review results are shown before loading; missing model configuration is explicit.
+Reviewed tables replace the saved set, and review findings appear in Import details. Missing model configuration is explicit.
 A sample review does not certify all records. Every mapping must use existing columns and satisfy a
 supported table contract; row values are never model-generated. Unmapped tables remain general tables. JSON objects and arrays of records are
 supported (nested values remain JSON); spreadsheets are not supported. Existing direct CSV/JSON and folder import remain available.
 
 Map → **Warehouse** → **Open workspace** → **Label data** classifies saved
-products with positive latest stock only. Search by name/code; **Label settings**
-contains market, assessment date and **Evidence**, which accepts
-product code, observation date, source and observation. Each model batch gets
+products with positive latest stock only. The toolbar contains search by name/code
+and **Label data**. New runs default to Vietnam and today; retries retain their
+saved assessment context. The API continues to accept dated product evidence. Each model batch gets
 only evidence for its products. No web search is performed; metadata and manual
 evidence do not imply measured demand. Labels are `Trendy`, `Seasonal`, `Normal`,
 or `null` with an explanation of missing evidence. The Vietnamese prompt lives
@@ -207,13 +211,16 @@ in `server/demand-prompt.ts`; these labels do not change forecast groups or ads.
   evidence: [{ productCode, observedAt, source, observation }] } }`.
 
 Both routes require authentication and same-origin writes. Classification runs
-only on button click, uses batches of 25 (up to three concurrent calls), and has
-a 120-second timeout. At most 2,000 candidates and 100 evidence records are
+only on button click, uses batches of 50 (up to three concurrent calls), with
+a 30-second timeout per batch and a 120-second overall timeout. At most 2,000 candidates and 100 evidence records are
 accepted. Long jobs can time out; there is no background queue. Results retain
 assessment context, model/prompt version and source fingerprint in account
 storage. Invalid/duplicate/unknown results are rejected. Concurrent calls are
 leased, changed sources reject late results, and completed/partial identical requests
-are reused without another model call or source write. Changed assessment context can start a new run. Legacy five-group
+without batch failures are reused without another model call or source write.
+Successful batches survive individual batch failures; retry requests only missing
+products when source, provider and context still match. Safe errors distinguish
+model access, unsupported requests, rate limits and service failures. Changed assessment context can start a new run. Legacy five-group
 results are stale and must be regenerated. Failures never erase source data.
 
 Successful/partial runs atomically add a read-only `Demand label` column to the
@@ -230,6 +237,11 @@ flow. The local QA login is `admin` / `studio-local-test` (or set
 `.cloudflare/studio-qa/`; screenshots and results go to `qa/runs/studio-import/`.
 The script resets and writes synthetic tables only on localhost. Provider
 contract tests stub the OpenAI response; they do not prove a live model call.
+For an actual archive, set `LIVE_ARCHIVE_PATH` and run
+`npx vitest run server/live-archive.test.ts`, then
+`node qa/studio/live-zip.mjs`. The latter verifies ZIP drop, saved records, HQ,
+Neighborhood, Warehouse and responsive layouts against the local Worker.
+Archive contents stay local and are never committed.
 
 ## Cấu trúc
 

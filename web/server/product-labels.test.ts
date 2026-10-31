@@ -69,6 +69,20 @@ async function setup() {
 }
 
 describe("product label workflow", () => {
+  it("saves successful products and retries only missing products", async () => {
+    const { workspace, saveSources } = await setup();
+    const inventory = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2\nB,Lamp,3", "upload");
+    await saveSources(1, { schema: "hackathon.sources.v1", files: [inventory] });
+    const classify = vi.fn(async (input: LabelInput) => ({ labels: labels(input).labels.slice(0, 1) }));
+    const provider = { id: "test", classify };
+    const first = await (await productLabels(request(2), workspace, provider)).json() as LabelResponse;
+    expect(first.run).toMatchObject({ status: "partial", error: "Saved 1 of 2 products. Retry to label the remaining products." });
+    const second = await (await productLabels(request(first.sourceRevision), workspace, provider)).json() as LabelResponse;
+    expect(second.run).toMatchObject({ status: "completed", error: null });
+    expect(second.run?.results).toHaveLength(2);
+    expect(classify.mock.calls.map(([input]) => input.products.length)).toEqual([2, 1]);
+  });
+
   it("stays honestly unconfigured and never writes fake labels", async () => {
     const { workspace } = await setup();
     expect(getProductLabelProvider({ OPENAI_API_KEY: "must-not-enable-without-decision-model" })).toBeNull();

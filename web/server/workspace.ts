@@ -175,7 +175,7 @@ export class AccountWorkspace {
       if (previous?.sourceRevision === sources.revision && previous.sourceFingerprint === fingerprint) {
         if (previous.status === "running" && Date.parse(previous.startedAt) + LABEL_LEASE_MS > Date.now())
           return fail(409, "Labeling is already running. Refresh its status shortly.", "LABEL_RUN_ACTIVE");
-        if (["completed", "partial"].includes(previous.status) && previous.provider === candidate.provider && JSON.stringify(previous.context) === JSON.stringify(candidate.context))
+        if (["completed", "partial"].includes(previous.status) && !previous.error && previous.provider === candidate.provider && JSON.stringify(previous.context) === JSON.stringify(candidate.context))
           return Response.json({ acquired: false, run: previous });
       }
       // Start time comes from this object, not from the caller's clock.
