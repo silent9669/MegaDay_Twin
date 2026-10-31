@@ -93,6 +93,7 @@ const TOUR = [
   },
 ] as const;
 export function CityApp({ studio = false }: { studio?: boolean }) {
+  const [chatAnchor, setChatAnchor] = useState<HTMLSpanElement | null>(null);
   const connected = useAccountEvents();
   const settings = useAccountDocument<ViewSettings>("settings"),
     sources = useAccountDocument<SourcePack>("sources"),
@@ -412,6 +413,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             </div>
             {!district && (
               <section className="city-stats" aria-label="Source overview">
+                <span className="city-pm-anchor" ref={setChatAnchor} />
                 <div>
                   <span>Inventory codes</span>
                   <strong>{feed.stock.length.toLocaleString()}</strong>
@@ -682,7 +684,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             : "Loading account"}
         </span>
       </footer>
-      <CityChat />
+      <CityChat launcherAnchor={chatAnchor} />
       <dialog
         ref={settingsDialog}
         className="city-settings"

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { requestJSON } from "../studio/account";
 import "./city.css";
 export function Login() {
@@ -32,34 +32,24 @@ export function Login() {
   return (
     <main className="city-login">
       <div className="login-art" aria-hidden="true">
-        <span className="login-wordmark">MegaDay Twin</span>
-        <div className="login-buildings">
-          {Array.from({ length: 9 }, (_, i) => (
-            <i key={i} style={{ height: `${100 + ((i * 73) % 220)}px` }}>
-              {Array.from({ length: 12 }, (_, w) => (
-                <b key={w} />
-              ))}
-            </i>
-          ))}
-        </div>
-        <div className="login-art-caption">
-          <span>SENSE → PLAN → CONTROL</span>
-          <strong>
-            Your commerce.
-            <br />A living city.
-          </strong>
-        </div>
+        <div className="login-art-image" />
       </div>
       <section className="login-form-area">
-        <form onSubmit={(e) => void submit(e)}>
-          <span className="eyebrow">MegaDay Twin / Workspace</span>
-          <h1>Enter your city.</h1>
+        <form aria-label="Sign in" aria-busy={busy} onSubmit={(e) => void submit(e)}>
+          <div className="login-brand">
+            <img src="/icon.svg?v=2" width="36" height="36" alt="" />
+            <span>MegaDay Twin</span>
+          </div>
+          <h1>Sign in</h1>
           <label htmlFor="username">Username</label>
           <input
             id="username"
             name="username"
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             required
+            readOnly={busy}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
@@ -71,30 +61,30 @@ export function Login() {
               type={visible ? "text" : "password"}
               autoComplete="current-password"
               required
+              readOnly={busy}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "login-error" : undefined}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
             <button
               type="button"
               aria-label={visible ? "Hide password" : "Show password"}
+              aria-pressed={visible}
               onClick={() => setVisible(!visible)}
             >
-              {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+              {visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
             </button>
           </div>
           {error && (
-            <p role="alert" className="studio-error">
+            <p id="login-error" role="alert" className="login-error">
               {error}
             </p>
           )}
           <button className="login-submit" type="submit" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
-            <ArrowRight size={18} />
+            <ArrowRight size={18} aria-hidden="true" />
           </button>
-          <div className="login-foot">
-            <ShieldCheck size={15} />
-            <span>Your account. One shared workspace.</span>
-          </div>
         </form>
       </section>
     </main>
