@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
+  Bell,
   Check,
   CircleHelp,
   Database,
@@ -43,6 +44,8 @@ import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
+import { CampaignHQ } from "../campaign/CampaignHQ";
+import { useCampaignWatch } from "../campaign/useCampaignWatch";
 import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
 import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
 import { CityChat } from "./CityChat";
@@ -62,8 +65,9 @@ const DISTRICTS = [
   { id: "ads", name: "Ads Platform", icon: Megaphone },
   { id: "homes", name: "Residential district", icon: Home },
 ] as const;
-export function CityApp({ studio = false, planner = false, skuAssistant = false }: { studio?: boolean; planner?: boolean; skuAssistant?: boolean }) {
-  const pageWorkspace = studio || planner || skuAssistant;
+export function CityApp({ studio = false, planner = false, skuAssistant = false, campaignHQ = false }: { studio?: boolean; planner?: boolean; skuAssistant?: boolean; campaignHQ?: boolean }) {
+  const pageWorkspace = studio || planner || skuAssistant || campaignHQ;
+  const campaignWatch = useCampaignWatch();
   const [mobile, setMobile] = useState(
     () => matchMedia("(max-width: 899px)").matches,
   );
@@ -277,13 +281,17 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
         </Link>
         <span className="city-route">
           /{" "}
-          {skuAssistant ? "Trợ lý theo SKU" : planner ? "Mục tiêu buổi sale" : studio
+          {campaignHQ ? "Campaign CD002" : skuAssistant ? "Trợ lý theo SKU" : planner ? "Mục tiêu buổi sale" : studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
               : "Commerce city"}
         </span>
         <div className="city-account">
+          <button className="city-appearance" aria-label="Thông báo Milo"
+            onClick={() => window.dispatchEvent(new Event("workspace:updates"))}>
+            <Bell size={16} /><span>{updates.unread > 0 ? updates.unread : "Milo"}</span>
+          </button>
           <button className="city-appearance" aria-label="Night mode" aria-pressed={appearance === "night"}
             disabled={!settings.document || savingSettings}
             onClick={() => void setSettings({ ...viewSettings, appearance: appearance === "night" ? "morning" : "night" })}>
@@ -387,7 +395,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
       </nav>
       {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
-        {skuAssistant ? <SkuGoalAssistant /> : planner ? <SaleGoalPlanner /> : studio ? (
+        {campaignHQ ? <CampaignHQ watch={campaignWatch} /> : skuAssistant ? <SkuGoalAssistant /> : planner ? <SaleGoalPlanner /> : studio ? (
           <DataStudio />
         ) : (
           <>
@@ -524,6 +532,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
                     {district === "hq" ? (
                       <>
                         <div className="workspace-tabs">
+                          <Link to="/campaign-hq">CD002 · Phân tích và đề xuất <ArrowRight aria-hidden size={16} /></Link>
                           <Link to="/sale-planner">Mục tiêu buổi sale <ArrowRight aria-hidden size={16} /></Link>
                           <Link to="/sku-assistant">Trao đổi mục tiêu với Milo <ArrowRight aria-hidden size={16} /></Link>
                         </div>
@@ -635,7 +644,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
         </span>
       </footer>
       <CityChat
-        context={{ screen: skuAssistant ? "sku-assistant" : planner ? "sale-planner" : studio ? "data-studio" : district ?? "city" }}
+        context={{ screen: campaignHQ ? "campaign-hq" : skuAssistant ? "sku-assistant" : planner ? "sale-planner" : studio ? "data-studio" : district ?? "city" }}
         launcherAnchor={chatAnchor}
         updates={updates}
         onOpenChange={setChatOpen}

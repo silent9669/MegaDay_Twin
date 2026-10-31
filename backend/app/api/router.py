@@ -8,7 +8,17 @@ from fastapi import APIRouter
 from app.api import actions as actions_api
 from app.api import ai as ai_api
 from app.api import alerts as alerts_api
-from app.api import campaigns, economics, health, ingest, scenarios, skus, system
+from app.api import (
+    campaign_analysis,
+    campaigns,
+    economics,
+    health,
+    ingest,
+    replay_archive,
+    scenarios,
+    skus,
+    system,
+)
 from app.api import decisions as decisions_api
 from app.api import live as live_api
 from app.api import stream as stream_api
@@ -28,4 +38,7 @@ api_router.include_router(decisions_api.router)
 api_router.include_router(actions_api.router)
 api_router.include_router(alerts_api.router)
 api_router.include_router(live_api.router)
+api_router.include_router(replay_archive.router)
 api_router.include_router(stream_api.router)
+
+api_router.include_router(campaign_analysis.router)

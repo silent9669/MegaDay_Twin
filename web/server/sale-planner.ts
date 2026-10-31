@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { backendFetch } from "./backend-fetch";
 import { goalDraftSchema } from "../src/planner/goal-contract";
 import type { PlannerContext, PlannerRunError } from "../src/planner/planner-api";
 import { hashText } from "../src/studio/sources";
@@ -24,8 +25,8 @@ export function plannerBackend(env: PlannerEnv, signal?: AbortSignal) {
   return async (path: string, body?: unknown): Promise<Record<string, unknown>> => {
     let response: Response;
     try {
-      response = await fetch(new URL(path, base), {
-        method: body === undefined ? "GET" : "POST", redirect: "error",
+      response = await backendFetch(new URL(path, base), {
+        method: body === undefined ? "GET" : "POST",
         headers: { "X-User": env.DATA_BACKEND_USER!, "X-Role": env.DATA_BACKEND_ROLE!, "Content-Type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(body === undefined ? 15000 : 90000)]) : AbortSignal.timeout(body === undefined ? 15000 : 90000),
       });

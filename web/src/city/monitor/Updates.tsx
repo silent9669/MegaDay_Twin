@@ -44,9 +44,9 @@ export function Updates({
           </small>
           <footer>
             <Link to={notice.href} onClick={onNavigate}>
-              View source <ArrowUpRight size={14} />
+              {notice.backendCampaign ? "Mở campaign để cập nhật & đề xuất lại" : "View source"} <ArrowUpRight size={14} />
             </Link>
-            <button onClick={() => onExplain(notice)}>Explain</button>
+            {!notice.backendCampaign && <button onClick={() => onExplain(notice)}>Explain</button>}
           </footer>
         </article>
       ))}

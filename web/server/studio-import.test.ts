@@ -71,11 +71,9 @@ describe("backend archive investigation", () => {
   });
 });
 
-it("excludes replay metadata and fast-imports recognized tables even when the AI connection fails", async () => {
+it("rejects replay ZIPs before importing future CSVs or calling AI", async () => {
   const fetch = vi.fn(async () => { throw Error("offline"); });
   vi.stubGlobal("fetch", fetch);
-  const result = await analyzeArchive(archive({ "live_11_11/stock.csv": "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,1", "live_11_11/_replay.json": '{"rows":[],"headers":[]}' }), { OPENAI_API_KEY: "test", OPENAI_MODEL_IMPORT: "test" }, false);
-  expect(result.tables).toHaveLength(1);
-  expect(result.skipped[0]?.file).toContain("_replay.json");
+  await expect(analyzeArchive(archive({ "live_11_11/stock.csv": "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,1", "live_11_11/_replay.json": '{"rows":[],"headers":[]}' }), { OPENAI_API_KEY: "test", OPENAI_MODEL_IMPORT: "test" }, false)).rejects.toThrow("Replay demo");
   expect(fetch).not.toHaveBeenCalled();
 });

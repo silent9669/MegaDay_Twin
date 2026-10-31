@@ -14,6 +14,8 @@ import { studioImport } from "./server/studio-import";
 import type { StudioModelEnv } from "./server/model-json";
 import { productLabels } from "./server/product-labels";
 import { getProductLabelProvider } from "./server/product-label-provider";
+import { explainCampaign } from "./server/campaign-explain";
+import { backendFetch } from "./server/backend-fetch";
 import { plannerContext, runSalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
@@ -107,6 +109,11 @@ async function handle(request: Request, env: Env): Promise<Response> {
         env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
         getProductLabelProvider(env));
     }
+    if (path === "/api/campaign-hq/explain" && request.method === "POST") {
+      if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
+        return fail(429, "Milo is busy. Retry shortly.");
+      return explainCampaign(request, env);
+    }
     if (path === "/api/sale-planner/context" && request.method === "GET")
       return plannerContext(env);
     if (path === "/api/sale-planner/interpret" && request.method === "POST") {
@@ -197,26 +204,24 @@ async function handle(request: Request, env: Env): Promise<Response> {
             }),
             SOURCE_DEFS.find((d) => d.kind === f.kind)!.file,
           );
-        return fetch(new URL("ingest/files", base), {
+        return backendFetch(new URL("ingest/files", base), {
           method: "POST",
           headers,
           body: form,
-          redirect: "error",
         });
       }
       const relative = path.slice("/api/v1/".length);
       if (relative.includes("..") || !/^[\w/.-]+$/.test(relative))
         return fail(400, "Invalid backend path.");
       if (!["GET", "HEAD"].includes(request.method)) {
-        headers.set("Content-Type", "application/json");
+        headers.set("Content-Type", relative === "live/replay-archive" ? "application/zip" : "application/json");
       }
-      return fetch(new URL(relative + url.search, base), {
+      return backendFetch(new URL(relative + url.search, base), {
         method: request.method,
         headers,
         body: ["GET", "HEAD"].includes(request.method)
           ? undefined
           : request.body,
-        redirect: "error",
       });
     }
     return fail(404, "API route not found.");

@@ -143,9 +143,19 @@ def select(run: SimRun) -> Selection:
         if g.kind == "clear_stock"
         else None
     )
+    progress = g.params.get("hq_progress", {})
     return select_actions(
         g.kind,
-        [Outcome(r.action.key, r.feasible, r.j, goal_units(run, r), r.spend) for r in run.runs],
+        [
+            Outcome(
+                r.action.key,
+                r.feasible,
+                r.j + progress.get("cash", 0),
+                goal_units(run, r) + progress.get("units", 0),
+                r.spend + progress.get("spend", 0),
+            )
+            for r in run.runs
+        ],
         target_units=g.target_units,
         sell_target_prob=float(g.params.get("sell_target_prob", p.num("sell_target_prob"))),
         max_loss_vnd=max_loss,
@@ -190,6 +200,8 @@ def zone_bar(run: SimRun, resim: Resim) -> tuple[ZoneBar | None, str | None]:
     """Continue-vs-pause bar from the simulation (05 §7.2)."""
     inp = run.inputs
     by = run.by_key()
+    if inp.goal.params.get("hq_progress"):
+        return None, "Goal selection includes observed progress; compare the saved campaign table."
     if quantity_sku(inp):
         return None, "Không dùng thanh kinh tế chạy/dừng để kết luận mục tiêu số lượng riêng SKU."
     if "continue" not in by or "pause" not in by:

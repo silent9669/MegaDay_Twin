@@ -14,6 +14,25 @@ export function useWorkspaceMonitor(
   const [notices, setNotices] = useState<ChangeNotice[]>([]);
   const [read, setRead] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<ChangeNotice | null>(null);
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const detail = (event as CustomEvent<{ revision: string; dataAsOf: string | null }>).detail;
+      const notice: ChangeNotice = {
+        id: `backend-CD002-${detail.revision}`, kind: "campaigns", backendCampaign: true,
+        title: "CD002 · Có cập nhật từ backend",
+        detail: "Dữ liệu hoặc mục tiêu đã đổi. Mở HQ để cập nhật và đề xuất lại.",
+        before: null, after: detail.revision, important: true, simulation: false,
+        reconnected: false, observedAt: new Date().toISOString(), href: "/campaign-hq",
+        // Backend notices link to HQ; never send this as source-workspace evidence.
+        reference: { kind: "campaigns", sourceRevision: 0, sandboxRevision: 0,
+          hour: 0, before: null, after: detail.revision },
+      };
+      setNotices(old => [notice, ...old.filter(n => !n.backendCampaign)].slice(0, 100));
+      setToast(notice);
+    };
+    window.addEventListener("workspace:campaign-update", changed);
+    return () => window.removeEventListener("workspace:campaign-update", changed);
+  }, []);
   const next = useMemo(
     () => (sources && sandbox ? snapshot(sources, sandbox) : null),
     [sources, sandbox],

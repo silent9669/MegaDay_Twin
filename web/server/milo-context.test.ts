@@ -21,7 +21,7 @@ function scenario(overrides = {}) { return { scenario_id: "SC1", input_hash: "ha
 function backend(data: unknown) {
   const fetch = vi.fn(async (_url: URL | string, init?: RequestInit) => {
     expect(init?.method).toBe("GET");
-    expect(init?.redirect).toBe("error");
+    expect(init?.redirect).toBe("manual");
     return Response.json({ data });
   });
   vi.stubGlobal("fetch", fetch);

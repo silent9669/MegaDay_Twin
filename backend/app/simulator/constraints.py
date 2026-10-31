@@ -110,6 +110,8 @@ class StockResult:
     combo_first_lost_t: IntArr  # [C, A, S]
     contribution_single: FloatArr  # [J, A, S], actual hourly margin times sales
     contribution_combo: FloatArr  # [C, A, S]
+    revenue_single: FloatArr  # [J, A, S], sum of actual hourly price * sales
+    revenue_combo: FloatArr  # [C, A, S]
 
 
 def simulate_stock(
@@ -118,6 +120,8 @@ def simulate_stock(
     combo_demand: FloatArr,  # [C, A, S, T]
     m: FloatArr,  # [J, T] contribution per single unit
     m_combo: FloatArr,  # [C, T]
+    price: FloatArr | None = None,
+    price_combo: FloatArr | None = None,
 ) -> StockResult:
     n_j, n_a, n_s, n_t = demand.shape
     n_c = combo_demand.shape[0]
@@ -131,6 +135,8 @@ def simulate_stock(
     contrib = np.zeros((n_a, n_s))
     contrib_single = np.zeros((n_j, n_a, n_s))
     contrib_combo = np.zeros((n_c, n_a, n_s))
+    revenue_single = np.zeros((n_j, n_a, n_s))
+    revenue_combo = np.zeros((n_c, n_a, n_s))
     first = np.full((n_j, n_a, n_s), n_t, dtype=np.int64)
     cfirst = np.full((n_c, n_a, n_s), n_t, dtype=np.int64)
     q = setup.combo_qty
@@ -148,6 +154,8 @@ def simulate_stock(
         lost_tot += lost
         contrib += np.einsum("j,jas->as", m[:, t], sold)
         contrib_single += m[:, t, None, None] * sold
+        if price is not None:
+            revenue_single += price[:, t, None, None] * sold
         np.minimum(first, np.where(lost > 0, t, n_t), out=first)
         for c in range(n_c):
             comp = np.flatnonzero(q[c] > 0)
@@ -166,6 +174,8 @@ def simulate_stock(
             clost_tot[c] += lc
             contrib += m_combo[c, t] * sc
             contrib_combo[c] += m_combo[c, t] * sc
+            if price_combo is not None:
+                revenue_combo[c] += price_combo[c, t] * sc
             np.minimum(cfirst[c], np.where(lc > 0, t, n_t), out=cfirst[c])
         if setup.flash[t]:
             reserve = np.maximum(reserve - used, 0.0)
@@ -180,4 +190,6 @@ def simulate_stock(
         combo_first_lost_t=cfirst,
         contribution_single=contrib_single,
         contribution_combo=contrib_combo,
+        revenue_single=revenue_single,
+        revenue_combo=revenue_combo,
     )

@@ -6,6 +6,8 @@ import type { ImportAnalysis, ImportTable } from "../src/studio/import-types";
 import { modelJSON, ModelRequestError, type StudioModelEnv } from "./model-json";
 import { fail } from "./auth";
 
+class ReplayArchive extends Error {}
+
 /** Extract in memory; never write archive paths or execute archive contents. */
 export function extractArchive(bytes: Uint8Array) {
   if (bytes.length > MAX_BYTES) throw Error("ZIP exceeds the 20 MiB limit.");
@@ -23,6 +25,8 @@ export function extractArchive(bytes: Uint8Array) {
   const unzip = new Unzip(file => {
     if (file.name.length > 300 || names.has(file.name) || names.size >= 100) throw Error("Duplicate archive path or 100-entry limit exceeded.");
     names.add(file.name);
+    if (/(?:^|\/)_replay\.json$/i.test(file.name))
+      throw new ReplayArchive("ZIP này là nguồn Replay demo; không import CSV cả ngày vào dữ liệu đang phân tích.");
     if (/^[/\\]|^[A-Za-z]:|\\/.test(file.name) || file.name.includes(String.fromCharCode(0)) || file.name.split("/").includes(".."))
       throw Error("Unsafe archive path.");
     if (file.name.endsWith("/")) return;
@@ -152,5 +156,8 @@ export async function studioImport(request: Request, env: StudioModelEnv) {
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
   try { return Response.json(await analyzeArchive(bytes, env, review)); }
-  catch (error) { return fail(422, error instanceof Error && error.name !== "ZodError" ? error.message : "Invalid archive analysis."); }
+  catch (error) {
+    if (error instanceof ReplayArchive) return fail(409, error.message, "REPLAY_ARCHIVE");
+    return fail(422, error instanceof Error && error.name !== "ZodError" ? error.message : "Invalid archive analysis.");
+  }
 }
