@@ -94,6 +94,9 @@ and Milo notification. It advances a fresh disposable local demo by one hour; no
 For a local browser preview with the real Worker authentication, run
 `npm run build:cloudflare`, then
 `npx vite preview --mode cloudflare --host 127.0.0.1 --port 5173 --strictPort`.
+Set `MEGADAY_LOCAL_BACKEND=1` in the shell for both commands when using the local
+Python bridge (`$env:MEGADAY_LOCAL_BACKEND='1'` in PowerShell). Do not set this flag
+in production builds: the bridge secrets are optional, and deployed secrets are retained.
 Use the local credentials/backend URL in the ignored `web/.dev.vars` file and run
 Python separately. This serves compiled public assets; Vite's development modules
 are blocked by the production login gate and its CSP, which otherwise leaves the
