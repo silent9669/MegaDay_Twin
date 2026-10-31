@@ -1,0 +1,12 @@
+{
+  "_comment": "Khai báo combo lúc onboarding (02 §2.3, WH-02). Thành phần combo không có trong file nào của shop nên người dùng khai báo; đây là bản khai báo mẫu cho demo.",
+  "bundles": [
+    {
+      "bundle_sku_id": "COMBO-NOICHIEN",
+      "components": [
+        {"sku_id": "NOICHIEN2L", "qty": 1},
+        {"sku_id": "GIAYLOT50", "qty": 1}
+      ]
+    }
+  ]
+}

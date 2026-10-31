@@ -1,0 +1,18 @@
+{
+  "data": {
+    "id": "u-ops-1",
+    "role": "operator",
+    "role_label": "Vận hành",
+    "can_run_scenarios": true,
+    "can_edit_goals": false
+  },
+  "meta": {
+    "data_as_of": null,
+    "computed_at": "2026-11-11T01:00:00+07:00",
+    "compute_state": null,
+    "confidence": null,
+    "sources": [],
+    "cache_hit": null,
+    "total": null
+  }
+}

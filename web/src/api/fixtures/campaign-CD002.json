@@ -1,0 +1,140 @@
+{
+  "data": {
+    "campaign_id": "CD002",
+    "name": "[Tìm kiếm] Nồi chiên mini + giấy lót",
+    "type": "Tìm kiếm",
+    "daily_budget_vnd": 1864000,
+    "sku_level_control": false,
+    "skus": [
+      "COMBO-NOICHIEN",
+      "GIAYLOT50",
+      "NOICHIEN2L"
+    ],
+    "status": "Đang chạy",
+    "status_code": "running",
+    "status_at": "2026-11-10T20:00:00+07:00",
+    "spend_today_vnd": null,
+    "budget_used_pct": null,
+    "iroas": {
+      "estimate_id": "iroas-01M67F7GW91MS4QEEYPASQCWS2",
+      "mean": 4.415310110754519,
+      "p10": 3.3303382154235126,
+      "p90": 5.390543443518652,
+      "platform_roas": 8.092039943166185,
+      "breakeven_iroas": 4.9607031345987815,
+      "confidence": "reference"
+    },
+    "recommendation": {
+      "recommendation_id": "rec-01M67FCMEZT0859NR57714PME4",
+      "status": "recommend",
+      "best": {
+        "kind": "schedule_hours",
+        "pct": null,
+        "windows_local": [
+          [
+            0,
+            2
+          ],
+          [
+            12,
+            14
+          ]
+        ]
+      },
+      "confidence": "reference",
+      "scenario_id": "scn-01M67FCMQJZT5V7Q3T9CWN1YA6",
+      "created_at": "2026-11-11T01:00:00+07:00",
+      "data_as_of": "2026-11-11T01:00:00+07:00"
+    },
+    "started_at": "2026-07-14T00:00:00+07:00",
+    "sku_detail": [
+      {
+        "sku": "COMBO-NOICHIEN",
+        "name": "Combo nồi chiên mini + giấy lót",
+        "variant": "",
+        "is_bundle": true,
+        "list_price_vnd": 719000,
+        "price_effective_vnd": 574000,
+        "stock_available": 76,
+        "unit_cost_vnd": 473000
+      },
+      {
+        "sku": "GIAYLOT50",
+        "name": "Giấy lót nồi chiên 50 tờ",
+        "variant": "",
+        "is_bundle": false,
+        "list_price_vnd": 45000,
+        "price_effective_vnd": 45000,
+        "stock_available": 296,
+        "unit_cost_vnd": 18000
+      },
+      {
+        "sku": "NOICHIEN2L",
+        "name": "Nồi chiên không dầu mini 2L",
+        "variant": "",
+        "is_bundle": false,
+        "list_price_vnd": 690000,
+        "price_effective_vnd": 531000,
+        "stock_available": 76,
+        "unit_cost_vnd": 455000
+      }
+    ],
+    "price_max_vnd": 690000,
+    "commitments": [
+      {
+        "id": "sc-73154153bbee238d522e",
+        "program": "Siêu sale 11.11",
+        "day_local": "2026-11-11",
+        "kind": "campaign_must_run",
+        "sku": null,
+        "campaign_id": "CD002",
+        "value": null,
+        "windows_local": [
+          [
+            0,
+            2
+          ]
+        ],
+        "window_start": "2026-11-11T00:00:00+07:00",
+        "window_end": "2026-11-11T02:00:00+07:00",
+        "text": "Không tắt chiến dịch trong khung flash sale (đã cam kết với sàn)"
+      },
+      {
+        "id": "sc-2676ef76f4fe637e1572",
+        "program": "Siêu sale 11.11",
+        "day_local": "2026-11-11",
+        "kind": "campaign_must_run",
+        "sku": null,
+        "campaign_id": "CD002",
+        "value": null,
+        "windows_local": [
+          [
+            12,
+            14
+          ]
+        ],
+        "window_start": "2026-11-11T12:00:00+07:00",
+        "window_end": "2026-11-11T14:00:00+07:00",
+        "text": "Không tắt chiến dịch trong khung flash sale (đã cam kết với sàn)"
+      }
+    ],
+    "goal": {
+      "goal_id": "goal-01M67FC48PSYTFRR9D1C4FPD2F",
+      "kind": "profit",
+      "label": "Lợi nhuận tới 00:00 12/11",
+      "deadline": "2026-11-12T00:00:00+07:00",
+      "target_units": null,
+      "confirmed_by": "lead-1",
+      "version": 1
+    }
+  },
+  "meta": {
+    "data_as_of": "2026-11-11T01:00:00+07:00",
+    "computed_at": "2026-11-11T01:00:00+07:00",
+    "compute_state": "fresh",
+    "confidence": null,
+    "sources": [],
+    "cache_hit": null,
+    "total": null
+  }
+}

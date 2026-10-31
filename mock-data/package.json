@@ -1,0 +1,17 @@
+{
+  "name": "megaday-twin-mock-data",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bộ sinh dữ liệu giả lập cho MegaDay Twin: shop Shopee đồ gia dụng, có đáp án đúng (ground truth) để chấm điểm.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "gen": "node generate.js",
+    "gen:nho": "node generate.js --size nho",
+    "gen:demo": "node generate.js --size demo",
+    "gen:tai-nang": "node generate.js --size tai_nang",
+    "replay": "node replay.js"
+  }
+}

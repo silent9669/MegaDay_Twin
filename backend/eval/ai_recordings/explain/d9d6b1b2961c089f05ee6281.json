@@ -1,0 +1,75 @@
+{
+ "key": "d9d6b1b2961c089f05ee6281",
+ "flow": "explain",
+ "question": "Vì sao nồi chiên chỉ chạy khung giờ?",
+ "client": "fake",
+ "ok": true,
+ "recorded_at": "2026-10-30T22:41:10.822427+00:00",
+ "steps": [
+  {
+   "request": {
+    "model": "gpt-5",
+    "n_items": 1,
+    "tools": [
+     "compare_actions",
+     "compute_breakeven",
+     "get_iroas",
+     "get_sku_snapshot",
+     "get_forecast",
+     "get_goal_and_parameters",
+     "draft_decision"
+    ],
+    "last_item": "user",
+    "sources": []
+   },
+   "response": {
+    "text": null,
+    "tool_calls": [
+     {
+      "id": "call_compare_actions_3",
+      "name": "compare_actions",
+      "arguments": "{\"campaign_id\": \"CD002\", \"horizon_hours\": null}"
+     }
+    ],
+    "usage": {
+     "input_tokens": 535,
+     "output_tokens": 20
+    },
+    "model": "fake",
+    "output_items": null
+   }
+  },
+  {
+   "request": {
+    "model": "gpt-5",
+    "n_items": 3,
+    "tools": [
+     "compare_actions",
+     "compute_breakeven",
+     "get_iroas",
+     "get_sku_snapshot",
+     "get_forecast",
+     "get_goal_and_parameters",
+     "draft_decision"
+    ],
+    "last_item": "function_call_output",
+    "sources": [
+     [
+      "compare_actions",
+      "scn-01M67FJRB6W9J517VJD0386X79"
+     ]
+    ]
+   },
+   "response": {
+    "text": "Mô phỏng đề xuất chỉ chạy theo khung giờ 00:00–02:00, 12:00–14:00 [[src:scn-01M67FJRB6W9J517VJD0386X79]].\nKhả năng cách này lời hơn cách đứng thứ hai là 100% [[src:scn-01M67FJRB6W9J517VJD0386X79]].\nChạy cả ngày tốn khoảng 5.299.234đ tiền ads [[src:scn-01M67FJRB6W9J517VJD0386X79]], còn chỉ chạy khung giờ tốn khoảng 1.180.332đ [[src:scn-01M67FJRB6W9J517VJD0386X79]].\nHai khung flash sale là khung đã cam kết với sàn nên vẫn phải chạy quảng cáo.\nĐiều làm đổi kết luận: Nếu hàng dư còn giá trị (ròng, so với giá vốn) từ -199.969đ/sp trở xuống → Giảm ngân sách 50% tốt hơn",
+    "tool_calls": [],
+    "usage": {
+     "input_tokens": 2183,
+     "output_tokens": 142
+    },
+    "model": "fake",
+    "output_items": null
+   }
+  }
+ ]
+}

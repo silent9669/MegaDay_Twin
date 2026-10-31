@@ -1,0 +1,427 @@
+<title>Sơ đồ MegaDay Twin</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: một cột đọc từ trên xuống — sơ đồ kiến trúc rộng (cuộn ngang trên điện thoại), rồi vòng chạy, màn hình mẫu, bảng tiêu chí */
+:root {
+  --bg: #F3F6F8;
+  --surface: #FFFFFF;
+  --layer: #E6ECF1;
+  --fg: #16202A;
+  --muted: #5A6774;
+  --line: #A8B3BE;
+  --accent: #0C7A84;
+  --new-bg: #E1F2F3;
+  --ok: #2E8B57;
+  --warn: #C98A12;
+  --zc: #F5E4CB;
+  --zp: #D7E6F5;
+  --ai: #6A4FBE;
+  --ai-bg: #EEE9FB;
+  --on-ai: #FFFFFF;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E141A; --surface: #17202A; --layer: #1E2934; --fg: #E5EBF0; --muted: #97A5B2;
+    --line: #4A5866; --accent: #4CC0C8; --new-bg: #12353A; --ok: #5CC28A; --warn: #E2AE45;
+    --zc: #4A3618; --zp: #1A3452; --ai: #A893F2; --ai-bg: #262043; --on-ai: #17122E; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E141A; --surface: #17202A; --layer: #1E2934; --fg: #E5EBF0; --muted: #97A5B2;
+  --line: #4A5866; --accent: #4CC0C8; --new-bg: #12353A; --ok: #5CC28A; --warn: #E2AE45;
+  --zc: #4A3618; --zp: #1A3452; --ai: #A893F2; --ai-bg: #262043; --on-ai: #17122E; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap {
+  max-width: 1240px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 36px 64px;
+  display: grid; gap: 48px;
+}
+header { display: grid; gap: 12px; max-width: 760px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0; }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.25; margin: 0; text-wrap: balance; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--muted); font-size: 16px; }
+section { display: grid; gap: 16px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); padding: 0; margin: 4px 0 0; list-style: none; }
+.legend li { display: flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 14px; border-radius: 3px; border: 1px solid var(--line); background: var(--surface); flex: none; }
+.sw.new { background: var(--new-bg); border: 1.6px solid var(--accent); }
+.sw.dash { border-style: dashed; }
+.sw.loop { border: none; height: 0; border-top: 2px dashed var(--accent); border-radius: 0; }
+
+figure { margin: 0; display: grid; gap: 10px; }
+figcaption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--layer); border-radius: 12px; padding: 12px; }
+.scroll svg { display: block; width: 100%; height: auto; }
+.arch { min-width: 1010px; }
+.zonesvg { min-width: 560px; }
+
+/* SVG */
+svg text { font-family: var(--font-body); }
+.t { font-size: 12.5px; font-weight: 600; fill: var(--fg); }
+.t2 { font-size: 11px; font-weight: 600; fill: var(--fg); }
+.s { font-size: 11px; fill: var(--muted); }
+.h { font-size: 11px; font-weight: 700; letter-spacing: .08em; fill: var(--muted); }
+.lbl { font-size: 10.5px; font-style: italic; fill: var(--muted); }
+.lbl-acc { font-size: 11px; font-weight: 600; fill: var(--accent); }
+.lbl-fg { font-size: 11px; font-weight: 600; fill: var(--fg); }
+.box { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.box.new { fill: var(--new-bg); stroke: var(--accent); stroke-width: 1.6; }
+.box.dashed { stroke-dasharray: 4 3; }
+.layer { fill: var(--layer); }
+.chip { fill: var(--surface); stroke: var(--line); stroke-width: .8; }
+.chip-new { fill: var(--surface); stroke: var(--accent); stroke-width: 1.1; }
+.wire { stroke: var(--muted); stroke-width: 1.3; fill: none; }
+.arrow { stroke: var(--muted); stroke-width: 1.3; fill: none; marker-end: url(#ah); }
+.arrow.loop { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 6 4; marker-end: url(#ah-acc); }
+.ah { fill: var(--muted); }
+.ah-acc { fill: var(--accent); }
+.dot-g { fill: var(--ok); }
+.dot-y { fill: var(--warn); }
+.dot-n { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; }
+.zone-c { fill: var(--zc); }
+.zone-p { fill: var(--zp); }
+.zt { font-size: 12.5px; font-weight: 600; fill: var(--fg); }
+.interval { fill: var(--fg); }
+.p50 { fill: var(--surface); stroke: var(--fg); stroke-width: 2; }
+.thr { stroke: var(--fg); stroke-width: 2; }
+.thr2 { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; }
+.axis { stroke: var(--muted); stroke-width: 1; }
+.tick { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+.box.ai { fill: var(--ai-bg); stroke: var(--ai); stroke-width: 1.6; }
+.chip-ai { fill: var(--surface); stroke: var(--ai); stroke-width: 1; }
+.chip-ai.dashed { stroke-dasharray: 4 3; }
+.arrow.ai { stroke: var(--ai); stroke-width: 1.6; marker-end: url(#ah-ai); }
+.ah-ai { fill: var(--ai); }
+.h-ai { fill: var(--ai); }
+.lbl-ai { font-size: 10.5px; font-style: italic; font-weight: 600; fill: var(--ai); }
+.aib { fill: var(--ai); }
+.aib-t { font-size: 9px; font-weight: 700; fill: var(--on-ai); }
+.sw.ai { background: var(--ai-bg); border: 1.6px solid var(--ai); }
+.badge { font-size: 10px; font-weight: 700; background: var(--ai); color: var(--on-ai); border-radius: 4px; padding: 0 6px; line-height: 16px; }
+
+/* Vòng chạy */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; counter-reset: st; }
+.steps li { counter-increment: st; background: var(--surface); border: 1px solid var(--layer); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.steps li::before { content: counter(st); font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+.steps li.after { border-style: dashed; border-color: var(--accent); }
+.steps b { font-size: 14.5px; }
+.steps span { font-size: 13.5px; color: var(--muted); }
+.timing { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--accent); font-weight: 600; }
+.timing code { font-family: var(--font-mono); font-size: 12.5px; }
+
+/* Kết luận mẫu */
+.verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.verdict { background: var(--surface); border: 1px solid var(--layer); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; min-width: 0; }
+.pill { justify-self: start; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; }
+.pill.warn { color: var(--warn); }
+.pill.ok { color: var(--ok); }
+.verdict p { font-size: 14px; }
+.verdict .num { font-family: var(--font-mono); font-size: 13px; }
+
+/* Bảng tiêu chí */
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--layer); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--layer); vertical-align: top; }
+th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+tr:last-child td { border-bottom: none; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td:last-child { color: var(--muted); }
+.foot { font-size: 13px; color: var(--muted); }
+</style>
+
+<main class="wrap">
+  <header>
+    <p class="eyebrow">MegaDay Twin · bản nâng cấp đề xuất</p>
+    <h1>Sơ đồ hệ thống MegaDay Twin</h1>
+    <p class="lede">Dữ liệu đi từ nguồn của shop qua 5 lớp, thành một đề xuất có nhãn tin cậy. Lớp AI ở trên cùng nhận câu hỏi của người vận hành, gọi các lớp đó qua công cụ, rồi giải thích bằng đúng con số chúng trả về. Kết quả thật sau đó quay về để chấm điểm lại dự báo. Ô viền xanh là phần mình bổ sung, ô viền xám là phần đã có trong tài liệu ngày 24/10/2026.</p>
+    <ul class="legend">
+      <li><span class="sw"></span>Có trong tài liệu gốc</li>
+      <li><span class="sw new"></span>Bổ sung khi nâng cấp</li>
+      <li><span class="sw dash"></span>Làm sau, khi có quyền</li>
+      <li><span class="sw loop"></span>Vòng phản hồi</li>
+      <li><span class="sw ai"></span>Lớp AI (OpenAI)</li>
+      <li><span class="badge">AI</span>Ô mà AI gọi được qua công cụ</li>
+    </ul>
+  </header>
+
+  <section>
+    <h2>Kiến trúc tổng thể</h2>
+    <figure>
+      <div class="scroll">
+        <svg class="arch" viewBox="0 0 1230 892" role="img" aria-label="Lớp AI ở trên cùng nhận câu hỏi bằng lời, ảnh hoặc giọng nói từ người vận hành, gọi công cụ qua cổng điều phối, kiểm số rồi đưa lời giải thích có nguồn lên giao diện; AI không tự thao tác ads hay đổi mục tiêu. Bên dưới, dữ liệu từ file Seller Center, báo cáo ads, Google Sheets và nhập tay đi qua lớp dữ liệu (adapter, ghép mã SKU, kiểm chất lượng, kho dữ liệu chuẩn), vào lớp mô hình (kho mô hình dự báo có phiếu điểm, hiệu quả thật của ads, bộ tính kinh tế), rồi lớp quyết định (mục tiêu, tham số, bộ mô phỏng 5 hành động, so sánh và ngưỡng), lên giao diện 3 tầng cho người vận hành duyệt và thao tác. Kết quả thực tế quay lại kho dữ liệu để chấm điểm lại. Lớp quản trị ở dưới ghi nhật ký, phiên bản, phân quyền và shadow mode.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="ah-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="ah-ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-ai" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <!-- Lớp AI -->
+          <rect class="box ai" x="15" y="10" width="1170" height="110" rx="10"/>
+          <text class="h h-ai" x="31" y="32">LỚP AI · LLM ĐIỀU PHỐI VÀ GIẢI THÍCH (OPENAI)</text>
+          <rect class="chip-ai" x="31" y="42" width="260" height="24" rx="5"/><text class="t2" x="161" y="58" text-anchor="middle">Hiểu yêu cầu → JSON tham số</text>
+          <path class="arrow ai" d="M291 54 H321"/>
+          <rect class="chip-ai" x="325" y="42" width="260" height="24" rx="5"/><text class="t2" x="455" y="58" text-anchor="middle">Chọn và gọi công cụ</text>
+          <path class="arrow ai" d="M585 54 H615"/>
+          <rect class="chip-ai" x="619" y="42" width="260" height="24" rx="5"/><text class="t2" x="749" y="58" text-anchor="middle">Kiểm số: khớp kết quả công cụ</text>
+          <path class="arrow ai" d="M879 54 H909"/>
+          <rect class="chip-ai" x="913" y="42" width="260" height="24" rx="5"/><text class="t2" x="1043" y="58" text-anchor="middle">Giải thích kèm chip nguồn</text>
+          <text class="s" x="31" y="93">Dùng cho:</text>
+          <rect class="chip-ai" x="95" y="76" width="110" height="26" rx="13"/><text class="s" x="105" y="93">Agent điều tra</text>
+          <rect class="chip-ai" x="215" y="76" width="130" height="26" rx="13"/><text class="s" x="225" y="93">What-if tiếng Việt</text>
+          <rect class="chip-ai" x="355" y="76" width="165" height="26" rx="13"/><text class="s" x="365" y="93">Nhập dữ liệu thông minh</text>
+          <rect class="chip-ai" x="530" y="76" width="95" height="26" rx="13"/><text class="s" x="540" y="93">Bàn giao ca</text>
+          <rect class="chip-ai dashed" x="635" y="76" width="160" height="26" rx="13"/><text class="s" x="645" y="93">Trợ lý giọng nói (sau)</text>
+          <text class="lbl-ai" x="1173" y="93" text-anchor="end">Không tự thao tác ads · không tự đổi mục tiêu</text>
+
+          <!-- AI ↔ cổng công cụ -->
+          <path class="arrow ai" d="M690 120 V178"/><text class="lbl-ai" x="684" y="140" text-anchor="end">gọi công cụ</text>
+          <path class="arrow ai" d="M740 180 V122"/><text class="lbl-ai" x="746" y="140">số thật từ công cụ</text>
+          <!-- AI → giao diện, người vận hành → AI -->
+          <path class="arrow ai" d="M1168 120 V278"/><text class="lbl-ai" x="1160" y="215" text-anchor="end">lời giải thích + chip nguồn</text>
+          <path class="arrow ai" d="M1174 486 H1205 V66 H1189"/>
+          <text class="lbl-ai" transform="translate(1222 290) rotate(-90)" text-anchor="middle">hỏi bằng lời, ảnh, giọng nói</text>
+
+          <g transform="translate(0 132)">
+          <!-- Tiêu đề cột -->
+          <text class="h" x="90" y="28" text-anchor="middle">NGUỒN DỮ LIỆU</text>
+          <text class="h" x="310" y="28" text-anchor="middle">1 · LỚP DỮ LIỆU</text>
+          <text class="h" x="570" y="28" text-anchor="middle">2 · LỚP MÔ HÌNH</text>
+          <text class="h" x="835" y="28" text-anchor="middle">3 · LỚP QUYẾT ĐỊNH</text>
+          <text class="h" x="1080" y="28" text-anchor="middle">5 · GIAO DIỆN &amp; HÀNH ĐỘNG</text>
+
+          <!-- Điều phối -->
+          <rect class="box new" x="200" y="48" width="750" height="44" rx="8"/>
+          <text class="t" x="216" y="75">Điều phối &amp; cổng công cụ</text>
+          <text class="s" x="400" y="75">dữ liệu mới → xếp ưu tiên SKU → chỉ tính lại phần đổi → cache · &lt; 5 phút cho top 50 SKU</text>
+
+          <!-- Nền các lớp -->
+          <rect class="layer" x="200" y="120" width="220" height="480" rx="10"/>
+          <rect class="layer" x="445" y="120" width="250" height="480" rx="10"/>
+          <rect class="layer" x="720" y="120" width="230" height="480" rx="10"/>
+          <rect class="layer" x="975" y="120" width="210" height="480" rx="10"/>
+
+          <!-- Nguồn -->
+          <rect class="box" x="15" y="152" width="150" height="52" rx="6"/>
+          <text class="t" x="27" y="174">File Seller Center</text><text class="s" x="27" y="192">đơn, sản phẩm</text>
+          <rect class="box" x="15" y="216" width="150" height="52" rx="6"/>
+          <text class="t" x="27" y="238">File báo cáo ads</text><text class="s" x="27" y="256">chi, trạng thái</text>
+          <rect class="box" x="15" y="280" width="150" height="52" rx="6"/>
+          <text class="t" x="27" y="302">Google Sheets</text><text class="s" x="27" y="320">tồn kho, restock</text>
+          <rect class="box" x="15" y="344" width="150" height="52" rx="6"/>
+          <text class="t" x="27" y="366">Nhập tay có nhãn</text><text class="s" x="27" y="384">giá vốn, phí</text>
+          <rect class="box dashed" x="15" y="408" width="150" height="52" rx="6"/>
+          <text class="t" x="27" y="430">Shopee API</text><text class="s" x="27" y="448">sau khi có quyền</text>
+          <path class="wire" d="M165 178 H185 M165 242 H185 M165 306 H185 M165 370 H185 M165 434 H185 M185 178 V434"/>
+          <path class="arrow" d="M185 178 H212"/>
+
+          <!-- Lớp dữ liệu -->
+          <rect class="box new" x="214" y="148" width="192" height="60" rx="6"/>
+          <text class="t" x="226" y="172">Adapter theo nguồn</text><text class="s" x="226" y="190">đổi mọi định dạng về một kiểu</text>
+          <path class="arrow" d="M310 208 V244"/><text class="lbl" x="318" y="231">bản ghi thô</text>
+          <rect class="box new" x="214" y="248" width="192" height="60" rx="6"/>
+          <text class="t" x="226" y="272">Ghép mã SKU</text><text class="s" x="226" y="290">máy gợi ý, người xác nhận</text>
+          <path class="arrow" d="M310 308 V344"/><text class="lbl" x="318" y="331">đã ghép mã</text>
+          <rect class="box" x="214" y="348" width="192" height="60" rx="6"/>
+          <text class="t" x="226" y="370">Kiểm chất lượng</text><text class="s" x="226" y="387">tồn âm, trùng đơn,</text><text class="s" x="226" y="401">thiếu giá vốn</text>
+          <path class="arrow" d="M310 408 V444"/><text class="lbl" x="318" y="431">đạt kiểm</text>
+          <rect class="box new" x="214" y="448" width="192" height="70" rx="6"/>
+          <text class="t" x="226" y="472">Kho dữ liệu chuẩn</text><text class="s" x="226" y="490">snapshot theo as_of</text><text class="s" x="226" y="506">huy hiệu độ mới</text>
+
+          <!-- Dữ liệu → mô hình -->
+          <path class="wire" d="M406 483 H436 M436 236 V494"/>
+          <path class="arrow" d="M436 236 H458 M436 394 H458 M436 494 H458"/>
+          <path class="arrow" d="M436 394 H458"/>
+          <path class="arrow" d="M436 494 H458"/>
+          <text class="lbl" transform="translate(429 365) rotate(-90)" text-anchor="middle">dữ liệu chuẩn</text>
+
+          <!-- Lớp mô hình -->
+          <path class="arrow" d="M570 92 V144"/><text class="lbl" x="578" y="114">kích hoạt tính lại</text>
+          <rect class="box new" x="462" y="148" width="216" height="176" rx="6"/>
+          <text class="t" x="474" y="170">Kho mô hình dự báo</text>
+          <rect class="chip" x="476" y="180" width="188" height="20" rx="4"/><text class="s" x="486" y="194">Trung bình trượt</text>
+          <rect class="chip" x="476" y="205" width="188" height="20" rx="4"/><text class="s" x="486" y="219">Theo mùa vụ / lịch sale</text>
+          <rect class="chip" x="476" y="230" width="188" height="20" rx="4"/><text class="s" x="486" y="244">Mượn SKU tương tự</text>
+          <rect class="chip" x="476" y="255" width="188" height="20" rx="4"/><text class="s" x="486" y="269">Hàng bán thưa (Croston)</text>
+          <text class="t2" x="474" y="294">Phiếu điểm backtest → nhãn:</text>
+          <circle class="dot-g" cx="480" cy="311" r="4"/><text class="s" x="488" y="315">Đã kiểm</text>
+          <circle class="dot-y" cx="546" cy="311" r="4"/><text class="s" x="554" y="315">Tham khảo</text>
+          <circle class="dot-n" cx="622" cy="311" r="4"/><text class="s" x="630" y="315">Kịch bản</text>
+
+          <rect class="box new" x="462" y="352" width="216" height="84" rx="6"/>
+          <text class="t" x="474" y="374">Hiệu quả thật của ads</text>
+          <text class="s" x="474" y="392">iROAS: tắt ads mất bao nhiêu đơn</text>
+          <text class="s" x="474" y="408">giả định → lịch sử → thử nghiệm</text>
+
+          <rect class="box" x="462" y="464" width="216" height="60" rx="6"/>
+          <text class="t" x="474" y="486">Bộ tính kinh tế</text><text class="s" x="474" y="504">đóng góp, chi ads, hàng dư</text>
+
+          <!-- Mô hình → quyết định -->
+          <path class="wire" d="M678 236 H706 M678 394 H706 M678 494 H706 M706 236 V494"/>
+          <path class="arrow" d="M706 369 H732"/>
+          <text class="lbl" x="681" y="230">p10–p90</text>
+          <text class="lbl" x="681" y="388">iROAS</text>
+          <text class="lbl" x="681" y="488">đ/sp</text>
+
+          <!-- Lớp quyết định -->
+          <rect class="box" x="736" y="148" width="198" height="52" rx="6"/>
+          <text class="t" x="748" y="170">Thẻ mục tiêu</text><text class="s" x="748" y="188">lợi nhuận, bán đủ, xả hàng…</text>
+          <path class="arrow" d="M835 200 V218"/><text class="lbl" x="843" y="213">ràng buộc</text>
+          <rect class="box new" x="736" y="222" width="198" height="52" rx="6"/>
+          <text class="t" x="748" y="244">Danh mục tham số</text><text class="s" x="748" y="262">mặc định, khoảng, ai được sửa</text>
+          <path class="arrow" d="M835 274 V296"/><text class="lbl" x="843" y="289">giá trị tham số</text>
+          <rect class="box new" x="736" y="300" width="198" height="140" rx="6"/>
+          <text class="t" x="748" y="322">Bộ mô phỏng hành động</text>
+          <rect class="chip" x="750" y="332" width="170" height="18" rx="4"/><text class="s" x="760" y="345">Tiếp tục</text>
+          <rect class="chip" x="750" y="354" width="170" height="18" rx="4"/><text class="s" x="760" y="367">Pause</text>
+          <rect class="chip-new" x="750" y="376" width="170" height="18" rx="4"/><text class="s" x="760" y="389">Giảm ngân sách x%</text>
+          <rect class="chip-new" x="750" y="398" width="170" height="18" rx="4"/><text class="s" x="760" y="411">Chỉ chạy theo khung giờ</text>
+          <rect class="chip-new" x="750" y="420" width="170" height="18" rx="4"/><text class="s" x="760" y="433">Pause đến khi restock</text>
+          <path class="arrow" d="M835 440 V462"/><text class="lbl" x="843" y="455">kết quả từng lựa chọn</text>
+          <rect class="box" x="736" y="466" width="198" height="60" rx="6"/>
+          <text class="t" x="748" y="488">So sánh &amp; ngưỡng</text><text class="s" x="748" y="506">điểm hòa vốn, vùng chưa rõ</text>
+
+          <!-- Quyết định → giao diện -->
+          <path class="arrow" d="M934 496 H962 V223 H986"/>
+          <text class="lbl" transform="translate(956 360) rotate(-90)" text-anchor="middle">đề xuất + nhãn tin cậy</text>
+
+          <!-- Giao diện & hành động -->
+          <rect class="box new" x="990" y="148" width="184" height="150" rx="6"/>
+          <text class="t" x="1002" y="170">Giao diện 3 tầng</text>
+          <rect class="chip" x="1002" y="180" width="160" height="34" rx="4"/><text class="t2" x="1012" y="194">Tầng 1 · 3 giây</text><text class="s" x="1012" y="208">kết luận + thanh vùng</text>
+          <rect class="chip" x="1002" y="218" width="160" height="34" rx="4"/><text class="t2" x="1012" y="232">Tầng 2 · bấm xem</text><text class="s" x="1012" y="246">lý do, điều làm đổi</text>
+          <rect class="chip" x="1002" y="256" width="160" height="34" rx="4"/><text class="t2" x="1012" y="270">Tầng 3 · kiểm tra</text><text class="s" x="1012" y="284">dữ liệu, model, phiên bản</text>
+          <path class="arrow" d="M1082 298 V322"/><text class="lbl" x="1090" y="315">đọc &amp; chọn</text>
+          <rect class="box" x="990" y="326" width="184" height="56" rx="6"/>
+          <text class="t" x="1002" y="348">Người vận hành / lead</text><text class="s" x="1002" y="366">chọn, override, xin duyệt</text>
+          <path class="arrow" d="M1082 382 V406"/><text class="lbl" x="1090" y="398">đã duyệt</text>
+          <rect class="box" x="990" y="410" width="184" height="56" rx="6"/>
+          <text class="t" x="1002" y="432">Thao tác quảng cáo</text><text class="s" x="1002" y="450">mô phỏng có nhãn / thật</text>
+          <path class="arrow" d="M1082 466 V490"/><text class="lbl" x="1090" y="482">thay đổi trên sàn</text>
+          <rect class="box" x="990" y="494" width="184" height="56" rx="6"/>
+          <text class="t" x="1002" y="516">Kết quả thực tế</text><text class="s" x="1002" y="534">đơn, tồn, chi thật</text>
+
+          <!-- Vòng phản hồi -->
+          <path class="arrow loop" d="M1082 550 V624 H310 V522"/>
+          <text class="lbl-acc" x="700" y="616" text-anchor="middle">vòng phản hồi: dữ liệu thật quay về, chấm điểm lại dự báo và cập nhật iROAS</text>
+
+          <!-- Lớp quản trị -->
+          <rect class="layer" x="200" y="645" width="985" height="100" rx="10"/>
+          <text class="h" x="216" y="667">4 · LỚP QUẢN TRỊ · MỌI LỚP ĐỀU GHI VÀO ĐÂY</text>
+          <rect class="box" x="216" y="680" width="226" height="50" rx="6"/>
+          <text class="t" x="228" y="700">Nhật ký quyết định</text><text class="s" x="228" y="718">phương án, lý do, người duyệt</text>
+          <rect class="box new" x="456" y="680" width="226" height="50" rx="6"/>
+          <text class="t" x="468" y="700">Phiên bản model &amp; tham số</text><text class="s" x="468" y="718">tái lập được kết quả cũ</text>
+          <rect class="box" x="696" y="680" width="226" height="50" rx="6"/>
+          <text class="t" x="708" y="700">Phân quyền &amp; duyệt</text><text class="s" x="708" y="718">ai được làm gì</text>
+          <rect class="box new" x="936" y="680" width="226" height="50" rx="6"/>
+          <text class="t" x="948" y="700">Shadow mode &amp; đánh giá</text><text class="s" x="948" y="718">so đề xuất với thực tế sau ca</text>
+
+          <!-- Ô mà AI gọi được qua công cụ -->
+          <rect class="aib" x="372" y="154" width="26" height="14" rx="4"/><text class="aib-t" x="385" y="164.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="372" y="254" width="26" height="14" rx="4"/><text class="aib-t" x="385" y="264.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="372" y="354" width="26" height="14" rx="4"/><text class="aib-t" x="385" y="364.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="372" y="454" width="26" height="14" rx="4"/><text class="aib-t" x="385" y="464.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="644" y="154" width="26" height="14" rx="4"/><text class="aib-t" x="657" y="164.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="644" y="358" width="26" height="14" rx="4"/><text class="aib-t" x="657" y="368.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="900" y="228" width="26" height="14" rx="4"/><text class="aib-t" x="913" y="238.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="900" y="306" width="26" height="14" rx="4"/><text class="aib-t" x="913" y="316.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="900" y="472" width="26" height="14" rx="4"/><text class="aib-t" x="913" y="482.5" text-anchor="middle">AI</text>
+          <rect class="aib" x="408" y="686" width="26" height="14" rx="4"/><text class="aib-t" x="421" y="696.5" text-anchor="middle">AI</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Mỗi lớp chỉ nói chuyện với lớp kế bên qua một định dạng cố định, nên có thể thay một mô hình, thêm một nguồn dữ liệu hay thêm một hành động mà không phải sửa các lớp khác. Lớp AI không có đường nào tự tính số: nó chỉ đọc kết quả qua cổng công cụ, và các ô có nhãn AI là những chỗ nó được gọi tới. Trên điện thoại, kéo ngang để xem hết sơ đồ.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Một vòng chạy giữa mega sale</h2>
+    <p>Đây là thứ tự hệ thống làm việc mỗi khi có dữ liệu mới. Bước 1 đến 6 chạy tự động. Bước 8 chạy sau ca, khi số liệu đã hoàn thiện.</p>
+    <span class="timing">Mục tiêu bước 1–6: <code>&lt; 5 phút</code> cho top 50 SKU ưu tiên</span>
+    <ol class="steps">
+      <li><b>Dữ liệu mới về</b><span>Từ file hoặc API, gắn mốc as_of (dữ liệu đúng đến lúc nào).</span></li>
+      <li><b>Kiểm và chuẩn hóa</b><span>Ghép mã SKU, chặn số lỗi, cập nhật huy hiệu độ mới.</span></li>
+      <li><b>Xếp ưu tiên</b><span>Rủi ro tồn × mức chi ads × độ lệch dự báo. Chỉ tính lại SKU có điểm cao hoặc vừa đổi.</span></li>
+      <li><b>Dự báo lại</b><span>Kho mô hình chọn model có phiếu điểm tốt nhất cho từng SKU, trả khoảng p10–p90.</span></li>
+      <li><b>Mô phỏng 5 lựa chọn</b><span>Theo thẻ mục tiêu, danh mục tham số và giới hạn tồn kho.</span></li>
+      <li><b>Hiện kết luận</b><span>Thanh vùng kèm nhãn tin cậy. Cảnh báo gom theo tình huống, xếp theo số tiền bị ảnh hưởng.</span></li>
+      <li><b>Duyệt và thao tác</b><span>Người vận hành chọn, lead duyệt. Ghi riêng trạng thái đã duyệt, đã gửi, đã kiểm lại.</span></li>
+      <li class="after"><b>Sau ca: chấm điểm</b><span>So đề xuất với kết quả thật, cập nhật phiếu điểm và ước lượng iROAS.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Người vận hành nhìn thấy gì</h2>
+    <p>Tầng 1 của giao diện, dùng đúng ví dụ ở trang 10 của tài liệu: còn 120 sản phẩm, còn 4 giờ, đóng góp 45.000đ mỗi sản phẩm, tiếp tục ads thì đóng góp sau ads là 4,05 triệu. Khoảng dự báo khi pause là số minh họa.</p>
+    <figure>
+      <div class="scroll">
+        <svg class="zonesvg" viewBox="0 0 760 222" role="img" aria-label="Thanh vùng quyết định: nếu pause bán trên ngưỡng thì pause tốt hơn. Dự báo khi pause là 18 đến 31 sản phẩm mỗi giờ. Với hàng dư bằng 0 đồng, ngưỡng là 22,5 nằm giữa khoảng dự báo nên chưa phân định. Với hàng dư 20.000 đồng, ngưỡng hạ xuống 16,5, cả khoảng nằm trên ngưỡng nên pause tốt hơn.">
+          <text class="lbl-acc" x="289" y="38" text-anchor="end">Ngưỡng 16,5 · hàng dư 20.000đ</text>
+          <text class="lbl-fg" x="386" y="38">Ngưỡng 22,5 · hàng dư 0đ</text>
+          <rect class="zone-c" x="60" y="52" width="320" height="36"/>
+          <rect class="zone-p" x="380" y="52" width="320" height="36"/>
+          <text class="zt" x="200" y="75" text-anchor="middle">Tiếp tục tốt hơn</text>
+          <text class="zt" x="540" y="75" text-anchor="middle">Pause tốt hơn</text>
+          <line class="thr2" x1="294.7" y1="44" x2="294.7" y2="132"/>
+          <line class="thr" x1="380" y1="44" x2="380" y2="132"/>
+          <rect class="interval" x="316" y="104" width="185" height="12" rx="6"/>
+          <circle class="p50" cx="401.3" cy="110" r="5"/>
+          <text class="s" x="408" y="146" text-anchor="middle">Dự báo nếu pause: 18–31 sp/giờ (p10–p90), giữa khoảng 24</text>
+          <line class="axis" x1="60" y1="168" x2="700" y2="168"/>
+          <line class="axis" x1="60" y1="168" x2="60" y2="174"/>
+          <line class="axis" x1="202.2" y1="168" x2="202.2" y2="174"/>
+          <line class="axis" x1="344.4" y1="168" x2="344.4" y2="174"/>
+          <line class="axis" x1="486.7" y1="168" x2="486.7" y2="174"/>
+          <line class="axis" x1="628.9" y1="168" x2="628.9" y2="174"/>
+          <text class="tick" x="60" y="190" text-anchor="middle">0</text>
+          <text class="tick" x="202.2" y="190" text-anchor="middle">10</text>
+          <text class="tick" x="344.4" y="190" text-anchor="middle">20</text>
+          <text class="tick" x="486.7" y="190" text-anchor="middle">30</text>
+          <text class="tick" x="628.9" y="190" text-anchor="middle">40</text>
+          <text class="s" x="380" y="214" text-anchor="middle">Lượng bán mỗi giờ nếu pause (sản phẩm)</text>
+        </svg>
+      </div>
+      <figcaption>Nếu pause mà vẫn bán trên ngưỡng thì pause tốt hơn. Ngưỡng dịch sang trái khi 30 sản phẩm dư sau hạn còn giá trị, vì pause không còn mất trắng phần hàng chưa bán.</figcaption>
+    </figure>
+    <div class="verdicts">
+      <div class="verdict">
+        <span class="pill warn">Chưa phân định</span>
+        <p>Hàng dư sau hạn coi như <span class="num">0đ</span>: ngưỡng <span class="num">22,5</span> nằm giữa khoảng dự báo, nên app không chọn thay người dùng.</p>
+      </div>
+      <div class="verdict">
+        <span class="pill ok">Pause tốt hơn</span>
+        <p>Hàng dư còn từ khoảng <span class="num">16.900đ</span>/sp trở lên: cả khoảng dự báo nằm trên ngưỡng. Đây là dòng "điều làm đổi kết luận" ở tầng 2.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Sáu tiêu chí nằm ở đâu trên sơ đồ</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Tiêu chí</th><th>Thành phần trên sơ đồ</th><th>Câu hỏi nó trả lời</th></tr></thead>
+        <tbody>
+          <tr><td>1 · Chính xác</td><td>Phiếu điểm backtest, Hiệu quả thật của ads, Shadow mode &amp; đánh giá, vòng phản hồi</td><td>Con số này đúng tới đâu?</td></tr>
+          <tr><td>2 · Linh hoạt</td><td>Thẻ mục tiêu, Danh mục tham số, Bộ mô phỏng 5 hành động</td><td>Đổi giả định thì kết luận đổi ra sao?</td></tr>
+          <tr><td>3 · Kết nối dữ liệu</td><td>Adapter theo nguồn, Ghép mã SKU, Kiểm chất lượng, Kho dữ liệu chuẩn</td><td>Dữ liệu từ đâu, mới tới đâu, có khớp nhau không?</td></tr>
+          <tr><td>4 · Mô-đun hóa</td><td>Kho mô hình dự báo, Adapter, Phiên bản model &amp; tham số</td><td>Thay một phần có phải sửa cả hệ thống không?</td></tr>
+          <tr><td>5 · Hiệu năng</td><td>Điều phối tính toán, Bộ tính kinh tế chạy tức thời</td><td>Giữa mega sale có ra kết quả kịp không?</td></tr>
+          <tr><td>6 · Minh bạch</td><td>Giao diện 3 tầng, nhãn tin cậy, So sánh &amp; ngưỡng</td><td>Người vận hành có hiểu trong 3 giây không?</td></tr>
+          <tr><td>+ Lớp AI</td><td>Hiểu yêu cầu, gọi công cụ, kiểm số, giải thích. Hỗ trợ thêm cho tiêu chí 1, 2, 3, 6</td><td>Hỏi bằng lời thường có nhận được câu trả lời có nguồn không?</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="foot">Dựa trên tài liệu "MegaDay Twin – Tính năng, hoàn cảnh và điều kiện sử dụng" (24/10/2026) và đề xuất nâng cấp. Mọi con số là ví dụ minh họa, không phải kết quả kinh doanh thực tế.</p>
+</main>

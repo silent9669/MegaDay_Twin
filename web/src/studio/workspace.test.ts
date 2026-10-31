@@ -1,0 +1,301 @@
+// @vitest-environment node
+import { DatabaseSync } from "node:sqlite";
+import type { DurableObjectState } from "@cloudflare/workers-types";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AccountWorkspace } from "../../server/workspace";
+import { savedChat } from "../../server/chat-store";
+import { defaultSettings } from "./workspace-types";
+function setup() {
+  const database = new DatabaseSync(":memory:");
+  const sent: string[] = [];
+  const state = {
+    storage: {
+      sql: {
+        exec: (query: string, ...bindings: (string | number)[]) => {
+          const result = database.prepare(query);
+          if (query.startsWith("SELECT"))
+            return { toArray: () => result.all(...bindings) };
+          result.run(...bindings);
+          return { toArray: () => [] };
+        },
+      },
+      transactionSync: <T>(callback: () => T) => {
+        database.exec("BEGIN");
+        try {
+          const result = callback();
+          database.exec("COMMIT");
+          return result;
+        } catch (e) {
+          database.exec("ROLLBACK");
+          throw e;
+        }
+      },
+    },
+    getWebSockets: () => [
+      {
+        send: (message: string) => sent.push(message),
+        deserializeAttachment: () => ({ expires: Date.now() + 10000 }),
+      },
+    ],
+  };
+  return {
+    reconstruct: () =>
+      new AccountWorkspace(state as unknown as DurableObjectState),
+    workspace: new AccountWorkspace(state as unknown as DurableObjectState),
+    database,
+    sent,
+  };
+}
+const req = (name: string, data?: unknown, revision = 1) =>
+  new Request(
+    `https://workspace.test/api/workspace/${name}`,
+    data ? { method: "PUT", body: JSON.stringify({ data, revision }) } : {},
+  );
+afterEach(() => vi.unstubAllGlobals());
+describe("persistent account documents", () => {
+  it("persists settings across object reconstruction and sends revision updates", async () => {
+    const { workspace, database, sent } = setup();
+    const initial = await workspace.fetch(req("settings"));
+    expect(await initial.json()).toMatchObject({
+      revision: 1,
+      data: defaultSettings,
+    });
+    const saved = await workspace.fetch(
+      req("settings", { ...defaultSettings, signals: false }),
+    );
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({
+      revision: 2,
+      data: { signals: false },
+    });
+    expect(JSON.parse(sent[0]!)).toEqual({ name: "settings", revision: 2 });
+    expect(
+      database
+        .prepare("SELECT revision FROM documents WHERE name = ?")
+        .get("settings"),
+    ).toMatchObject({ revision: 2 });
+    database.close();
+  });
+  it("rejects stale concurrent edits without overwriting the accepted document", async () => {
+    const { workspace, database } = setup();
+    await workspace.fetch(req("settings"));
+    await workspace.fetch(
+      req("settings", { ...defaultSettings, signals: false }),
+    );
+    const conflict = await workspace.fetch(
+      req("settings", { ...defaultSettings, quality: "high" }),
+    );
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toHaveProperty(
+      "error.code",
+      "REVISION_CONFLICT",
+    );
+    expect(await (await workspace.fetch(req("settings"))).json()).toMatchObject(
+      { revision: 2, data: { signals: false, quality: "balanced" } },
+    );
+    database.close();
+  });
+  it("keeps chat history and model preference across device reads and rejects stale writes", async () => {
+    const { workspace, reconstruct, database, sent } = setup();
+    expect(await (await workspace.fetch(req("chats"))).json()).toMatchObject({
+      revision: 1,
+      data: { preferredModel: "", sessions: [] },
+    });
+    const archive = {
+      preferredModel: "gpt-6.1-sol",
+      sessions: [
+        {
+          id: crypto.randomUUID(),
+          title: "Review stock",
+          model: "gpt-6.1-sol",
+          updatedAt: new Date().toISOString(),
+          messages: [
+            {
+              id: crypto.randomUUID(),
+              role: "user",
+              content: "Review stock",
+            },
+          ],
+        },
+      ],
+    };
+    expect((await workspace.fetch(req("chats", archive))).status).toBe(200);
+    expect(
+      await (await reconstruct().fetch(req("chats"))).json(),
+    ).toMatchObject({ revision: 2, data: archive });
+    expect(
+      (
+        await workspace.fetch(
+          req("chats", { preferredModel: "other", sessions: [] }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(await (await workspace.fetch(req("chats"))).json()).toMatchObject({
+      data: archive,
+    });
+    expect(JSON.parse(sent[0]!)).toEqual({ name: "chats", revision: 2 });
+    database.close();
+  });
+  it("rejects invalid and duplicate chat sessions before saving", async () => {
+    const { workspace, database } = setup();
+    expect(
+      (
+        await workspace.fetch(
+          req("chats", { preferredModel: "x", sessions: [{ id: "bad" }] }, 0),
+        )
+      ).status,
+    ).toBe(422);
+    database.close();
+  });
+  it("saves the assistant reply on the server and refuses stale retries", async () => {
+    const { workspace, database } = setup();
+    const message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: "Review stock",
+    };
+    const chat = {
+      id: crypto.randomUUID(),
+      title: "Review stock",
+      model: "gpt-6.1-sol",
+      updatedAt: new Date().toISOString(),
+      messages: [message],
+    };
+    await workspace.fetch(
+      req("chats", { preferredModel: chat.model, sessions: [chat] }, 0),
+    );
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ data: [{ id: chat.model, created: 1 }] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          output: [
+            {
+              type: "message",
+              content: [
+                { type: "output_text", text: "Check the source timestamps." },
+              ],
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", upstream);
+    const request = () =>
+      new Request("https://workspace.test/api/pm/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          sessionId: chat.id,
+          lastMessageId: message.id,
+          messages: "ignored client history",
+        }),
+      });
+    const result = await savedChat(
+      request(),
+      { OPENAI_API_KEY: "test" },
+      {},
+      workspace,
+    );
+    expect(result.status).toBe(200);
+    const stored = (await (await workspace.fetch(req("chats"))).json()) as {
+      data: { sessions: { messages: unknown[] }[] };
+    };
+    expect(stored.data.sessions[0]!.messages).toEqual([
+      message,
+      expect.objectContaining({
+        role: "assistant",
+        content: "Check the source timestamps.",
+      }),
+    ]);
+    expect(
+      (await savedChat(request(), { OPENAI_API_KEY: "test" }, {}, workspace))
+        .status,
+    ).toBe(409);
+    expect(upstream).toHaveBeenCalledTimes(2);
+    database.close();
+  });
+  it("keeps the saved user message when OpenAI is unavailable", async () => {
+    const { workspace, database } = setup();
+    const message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: "Review stock",
+    };
+    const chat = {
+      id: crypto.randomUUID(),
+      title: "Review stock",
+      model: "gpt-6.1-sol",
+      updatedAt: new Date().toISOString(),
+      messages: [message],
+    };
+    await workspace.fetch(
+      req("chats", { preferredModel: chat.model, sessions: [chat] }, 0),
+    );
+    const response = await savedChat(
+      new Request("https://workspace.test/api/pm/chat", {
+        method: "POST",
+        body: JSON.stringify({ sessionId: chat.id, lastMessageId: message.id }),
+      }),
+      {},
+      {},
+      workspace,
+    );
+    expect(response.status).toBe(503);
+    expect(await (await workspace.fetch(req("chats"))).json()).toMatchObject({
+      data: { sessions: [{ messages: [message] }] },
+    });
+    database.close();
+  });
+  it("validates clock, document name, revision and settings before writing", async () => {
+    const { workspace, database } = setup();
+    expect(
+      (await workspace.fetch(req("sandbox", { hour: 25, event: "observe" }, 0)))
+        .status,
+    ).toBe(422);
+    expect(
+      (await workspace.fetch(req("sandbox", { hour: 1, event: "observe" }, -1)))
+        .status,
+    ).toBe(422);
+    expect((await workspace.fetch(req("other"))).status).toBe(404);
+    expect(
+      (await workspace.fetch(req("settings", { signals: "yes" }, 0))).status,
+    ).toBe(422);
+    database.close();
+  });
+  it("stores and reads sources using chunks below SQLite row limits", async () => {
+    const { workspace, database } = setup();
+    const text =
+      "Mã đơn hàng,SKU phân loại hàng,Số lượng,Ngày đặt hàng\n" +
+      Array.from(
+        { length: 5000 },
+        (_, i) => `O${i},SKU1,1,2026-11-11 01:00`,
+      ).join("\n");
+    const { default: pack } =
+      await import("../../server/repository-sources.json");
+    const response = await workspace.fetch(
+      req(
+        "sources",
+        {
+          ...pack,
+          files: pack.files.map((f, i) => (i === 0 ? { ...f, text } : f)),
+        },
+        0,
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(
+      database
+        .prepare("SELECT count(*) AS n FROM chunks WHERE name = ?")
+        .get("sources"),
+    ).toHaveProperty("n", expect.any(Number));
+    const stored = (await (await workspace.fetch(req("sources"))).json()) as {
+      data: { files: { text: string }[] };
+    };
+    expect(stored.data.files[0]!.text).toContain("O4999");
+    expect(
+      database.prepare("SELECT max(length(content)) AS n FROM chunks").get(),
+    ).toHaveProperty("n", 100000);
+    database.close();
+  });
+});

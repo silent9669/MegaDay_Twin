@@ -1,0 +1,377 @@
+{
+  "_note": "Minh họa ví dụ trang 10 (05 §7.1): số tròn theo công thức hòa vốn, không phải đầu ra simulator.",
+  "data": {
+    "scenario_id": "scn-2210",
+    "request": {
+      "session_id": null,
+      "campaign_id": "VIDU-T10",
+      "start": "2026-11-11T20:00:00+07:00",
+      "horizon_hours": 4,
+      "goal_id": "goal-vidu-profit",
+      "actions": null,
+      "param_overrides": {},
+      "samples": 1000,
+      "seed": 20261111
+    },
+    "results": [
+      {
+        "key": "continue",
+        "label": "Chạy tiếp",
+        "action": {
+          "kind": "continue",
+          "pct": null,
+          "windows_local": null
+        },
+        "feasible": true,
+        "violations": [],
+        "violation_details": [],
+        "objective": {
+          "mean": 4050000,
+          "p10": 3900000,
+          "p50": 4050000,
+          "p90": 4200000
+        },
+        "contribution": {
+          "mean": 5400000,
+          "p10": 5400000,
+          "p50": 5400000,
+          "p90": 5400000
+        },
+        "spend": {
+          "mean": 1350000,
+          "p10": 1350000,
+          "p50": 1350000,
+          "p90": 1350000
+        },
+        "units_sold": {
+          "mean": 120,
+          "p10": 120,
+          "p50": 120,
+          "p90": 120
+        },
+        "leftover_units": {
+          "mean": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "leftover_value": {
+          "mean": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "lost_units": null,
+        "stockout_hour_p50": "2026-11-11T23:00:00+07:00",
+        "per_sku": [],
+        "goal_eligible": true,
+        "p_target": null,
+        "goal_note": null
+      },
+      {
+        "key": "pause",
+        "label": "Tạm dừng",
+        "action": {
+          "kind": "pause",
+          "pct": null,
+          "windows_local": null
+        },
+        "feasible": true,
+        "violations": [],
+        "violation_details": [],
+        "objective": {
+          "mean": 4330000,
+          "p10": 3240000,
+          "p50": 4320000,
+          "p90": 5400000
+        },
+        "contribution": {
+          "mean": 4320000,
+          "p10": 4320000,
+          "p50": 4320000,
+          "p90": 4320000
+        },
+        "spend": {
+          "mean": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "units_sold": {
+          "mean": 96,
+          "p10": 72,
+          "p50": 96,
+          "p90": 120
+        },
+        "leftover_units": {
+          "mean": 24,
+          "p10": 24,
+          "p50": 24,
+          "p90": 24
+        },
+        "leftover_value": {
+          "mean": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "lost_units": null,
+        "stockout_hour_p50": null,
+        "per_sku": [],
+        "goal_eligible": true,
+        "p_target": null,
+        "goal_note": null
+      },
+      {
+        "key": "reduce_budget:0.3",
+        "label": "Giảm ngân sách 30%",
+        "action": {
+          "kind": "reduce_budget",
+          "pct": 0.3,
+          "windows_local": null
+        },
+        "feasible": true,
+        "violations": [],
+        "violation_details": [],
+        "objective": {
+          "mean": 3980000,
+          "p10": 3650000,
+          "p50": 3980000,
+          "p90": 4300000
+        },
+        "contribution": {
+          "mean": 5040000,
+          "p10": 5040000,
+          "p50": 5040000,
+          "p90": 5040000
+        },
+        "spend": {
+          "mean": 1060000,
+          "p10": 1060000,
+          "p50": 1060000,
+          "p90": 1060000
+        },
+        "units_sold": {
+          "mean": 112,
+          "p10": 104,
+          "p50": 112,
+          "p90": 120
+        },
+        "leftover_units": {
+          "mean": 8,
+          "p10": 8,
+          "p50": 8,
+          "p90": 8
+        },
+        "leftover_value": {
+          "mean": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "lost_units": null,
+        "stockout_hour_p50": null,
+        "per_sku": [],
+        "goal_eligible": true,
+        "p_target": null,
+        "goal_note": null
+      },
+      {
+        "key": "schedule_hours:20-22",
+        "label": "Chỉ chạy theo khung giờ 20:00–22:00",
+        "action": {
+          "kind": "schedule_hours",
+          "pct": null,
+          "windows_local": [
+            [
+              20,
+              22
+            ]
+          ]
+        },
+        "feasible": true,
+        "violations": [],
+        "violation_details": [],
+        "objective": {
+          "mean": 3960000,
+          "p10": 3600000,
+          "p50": 3960000,
+          "p90": 4300000
+        },
+        "contribution": {
+          "mean": 4860000,
+          "p10": 4860000,
+          "p50": 4860000,
+          "p90": 4860000
+        },
+        "spend": {
+          "mean": 900000,
+          "p10": 900000,
+          "p50": 900000,
+          "p90": 900000
+        },
+        "units_sold": {
+          "mean": 108,
+          "p10": 98,
+          "p50": 108,
+          "p90": 118
+        },
+        "leftover_units": {
+          "mean": 12,
+          "p10": 12,
+          "p50": 12,
+          "p90": 12
+        },
+        "leftover_value": {
+          "mean": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "lost_units": null,
+        "stockout_hour_p50": null,
+        "per_sku": [],
+        "goal_eligible": true,
+        "p_target": null,
+        "goal_note": null
+      },
+      {
+        "key": "pause_until_restock",
+        "label": "Tạm dừng tới khi hàng về",
+        "action": {
+          "kind": "pause_until_restock",
+          "pct": null,
+          "windows_local": null
+        },
+        "feasible": true,
+        "violations": [],
+        "violation_details": [],
+        "objective": {
+          "mean": 3900000,
+          "p10": 3300000,
+          "p50": 3900000,
+          "p90": 4400000
+        },
+        "contribution": {
+          "mean": 4800000,
+          "p10": 4800000,
+          "p50": 4800000,
+          "p90": 4800000
+        },
+        "spend": {
+          "mean": 900000,
+          "p10": 900000,
+          "p50": 900000,
+          "p90": 900000
+        },
+        "units_sold": {
+          "mean": 107,
+          "p10": 92,
+          "p50": 107,
+          "p90": 120
+        },
+        "leftover_units": {
+          "mean": 13,
+          "p10": 13,
+          "p50": 13,
+          "p90": 13
+        },
+        "leftover_value": {
+          "mean": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "lost_units": null,
+        "stockout_hour_p50": null,
+        "per_sku": [],
+        "goal_eligible": true,
+        "p_target": null,
+        "goal_note": null
+      }
+    ],
+    "recommendation": {
+      "recommendation_id": "rec-510",
+      "campaign_id": "VIDU-T10",
+      "status": "undetermined",
+      "best": {
+        "kind": "pause",
+        "pct": null,
+        "windows_local": null
+      },
+      "runner_up": {
+        "kind": "continue",
+        "pct": null,
+        "windows_local": null
+      },
+      "p_best_beats_runner_up": 0.62,
+      "expected_gain_vnd": 280000,
+      "zone_bar": {
+        "axis_label": "Lượng bán mỗi giờ nếu pause (sp)",
+        "threshold": 22.5,
+        "interval": [
+          18,
+          24,
+          31
+        ],
+        "verdict": "undetermined",
+        "alt_thresholds": [
+          {
+            "label": "hàng dư 20.000đ",
+            "threshold": 16.5,
+            "leftover_value_per_unit": 20000,
+            "status": "ok"
+          }
+        ]
+      },
+      "flip_conditions": [],
+      "confidence": "scenario",
+      "reasons": [],
+      "inputs_ref": {
+        "forecast_ids": [
+          "fc-9001"
+        ],
+        "estimate_id": "ie-90",
+        "param_version": {
+          "leftover_value_per_unit": 0,
+          "restock_delay_days": 0,
+          "platform_fee_rate": 12
+        },
+        "goal_id": "goal-vidu-profit",
+        "data_as_of": "2026-11-11T20:00:00+07:00",
+        "panel_version": null,
+        "iroas_source": "estimate"
+      },
+      "scenario_id": null,
+      "created_at": null,
+      "superseded_by": null,
+      "best_label": "Tạm dừng",
+      "runner_up_label": "Chạy tiếp",
+      "reason_sources": [],
+      "active": true
+    },
+    "cache_hit": false,
+    "input_hash": null,
+    "blocked": false,
+    "timings_ms": {},
+    "requested_by": "user",
+    "created_at": null
+  },
+  "meta": {
+    "data_as_of": "2026-11-11T20:00:00+07:00",
+    "computed_at": "2026-11-11T20:01:00+07:00",
+    "compute_state": "fresh",
+    "confidence": "scenario",
+    "sources": [
+      {
+        "id": "fc-9001",
+        "kind": "forecast",
+        "label": "Dự báo minh họa (bán đều)",
+        "tool": "breakeven example",
+        "data_as_of": null,
+        "href": null
+      }
+    ],
+    "cache_hit": false
+  }
+}

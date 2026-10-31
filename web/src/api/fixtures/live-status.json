@@ -1,0 +1,29 @@
+{
+  "data": {
+    "enabled": false,
+    "watching": false,
+    "day": null,
+    "orders_until": null,
+    "ads_until": null,
+    "last_tick_at": null,
+    "replay_running": false,
+    "replay_hour": null,
+    "from_hour": null,
+    "interval_seconds": null,
+    "data_as_of": "2026-11-11T01:00:00+07:00",
+    "recompute_busy": false,
+    "recompute_runs": 1,
+    "live_dir": null,
+    "last_error": null,
+    "last_load": null
+  },
+  "meta": {
+    "data_as_of": "2026-11-11T01:00:00+07:00",
+    "computed_at": "2026-11-11T01:00:00+07:00",
+    "compute_state": null,
+    "confidence": null,
+    "sources": [],
+    "cache_hit": null,
+    "total": null
+  }
+}

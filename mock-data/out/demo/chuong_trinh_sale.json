@@ -1,0 +1,100 @@
+{
+  "chuong_trinh": "Siêu sale 11.11",
+  "ngay": "2026-11-11",
+  "khung_flash_sale": [
+    "00:00-02:00",
+    "12:00-14:00"
+  ],
+  "quy_dinh_chung": [
+    "Không tăng giá các SKU đã đăng ký trong ngày 11.11",
+    "Không hủy đăng ký sau 2026-11-08"
+  ],
+  "cam_ket": [
+    {
+      "sku": "BINHNUOC500-XANH",
+      "gia_cam_ket": 142000,
+      "ton_giu_cho_flash_sale": 17
+    },
+    {
+      "sku": "BINHNUOC500-HONG",
+      "gia_cam_ket": 142000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "BINHNUOC500-DEN",
+      "gia_cam_ket": 142000,
+      "ton_giu_cho_flash_sale": 12
+    },
+    {
+      "sku": "NOICHIEN2L",
+      "gia_cam_ket": 531000,
+      "ton_giu_cho_flash_sale": 23
+    },
+    {
+      "sku": "COMBO-NOICHIEN",
+      "gia_cam_ket": 574000,
+      "ton_giu_cho_flash_sale": 9
+    },
+    {
+      "sku": "AOGIUNHIET-S",
+      "gia_cam_ket": 139000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "AOGIUNHIET-M",
+      "gia_cam_ket": 139000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "AOGIUNHIET-L",
+      "gia_cam_ket": 139000,
+      "ton_giu_cho_flash_sale": 10
+    },
+    {
+      "sku": "HOPCOM3-XANH",
+      "gia_cam_ket": 177000,
+      "ton_giu_cho_flash_sale": 19
+    },
+    {
+      "sku": "HOPCOM-HONG",
+      "gia_cam_ket": 159000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "HOPCOM-TRANG",
+      "gia_cam_ket": 159000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "HOPMYPHAM3-TRANG",
+      "gia_cam_ket": 163000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "KEGIAVI3-XANH",
+      "gia_cam_ket": 151000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "LEDCUON2-5M",
+      "gia_cam_ket": 98000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "BINHHOA-XANH",
+      "gia_cam_ket": 150000,
+      "ton_giu_cho_flash_sale": 5
+    },
+    {
+      "sku": "LYTT4-750",
+      "gia_cam_ket": 40000,
+      "ton_giu_cho_flash_sale": 9
+    }
+  ],
+  "quy_dinh_chien_dich": [
+    {
+      "ma_chien_dich": "CD002",
+      "quy_dinh": "Không tắt chiến dịch trong khung flash sale (đã cam kết với sàn)"
+    }
+  ]
+}

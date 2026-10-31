@@ -1,0 +1,176 @@
+{
+  "data": [
+    {
+      "recommendation_id": "rec-01M67FCMEZT0859NR57714PME4",
+      "campaign_id": "CD002",
+      "status": "recommend",
+      "best": {
+        "kind": "schedule_hours",
+        "pct": null,
+        "windows_local": [
+          [
+            0,
+            2
+          ],
+          [
+            12,
+            14
+          ]
+        ]
+      },
+      "runner_up": {
+        "kind": "reduce_budget",
+        "pct": 0.5,
+        "windows_local": null
+      },
+      "p_best_beats_runner_up": 1.0,
+      "expected_gain_vnd": 1217012,
+      "zone_bar": {
+        "axis_label": "Lượng bán mỗi giờ nếu pause (sp)",
+        "threshold": 0.0,
+        "interval": [
+          3.782608695652174,
+          4.434782608695652,
+          5.3478260869565215
+        ],
+        "verdict": "pause_better",
+        "alt_thresholds": [],
+        "inputs": {
+          "units_left": 372.0,
+          "hours_left": 23.0,
+          "contribution_per_unit_vnd": 12683.112612151606,
+          "spend_per_hour_vnd": 230401.47826086957,
+          "rate_continue_per_hour": 5.09791304347826,
+          "pause_rate_interval": [
+            3.782608695652174,
+            4.434782608695652,
+            5.3478260869565215
+          ],
+          "leftover_value_per_unit_vnd": 0.0,
+          "alt_leftover_values": [
+            20000.0
+          ]
+        },
+        "pause_feasible": false,
+        "pause_violations": [
+          "campaign_must_run"
+        ],
+        "verdict_note": "Tạm dừng bị cấm vì đã cam kết với sàn trong khung flash sale. Về tiền, tạm dừng lợi hơn chạy tiếp: thanh cho thấy cái giá của ràng buộc, không phải đề xuất tạm dừng"
+      },
+      "flip_conditions": [
+        {
+          "factor": "leftover_value_per_unit",
+          "flip_at": -199969.0,
+          "base_value": 0.0,
+          "unit": "đ/sp",
+          "text": "Nếu hàng dư còn giá trị (ròng, so với giá vốn) từ -199.969đ/sp trở xuống → Giảm ngân sách 50% tốt hơn"
+        }
+      ],
+      "confidence": "reference",
+      "reasons": [
+        "Hàng NOICHIEN2L sẽ hết khoảng 14:00 11/11 (nhu cầu ~162 sp, tồn 76 sp): ads không bán thêm được khi hết hàng",
+        "Ở giá 11.11 (531.000đ) mỗi sp NOICHIEN2L lãi 9.280đ; ads chỉ có lời khi iROAS ≥ 57.2",
+        "Không được tắt hẳn vì đã cam kết với sàn trong khung flash sale",
+        "Chỉ chạy theo khung giờ 00:00–02:00, 12:00–14:00 lợi hơn Giảm ngân sách 50% khoảng 1.217.012đ (xác suất 100%)",
+        "Tạm dừng bị cấm vì đã cam kết với sàn trong khung flash sale. Về tiền, tạm dừng lợi hơn chạy tiếp: thanh cho thấy cái giá của ràng buộc, không phải đề xuất tạm dừng",
+        "Dự báo nhu cầu ở mức 'reference'"
+      ],
+      "inputs_ref": {
+        "forecast_ids": [
+          "fc-01M67FCM5D7G2FVH4D30XVQ2WM",
+          "fc-01M67FCM69PEGYRHXTXJQ15AA8",
+          "fc-01M67FCM78RHBVAH2GAWP5GM8Y"
+        ],
+        "estimate_id": "iroas-01M67F7GW91MS4QEEYPASQCWS2",
+        "param_version": {
+          "decision_min_gain_vnd": 0,
+          "decision_min_prob": 0,
+          "leftover_value_per_unit": 0,
+          "max_loss_vnd": 0,
+          "min_marginal_return": 0,
+          "platform_fee_rate": 0,
+          "rank_loss_after_pause": 0,
+          "reduce_budget_options": 0,
+          "restock_assumed_hour": 0,
+          "restock_delay_days": 0,
+          "safety_stock": 0,
+          "sell_target_prob": 0,
+          "stockout_penalty_per_unit": 0
+        },
+        "goal_id": "goal-01M67FC48PSYTFRR9D1C4FPD2F",
+        "data_as_of": "2026-11-11T01:00:00+07:00",
+        "panel_version": "ib-01M67F32DZ1CTGBBE2X5TR522B",
+        "iroas_source": "estimate"
+      },
+      "scenario_id": "scn-01M67FCMQJZT5V7Q3T9CWN1YA6",
+      "created_at": "2026-11-11T01:00:00+07:00",
+      "superseded_by": null,
+      "runner_up_meets_goal": true,
+      "goal_cost_vnd": null,
+      "best_label": "Chỉ chạy theo khung giờ 00:00–02:00, 12:00–14:00",
+      "runner_up_label": "Giảm ngân sách 50%",
+      "reason_sources": [
+        {
+          "id": "fc-01M67FCM78RHBVAH2GAWP5GM8Y",
+          "kind": "forecast",
+          "label": "Dự báo nhu cầu NOICHIEN2L",
+          "data_as_of": "2026-11-11T01:00:00+07:00",
+          "tool": "get_forecast",
+          "href": "/api/v1/skus/NOICHIEN2L/forecast"
+        },
+        {
+          "id": "m-NOICHIEN2L",
+          "kind": "contribution",
+          "label": "Giá bán, giá vốn, phí sàn của NOICHIEN2L",
+          "data_as_of": "2026-11-11T01:00:00+07:00",
+          "tool": "get_sku_snapshot",
+          "href": "/api/v1/skus/NOICHIEN2L"
+        },
+        {
+          "id": "commit-CD002",
+          "kind": "commitment",
+          "label": "Cam kết chương trình sale của CD002",
+          "data_as_of": "2026-11-11T01:00:00+07:00",
+          "tool": "get_campaign_status",
+          "href": "/api/v1/campaigns/CD002"
+        },
+        {
+          "id": "scn-01M67FCMQJZT5V7Q3T9CWN1YA6",
+          "kind": "scenario",
+          "label": "Kết quả mô phỏng các lựa chọn",
+          "data_as_of": "2026-11-11T01:00:00+07:00",
+          "tool": "run_scenario",
+          "href": "/api/v1/scenarios/scn-01M67FCMQJZT5V7Q3T9CWN1YA6"
+        },
+        {
+          "id": "commit-CD002",
+          "kind": "commitment",
+          "label": "Cam kết chương trình sale của CD002",
+          "data_as_of": "2026-11-11T01:00:00+07:00",
+          "tool": "get_campaign_status",
+          "href": "/api/v1/campaigns/CD002"
+        },
+        {
+          "id": "fc-01M67FCM5D7G2FVH4D30XVQ2WM",
+          "kind": "forecast",
+          "label": "Dự báo nhu cầu",
+          "data_as_of": "2026-11-11T01:00:00+07:00",
+          "tool": "get_forecast",
+          "href": "/api/v1/skus/COMBO-NOICHIEN/forecast"
+        }
+      ],
+      "active": true,
+      "what_if": false
+    }
+  ],
+  "meta": {
+    "data_as_of": "2026-11-11T01:00:00+07:00",
+    "computed_at": "2026-11-11T01:00:00+07:00",
+    "compute_state": "fresh",
+    "confidence": null,
+    "sources": [],
+    "cache_hit": null,
+    "total": null
+  },
+  "next_cursor": null
+}

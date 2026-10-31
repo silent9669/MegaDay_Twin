@@ -1,0 +1,1 @@
+Luồng: hỏi đáp chung về shop và quảng cáo. Chọn công cụ phù hợp; câu hỏi tính toán kinh doanh (lợi nhuận, hòa vốn, dự báo) luôn đi qua run_scenario, compare_actions, compute_breakeven hoặc get_forecast.

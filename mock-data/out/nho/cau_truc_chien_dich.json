@@ -1,0 +1,106 @@
+[
+  {
+    "ma_chien_dich": "CD001",
+    "ten_chien_dich": "[Tìm kiếm] Bình nước giữ nhiệt",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 256000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "BINHNUOC500-XANH",
+      "BINHNUOC500-HONG",
+      "BINHNUOC500-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD002",
+    "ten_chien_dich": "[Tìm kiếm] Nồi chiên mini + giấy lót",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 1522000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "NOICHIEN2L",
+      "GIAYLOT50",
+      "COMBO-NOICHIEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD003",
+    "ten_chien_dich": "[Khám phá] Đèn LED Tết",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 118000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENLEDTET-5M",
+      "DENLEDTET-10M"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD004",
+    "ten_chien_dich": "[Khám phá] Cốc in hình meme",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 74000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "COCMEME-A",
+      "COCMEME-B",
+      "COCMEME-C"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD005",
+    "ten_chien_dich": "[Tìm kiếm] Áo giữ nhiệt nam",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 259000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "AOGIUNHIET-S",
+      "AOGIUNHIET-M",
+      "AOGIUNHIET-L"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD006",
+    "ten_chien_dich": "[Tìm kiếm] Máy hút bụi mini",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 270000,
+    "bat_dau": "2026-11-04 08:00",
+    "sku": [
+      "MAYHUTMINI"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD007",
+    "ten_chien_dich": "[Tự động] Đèn LED cuộn trang trí phòng + 3 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 214000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "LEDCUON-5M",
+      "BINHLOC",
+      "QUATMINI-XANH",
+      "QUATMINI-HONG",
+      "QUATMINI-DEN",
+      "COCKHUAY-XANH",
+      "COCKHUAY-HONG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD008",
+    "ten_chien_dich": "[Tự động] Móc khóa hoạt hình + 1 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "MOCKHOA-A",
+      "MOCDAN-G1"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  }
+]

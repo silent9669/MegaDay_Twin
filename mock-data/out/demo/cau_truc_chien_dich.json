@@ -1,0 +1,719 @@
+[
+  {
+    "ma_chien_dich": "CD001",
+    "ten_chien_dich": "[Tìm kiếm] Bình nước giữ nhiệt",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 367000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "BINHNUOC500-XANH",
+      "BINHNUOC500-HONG",
+      "BINHNUOC500-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD002",
+    "ten_chien_dich": "[Tìm kiếm] Nồi chiên mini + giấy lót",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 1864000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "NOICHIEN2L",
+      "GIAYLOT50",
+      "COMBO-NOICHIEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD003",
+    "ten_chien_dich": "[Khám phá] Đèn LED Tết",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 118000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENLEDTET-5M",
+      "DENLEDTET-10M"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD004",
+    "ten_chien_dich": "[Khám phá] Cốc in hình meme",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 126000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "COCMEME-A",
+      "COCMEME-B",
+      "COCMEME-C"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD005",
+    "ten_chien_dich": "[Tìm kiếm] Áo giữ nhiệt nam",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 221000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "AOGIUNHIET-S",
+      "AOGIUNHIET-M",
+      "AOGIUNHIET-L"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD006",
+    "ten_chien_dich": "[Tìm kiếm] Máy hút bụi mini",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 265000,
+    "bat_dau": "2026-11-04 08:00",
+    "sku": [
+      "MAYHUTMINI"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD007",
+    "ten_chien_dich": "[Khám phá] Hộp đựng mỹ phẩm xoay (mẫu 2) + 2 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 152000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "HOPMYPHAM2-XANH",
+      "HOPMYPHAM2-HONG",
+      "HOPMYPHAM2-DEN",
+      "DUAINOX3",
+      "DUAINOX2"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD008",
+    "ten_chien_dich": "[Khám phá] Máy xay hạt cà phê (mẫu 2) + 1 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "MAYXAY2",
+      "LIXI2-G1",
+      "LIXI2-G3",
+      "LIXI2-G5"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD009",
+    "ten_chien_dich": "[Khám phá] Đèn ngủ cảm ứng + 2 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 203000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENNGU-XANH",
+      "DENNGU-HONG",
+      "DENNGU-DEN",
+      "DENNGU-TRANG",
+      "DUAINOX5",
+      "GAUBONG3-NHO",
+      "GAUBONG3-VUA"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD010",
+    "ten_chien_dich": "[Tìm kiếm] Máy đánh trứng cầm tay (mẫu 2) + 3 SP khác",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 390000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DANHTRUNG2-XANH",
+      "DANHTRUNG2-HONG",
+      "TUIZIP5-G1",
+      "TUIZIP5-G3",
+      "THAM-XANH",
+      "BINHLOC3"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD011",
+    "ten_chien_dich": "[Tìm kiếm] Đèn ngủ cảm ứng (mẫu 2)",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 159000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENNGU2-XANH",
+      "DENNGU2-HONG",
+      "DENNGU2-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD012",
+    "ten_chien_dich": "[Tìm kiếm] Thảm chùi chân thấm nước (mẫu 4) + 2 SP khác",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 140000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "THAM4-XANH",
+      "THAM4-HONG",
+      "THAM4-DEN",
+      "MOCKHOA-A",
+      "CAUDOI2-A",
+      "CAUDOI2-B",
+      "CAUDOI2-C"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD013",
+    "ten_chien_dich": "[Tìm kiếm] Hộp đựng thực phẩm thủy tinh (mẫu 6)",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 165000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "HOPTT6-500"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD014",
+    "ten_chien_dich": "[Tìm kiếm] Chảo chống dính đáy từ + 2 SP khác",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 545000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "CHAO-NHO",
+      "CHAO-VUA",
+      "CHAO-LON",
+      "BINHHOA2-XANH",
+      "BINHHOA2-HONG",
+      "BANCHAI4-XANH",
+      "BANCHAI4-HONG",
+      "BANCHAI4-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD015",
+    "ten_chien_dich": "[Khám phá] Hộp cơm giữ nhiệt (mẫu 4)",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 326000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "HOPCOM4-XANH",
+      "HOPCOM4-HONG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD016",
+    "ten_chien_dich": "[Khám phá] Giá phơi đồ gấp gọn + 2 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 514000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "GIAPHOI",
+      "GIAPHOI5",
+      "DANHTRUNG3-XANH",
+      "DANHTRUNG3-HONG",
+      "DANHTRUNG3-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD017",
+    "ten_chien_dich": "[Tự động] Ly thủy tinh chịu nhiệt (mẫu 2) + 3 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 585000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "LYTT2-500",
+      "HOPMYPHAM3-XANH",
+      "HOPMYPHAM3-HONG",
+      "HOPMYPHAM3-DEN",
+      "HOPMYPHAM3-TRANG",
+      "KEGIAVI4-XANH",
+      "KEGIAVI4-HONG",
+      "KEGIAVI4-DEN",
+      "KEGIAVI4-TRANG",
+      "BANCHAI5-XANH",
+      "BANCHAI5-HONG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD018",
+    "ten_chien_dich": "[Khám phá] Đèn lồng đỏ (mẫu 2) + 1 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 280000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENLONG2-NHO",
+      "BINHLOC4"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD019",
+    "ten_chien_dich": "[Tự động] Thớt gỗ tràm + 2 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 114000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "THOTGO-NHO",
+      "THOTGO-VUA",
+      "THOTGO-LON",
+      "THOTGO6-NHO",
+      "NENTHOM-A",
+      "NENTHOM-B",
+      "NENTHOM-C"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD020",
+    "ten_chien_dich": "[Khám phá] Đèn lồng đỏ + 3 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 156000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENLONG-NHO",
+      "DENNGU4-XANH",
+      "DENNGU4-HONG",
+      "DENNGU4-DEN",
+      "DENNGU4-TRANG",
+      "MOCDAN3-G1",
+      "MOCDAN3-G3",
+      "MOCDAN3-G5",
+      "COCKHUAY-XANH",
+      "COCKHUAY-HONG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD021",
+    "ten_chien_dich": "[Tự động] Bộ dao Nhật 5 món",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "BODAO"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD022",
+    "ten_chien_dich": "[Tự động] Rổ nhựa đa năng + 1 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 108000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "RONHUA-XANH",
+      "RONHUA-HONG",
+      "RONHUA-DEN",
+      "RONHUA-TRANG",
+      "TUIZIP2-G1",
+      "TUIZIP2-G3"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD023",
+    "ten_chien_dich": "[Khám phá] Hộp quà hoa sáp (mẫu 3) + 3 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 596000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "HOPQUA3-XANH",
+      "HOPQUA3-HONG",
+      "HOPQUA3-DEN",
+      "HOPQUA3-TRANG",
+      "KEGIAVI-XANH",
+      "KEGIAVI-HONG",
+      "KEGIAVI-DEN",
+      "KEGIAVI6-XANH",
+      "KEGIAVI6-HONG",
+      "HOPCOM3-XANH",
+      "HOPCOM3-HONG",
+      "HOPCOM3-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD024",
+    "ten_chien_dich": "[Tìm kiếm] Thớt gỗ tràm (mẫu 3) + 1 SP khác",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 214000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "THOTGO3-NHO",
+      "GUONGLED-XANH"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD025",
+    "ten_chien_dich": "[Tự động] Nến thơm tinh dầu (mẫu 2) + 1 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 473000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "NENTHOM2-A",
+      "CHAO5-NHO"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD026",
+    "ten_chien_dich": "[Tự động] Đèn LED cuộn trang trí phòng",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "LEDCUON-5M"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD027",
+    "ten_chien_dich": "[Khám phá] Thảm chùi chân thấm nước (mẫu 5) + 2 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 95000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "THAM5-XANH",
+      "THAM5-HONG",
+      "THAM5-DEN",
+      "KHANLAU4-G1",
+      "KHANLAU4-G3",
+      "THOTGO4-NHO",
+      "THOTGO4-VUA"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD028",
+    "ten_chien_dich": "[Tìm kiếm] Quạt cầm tay mini",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "QUATMINI-XANH",
+      "QUATMINI-HONG",
+      "QUATMINI-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD029",
+    "ten_chien_dich": "[Khám phá] Khăn lau bếp microfiber (mẫu 6) + 3 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 197000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "KHANLAU6-G1",
+      "KHANLAU6-G3",
+      "DANHTRUNG-XANH",
+      "DANHTRUNG-HONG",
+      "DANHTRUNG-DEN",
+      "MOCDAN2-G1",
+      "MOCDAN2-G3",
+      "MOCDAN2-G5",
+      "THOTGO2-NHO",
+      "THOTGO2-VUA"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD030",
+    "ten_chien_dich": "[Tự động] Đèn bàn gỗ decor",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENBAN"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD031",
+    "ten_chien_dich": "[Tự động] Chăn lông cừu (mẫu 2)",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 98000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "CHANLONG2-XANH",
+      "CHANLONG2-HONG",
+      "CHANLONG2-DEN",
+      "CHANLONG2-TRANG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD032",
+    "ten_chien_dich": "[Tìm kiếm] Nến thơm tinh dầu (mẫu 3) + 2 SP khác",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 374000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "NENTHOM3-A",
+      "NENTHOM3-B",
+      "KEGIAVI3-XANH",
+      "KEGIAVI3-HONG",
+      "KEGIAVI3-DEN",
+      "BINHLOC2"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD033",
+    "ten_chien_dich": "[Tự động] Móc khóa hoạt hình (mẫu 2)",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "MOCKHOA2-A"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD034",
+    "ten_chien_dich": "[Khám phá] Gấu bông ôm (mẫu 2)",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 108000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "GAUBONG2-NHO",
+      "GAUBONG2-VUA",
+      "GAUBONG2-LON"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD035",
+    "ten_chien_dich": "[Khám phá] Hộp đựng thực phẩm thủy tinh (mẫu 4) + 2 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 209000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "HOPTT4-500",
+      "HOPTT4-750",
+      "HOPTT4-1L",
+      "GAUBONG-NHO",
+      "GAUBONG-VUA",
+      "GAUBONG-LON",
+      "MOCKHOA3-A",
+      "MOCKHOA3-B",
+      "MOCKHOA3-C"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD036",
+    "ten_chien_dich": "[Tự động] Ly thủy tinh chịu nhiệt (mẫu 5)",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "LYTT5-500"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD037",
+    "ten_chien_dich": "[Khám phá] Khăn lau bếp microfiber (mẫu 2) + 2 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 272000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "KHANLAU2-G1",
+      "KHANLAU2-G3",
+      "KEGIAVI2-XANH",
+      "KEGIAVI2-HONG",
+      "KEGIAVI2-DEN",
+      "KEGIAVI2-TRANG",
+      "THAM2-XANH",
+      "THAM2-HONG",
+      "THAM2-DEN"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD038",
+    "ten_chien_dich": "[Tự động] Móc dán tường chịu lực + 3 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 195000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "MOCDAN-G1",
+      "DENNGU3-XANH",
+      "LEDCUON2-5M",
+      "RONHUA4-XANH",
+      "RONHUA4-HONG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD039",
+    "ten_chien_dich": "[Tự động] Thớt gỗ tràm (mẫu 5)",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "THOTGO5-NHO",
+      "THOTGO5-VUA"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD040",
+    "ten_chien_dich": "[Tự động] Máy đánh trứng cầm tay (mẫu 4) + 2 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 239000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DANHTRUNG4-XANH",
+      "DANHTRUNG4-HONG",
+      "DANHTRUNG4-DEN",
+      "TUIZIP6-G1",
+      "TUIZIP6-G3",
+      "TUIZIP6-G5",
+      "BANCHAI3-XANH",
+      "BANCHAI3-HONG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD041",
+    "ten_chien_dich": "[Tự động] Đèn ngủ cảm ứng (mẫu 5) + 2 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 100000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DENNGU5-XANH",
+      "DENNGU5-HONG",
+      "DENNGU5-DEN",
+      "COCKHUAY3-XANH",
+      "COCKHUAY3-HONG",
+      "COCKHUAY3-DEN",
+      "HOPTT3-500",
+      "HOPTT3-750",
+      "HOPTT3-1L"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD042",
+    "ten_chien_dich": "[Tự động] Ly thủy tinh chịu nhiệt (mẫu 4)",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "LYTT4-500",
+      "LYTT4-750"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD043",
+    "ten_chien_dich": "[Tìm kiếm] Bình lọc nước mini",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 229000,
+    "bat_dau": "2026-10-22 20:00",
+    "sku": [
+      "BINHLOC"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD044",
+    "ten_chien_dich": "[Tìm kiếm] Hộp cơm giữ nhiệt (mẫu 5) + 3 SP khác",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 302000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "HOPCOM5-XANH",
+      "HOPQUA2-XANH",
+      "HOPQUA2-HONG",
+      "HOPQUA2-DEN",
+      "HOPQUA2-TRANG",
+      "KHANLAU3-G1",
+      "KHANLAU3-G3",
+      "HOPCOM-XANH",
+      "HOPCOM-HONG",
+      "HOPCOM-DEN",
+      "HOPCOM-TRANG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD045",
+    "ten_chien_dich": "[Khám phá] Bình hoa gốm + 3 SP khác",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 211000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "BINHHOA-XANH",
+      "MOCDAN6-G1",
+      "MOCDAN6-G3",
+      "CAUDOI-A",
+      "GIAPHOI3"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD046",
+    "ten_chien_dich": "[Khám phá] Chảo chống dính đáy từ (mẫu 4)",
+    "loai": "Khám phá",
+    "ngan_sach_ngay": 625000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "CHAO4-NHO"
+    ],
+    "ghi_chu": ""
+  },
+  {
+    "ma_chien_dich": "CD047",
+    "ten_chien_dich": "[Tự động] Bộ đũa inox 10 đôi + 2 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 313000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "DUAINOX",
+      "HOPTT5-500",
+      "GUONGLED2-XANH"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD048",
+    "ten_chien_dich": "[Tự động] Bàn chải vệ sinh nhà tắm (mẫu 2) + 1 SP khác",
+    "loai": "Tự động",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "BANCHAI2-XANH",
+      "BANCHAI2-HONG",
+      "LYTT-500",
+      "LYTT-750",
+      "LYTT-1L"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  },
+  {
+    "ma_chien_dich": "CD049",
+    "ten_chien_dich": "[Tìm kiếm] Cốc tự khuấy (mẫu 2)",
+    "loai": "Tìm kiếm",
+    "ngan_sach_ngay": 50000,
+    "bat_dau": "2026-07-14 00:00",
+    "sku": [
+      "COCKHUAY2-XANH",
+      "COCKHUAY2-HONG",
+      "COCKHUAY2-DEN",
+      "COCKHUAY2-TRANG"
+    ],
+    "ghi_chu": "Ngân sách dùng chung cho mọi SKU trong chiến dịch; không bật/tắt riêng từng SKU được."
+  }
+]

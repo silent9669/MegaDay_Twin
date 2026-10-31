@@ -1,0 +1,47 @@
+{
+  "seed": 20261111,
+  "sizes": {
+    "nho": { "targetSkus": 30 },
+    "demo": { "targetSkus": 300 },
+    "tai_nang": { "targetSkus": 2000 }
+  },
+  "timeline": {
+    "start": "2026-07-14",
+    "historyCutoff": "2026-11-11",
+    "end": "2026-11-12"
+  },
+  "groupMix": {
+    "on_dinh": 0.5,
+    "mua_vu": 0.2,
+    "trend": 0.1,
+    "moi": 0.1,
+    "ban_thua": 0.1
+  },
+  "demand": {
+    "dispersion": 3,
+    "rankWeight": 0.15
+  },
+  "ads": {
+    "shareProductsWithAds": 0.7,
+    "budgetShareOfRevenue": 0.12,
+    "eventBudgetMultiplier": 3,
+    "adstockDecay": 0.6,
+    "attributionInflation": 1.8,
+    "pauseWhenStockBelow": 15
+  },
+  "orders": {
+    "cancelRate": 0.04,
+    "returnRate": 0.015
+  },
+  "platformFeeRate": 0.12,
+  "dirty": {
+    "duplicateOrderRate": 0.003,
+    "missingCostRate": 0.05,
+    "negativeStockRows": 3,
+    "adsLagHours": 3,
+    "liveAdsLagHours": 2,
+    "adsTimezoneUtc": true,
+    "adsMissingDay": "2026-09-20",
+    "pendingStatusHours": 48
+  }
+}

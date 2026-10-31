@@ -1,0 +1,155 @@
+{
+  "data": [
+    {
+      "id": "al-01M67FCP7S5X4PZHFSV5FZJAMV",
+      "shop_id": "shop-demo",
+      "kind": "data_blocking",
+      "severity": "high",
+      "target_kind": "issue",
+      "target_id": "MISSING_COST",
+      "group_key": null,
+      "title": "Thiếu giá vốn cho 21 SKU đang chạy quảng cáo",
+      "detail": {
+        "code": "MISSING_COST",
+        "skus": [
+          {
+            "sku": "BANCHAI2-HONG"
+          },
+          {
+            "sku": "BINHLOC"
+          },
+          {
+            "sku": "BINHLOC2"
+          },
+          {
+            "sku": "CHAO5-NHO"
+          },
+          {
+            "sku": "DUAINOX"
+          },
+          {
+            "sku": "GIAPHOI"
+          },
+          {
+            "sku": "GIAPHOI5"
+          },
+          {
+            "sku": "KEGIAVI2-DEN"
+          },
+          {
+            "sku": "LYTT-500"
+          },
+          {
+            "sku": "LYTT2-500"
+          },
+          {
+            "sku": "MOCDAN-G1"
+          },
+          {
+            "sku": "MOCDAN6-G3"
+          },
+          {
+            "sku": "NENTHOM2-A"
+          },
+          {
+            "sku": "NENTHOM3-A"
+          },
+          {
+            "sku": "QUATMINI-XANH"
+          },
+          {
+            "sku": "THAM-XANH"
+          },
+          {
+            "sku": "THAM2-HONG"
+          },
+          {
+            "sku": "THAM2-XANH"
+          },
+          {
+            "sku": "THAM5-HONG"
+          },
+          {
+            "sku": "THAM5-XANH"
+          },
+          {
+            "sku": "TUIZIP5-G1"
+          }
+        ],
+        "n_skus": 21,
+        "first_data_hour": null
+      },
+      "impact_vnd": null,
+      "status": "open",
+      "raised_at": "2026-11-11T01:00:00+07:00",
+      "updated_at": "2026-11-11T01:00:00+07:00",
+      "last_seen_at": "2026-11-11T01:00:00+07:00",
+      "occurrences": 1,
+      "resolved_at": null,
+      "resolved_by": null,
+      "snoozed_until": null,
+      "acknowledged_by": null,
+      "acknowledged_at": null,
+      "source_event_id": null,
+      "dedupe_key": "data_blocking:code:MISSING_COST",
+      "investigation": null,
+      "target": {
+        "kind": "issue",
+        "id": "MISSING_COST",
+        "sku": null,
+        "campaign_id": null,
+        "product": null
+      }
+    },
+    {
+      "id": "al-01M67FCP6QYCEBYRM7TEBMTHR0",
+      "shop_id": "shop-demo",
+      "kind": "data_stale",
+      "severity": "medium",
+      "target_kind": "source",
+      "target_id": "ads",
+      "group_key": null,
+      "title": "Dữ liệu quảng cáo trễ 240 phút (ngưỡng 180 phút)",
+      "detail": {
+        "source": "ads",
+        "as_of": "2026-11-10T14:00:00+00:00",
+        "lag_minutes": 240,
+        "threshold_minutes": 180,
+        "data_as_of": "2026-11-10T18:00:00+00:00",
+        "data_hour": "00:59",
+        "first_data_hour": "00:59"
+      },
+      "impact_vnd": null,
+      "status": "open",
+      "raised_at": "2026-11-11T01:00:00+07:00",
+      "updated_at": "2026-11-11T01:00:00+07:00",
+      "last_seen_at": "2026-11-11T01:00:00+07:00",
+      "occurrences": 1,
+      "resolved_at": null,
+      "resolved_by": null,
+      "snoozed_until": null,
+      "acknowledged_by": null,
+      "acknowledged_at": null,
+      "source_event_id": null,
+      "dedupe_key": "data_stale:source:ads",
+      "investigation": null,
+      "target": {
+        "kind": "source",
+        "id": "ads",
+        "sku": null,
+        "campaign_id": null,
+        "product": null
+      }
+    }
+  ],
+  "meta": {
+    "data_as_of": "2026-11-11T01:00:00+07:00",
+    "computed_at": "2026-11-11T01:00:00+07:00",
+    "compute_state": null,
+    "confidence": null,
+    "sources": [],
+    "cache_hit": null,
+    "total": 2
+  },
+  "next_cursor": null
+}

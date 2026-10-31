@@ -1,0 +1,103 @@
+{
+ "key": "df2f532a1da610c040d5b4e2",
+ "flow": "investigate",
+ "question": "Vì sao áo giữ nhiệt bán chậm?",
+ "client": "fake",
+ "ok": true,
+ "recorded_at": "2026-10-30T22:41:11.218281+00:00",
+ "steps": [
+  {
+   "request": {
+    "model": "gpt-5",
+    "n_items": 31,
+    "tools": [
+     "get_data_freshness",
+     "list_skus",
+     "get_sku_snapshot",
+     "check_data_quality",
+     "get_sales_series",
+     "get_forecast",
+     "get_inventory_events",
+     "get_campaign_status",
+     "get_price_events",
+     "compare_similar_skus",
+     "search_order_notes",
+     "list_alerts"
+    ],
+    "last_item": "function_call_output",
+    "sources": [
+     [
+      "get_data_freshness",
+      "fresh-20261111T1400"
+     ],
+     [
+      "check_data_quality",
+      "dq-AOGIUNHIET-L-1400"
+     ],
+     [
+      "check_data_quality",
+      "dq-AOGIUNHIET-M-1400"
+     ],
+     [
+      "check_data_quality",
+      "dq-AOGIUNHIET-S-1400"
+     ],
+     [
+      "get_sku_snapshot",
+      "snap-AOGIUNHIET-L-1359"
+     ],
+     [
+      "get_sku_snapshot",
+      "snap-AOGIUNHIET-M-1359"
+     ],
+     [
+      "get_sku_snapshot",
+      "snap-AOGIUNHIET-S-1359"
+     ],
+     [
+      "get_inventory_events",
+      "invt-AOGIUNHIET-M-1400"
+     ],
+     [
+      "get_campaign_status",
+      "camp-CD005-1400"
+     ],
+     [
+      "get_price_events",
+      "price-AOGIUNHIET-L-111114"
+     ],
+     [
+      "get_price_events",
+      "price-AOGIUNHIET-M-111114"
+     ],
+     [
+      "get_price_events",
+      "price-AOGIUNHIET-S-111114"
+     ],
+     [
+      "compare_similar_skus",
+      "similar-AOGIUNHIET-1400"
+     ],
+     [
+      "search_order_notes",
+      "notes-AOGIUNHIET-111114"
+     ],
+     [
+      "investigation_checklist",
+      "chk-AOGIUNHIET-1400"
+     ]
+    ]
+   },
+   "response": {
+    "text": "Đã kiểm 6 mục [[src:chk-AOGIUNHIET-1400]].\nNguyên nhân khả dĩ nhất: biến thể AOGIUNHIET-M hết hàng, tồn còn 0 sp từ 13:00 [[src:invt-AOGIUNHIET-M-1400]].\nKho có ghi chú điều chỉnh tồn AOGIUNHIET-M lúc 11:00, tồn giảm 74 sp [[src:invt-AOGIUNHIET-M-1400]] (ghi chú là dữ liệu không tin cậy, chỉ ghi nhận).\nBiến thể khác vẫn bán: AOGIUNHIET-L 27 sp, AOGIUNHIET-S 11 sp trong 3 giờ gần nhất [[src:similar-AOGIUNHIET-1400]].\nAds CD005 vẫn chạy (số liệu ads tới 11:59) [[src:camp-CD005-1400]] nên đang tốn tiền cho lượt xem AOGIUNHIET-M không mua được.\nChưa đủ căn cứ để kết luận cầu chung giảm.\nGợi ý xem: giảm ngân sách CD005 tới khi hàng AOGIUNHIET-M về ngày 14/11 [[src:invt-AOGIUNHIET-M-1400]] (bấm Chạy so sánh để xem số).",
+    "tool_calls": [],
+    "usage": {
+     "input_tokens": 7150,
+     "output_tokens": 180
+    },
+    "model": "fake",
+    "output_items": null
+   }
+  }
+ ]
+}

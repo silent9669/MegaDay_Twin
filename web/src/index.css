@@ -1,0 +1,122 @@
+@import 'tailwindcss';
+
+/* Dark mode follows data-theme on <html>, set by src/lib/theme.ts (system | light | dark). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Design tokens. Neutral slate base, one blue accent, semantic colors only where they carry meaning. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --border: #dde1e7;
+  --fg: #16191f;
+  --muted: #5b6472;
+  --accent: #1d5bd8;
+  --accent-fg: #ffffff;
+  --accent-soft: #e6eefc;
+  --focus: #1d5bd8;
+  --ok: #17803d;
+  --ok-soft: #e7f5ec;
+  --warn: #9a6200;
+  --warn-soft: #fdf3dc;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --neutral: #5b6472;
+  --neutral-soft: #eef0f3;
+  /* ZoneBar regions (09 §4): two calm hues, neither reads as good/bad. */
+  --zone-continue: #dce8fb;
+  --zone-pause: #fbecc8;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #0f1216;
+  --surface: #161a20;
+  --surface-2: #1d222a;
+  --border: #2b323c;
+  --fg: #e6e9ee;
+  --muted: #9aa3b1;
+  --accent: #6e9bff;
+  --accent-fg: #0b1220;
+  --accent-soft: #1b2740;
+  --focus: #8cb0ff;
+  --ok: #4cc27a;
+  --ok-soft: #142a1d;
+  --warn: #f0b545;
+  --warn-soft: #2e2512;
+  --danger: #ff7b6e;
+  --danger-soft: #331a18;
+  --neutral: #9aa3b1;
+  --neutral-soft: #222831;
+  --zone-continue: #1c2b47;
+  --zone-pause: #3a2e14;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus: var(--focus);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-zone-continue: var(--zone-continue);
+  --color-zone-pause: var(--zone-pause);
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface-2;
+  }
+  .icon-btn {
+    @apply inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-fg;
+  }
+  .card {
+    @apply rounded-lg border border-border bg-surface;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

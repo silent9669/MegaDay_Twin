@@ -1,0 +1,676 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  Download,
+  FileJson,
+  FileSpreadsheet,
+  FolderOpen,
+  RefreshCw,
+  Save,
+  Search,
+  Upload,
+  X,
+  AlertTriangle,
+  Database,
+} from "lucide-react";
+import Papa from "papaparse";
+import { useAccountDocument, requestJSON } from "./account";
+import {
+  SOURCE_DEFS,
+  inspect,
+  makeSource,
+  selectUploads,
+  validatePack,
+  MAX_BYTES,
+  type Source,
+  type SourcePack,
+} from "./sources";
+import { SandboxControl } from "./SandboxControl";
+import "./studio.css";
+function download(name: string, text: string) {
+  const url = URL.createObjectURL(
+    new Blob([text], {
+      type: name.endsWith(".csv")
+        ? "text/csv;charset=utf-8"
+        : "application/json",
+    }),
+  );
+  const link = window.document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export function DataStudio() {
+  const cloud = useAccountDocument<SourcePack>("sources");
+  const saveCloud = cloud.save;
+  const [draft, setDraft] = useState<SourcePack | null>(null),
+    [base, setBase] = useState(0),
+    [dirty, setDirty] = useState(false),
+    [saving, setSaving] = useState(false),
+    [busy, setBusy] = useState(false),
+    [message, setMessage] = useState(""),
+    [saveError, setSaveError] = useState("");
+  const [selected, setSelected] = useState("orders"),
+    [tab, setTab] = useState<"records" | "diagnostics" | "schema">("records"),
+    [query, setQuery] = useState(""),
+    [page, setPage] = useState(0),
+    [cell, setCell] = useState<{
+      row: number;
+      column: string;
+      value: string;
+    } | null>(null);
+  const files = useMemo(
+    () => draft?.files ?? cloud.document?.data.files ?? [],
+    [draft, cloud.document],
+  );
+  const revision = draft ? base : (cloud.document?.revision ?? 0);
+  const conflict =
+    dirty && !!cloud.document && cloud.document.revision > revision;
+  const input = useRef<HTMLInputElement>(null),
+    folder = useRef<HTMLInputElement>(null),
+    edit = useRef<HTMLDialogElement>(null);
+  const latest = useRef({ draft, base, dirty });
+  useEffect(() => {
+    latest.current = { draft, base, dirty };
+  }, [draft, base, dirty]);
+  const current = files.find((f) => f.kind === selected) ?? files[0];
+  const parsed = useMemo(
+    () => files.map((f) => ({ source: f, parsed: inspect(f.name, f.text) })),
+    [files],
+  );
+  const currentParsed = parsed.find(
+    (f) => f.source.kind === current?.kind,
+  )?.parsed;
+  const logs = parsed.flatMap(({ source, parsed }) =>
+    parsed.issues.map((i) => ({ ...i, kind: source.kind, file: source.name })),
+  );
+  const filtered =
+    currentParsed?.rows
+      .map((row, index) => ({ row, index }))
+      .filter(
+        ({ row }) =>
+          !query ||
+          JSON.stringify(row).toLowerCase().includes(query.toLowerCase()),
+      ) ?? [];
+  const pages = Math.max(1, Math.ceil(filtered.length / 30));
+  const sourceErrors = logs.filter((i) => i.level === "error").length;
+  const change = (next: SourcePack) => {
+    if (!dirty) setBase(cloud.document?.revision ?? revision);
+    setDraft(next);
+    setDirty(true);
+    setSaveError("");
+  };
+  const save = useCallback(async () => {
+    const pending = latest.current;
+    if (!pending.draft || !pending.dirty || saving || conflict) return;
+    setSaving(true);
+    try {
+      const saved = await saveCloud(pending.draft, pending.base);
+      setBase(saved.revision);
+      if (latest.current.draft === pending.draft) {
+        setDirty(false);
+        setDraft(null);
+      }
+      setSaveError("");
+    } catch (e) {
+      setSaveError(
+        e instanceof Error ? e.message : "Save failed. Export your draft.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [saveCloud, saving, conflict]);
+  useEffect(() => {
+    if (!dirty || saving || conflict || saveError) return;
+    const timer = setTimeout(() => void save(), 1200);
+    return () => clearTimeout(timer);
+  }, [draft, dirty, saving, conflict, saveError, save]);
+  useEffect(() => {
+    const prevent = (event: BeforeUnloadEvent) => {
+      if (latest.current.dirty) event.preventDefault();
+    };
+    window.addEventListener("beforeunload", prevent);
+    return () => window.removeEventListener("beforeunload", prevent);
+  }, []);
+  useEffect(() => {
+    if (cell) edit.current?.showModal();
+  }, [cell]);
+  const importFiles = async (list: FileList | null, isFolder = false) => {
+    if (!list?.length || busy || !files.length) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      let incoming = Array.from(list);
+      if (isFolder) incoming = selectUploads(incoming).map((i) => incoming[i]!);
+      if (
+        incoming.length > 6 ||
+        incoming.reduce((sum, f) => sum + f.size, 0) > MAX_BYTES
+      )
+        throw Error("Import up to six sources, maximum 20 MiB.");
+      const imported: Source[] = [];
+      if (incoming.length === 1 && incoming[0]!.name.endsWith(".json")) {
+        const text = await incoming[0]!.text();
+        let value: unknown;
+        try {
+          value = JSON.parse(text);
+        } catch {
+          /* Source inspector reports syntax. */
+        }
+        if (value && typeof value === "object" && "schema" in value)
+          imported.push(...(await validatePack(value)).files);
+      }
+      if (!imported.length)
+        for (const file of incoming) {
+          if (!/\.(csv|json)$/i.test(file.name))
+            throw Error("Upload CSV or JSON files.");
+          imported.push(
+            await makeSource(
+              file.name,
+              await file.text(),
+              file.webkitRelativePath || file.name,
+            ),
+          );
+        }
+      if (new Set(imported.map((f) => f.kind)).size !== imported.length)
+        throw Error(
+          "Duplicate source type in this upload. Choose one file per source.",
+        );
+      change({
+        schema: "hackathon.sources.v1",
+        files: files.map((f) => imported.find((v) => v.kind === f.kind) ?? f),
+      });
+      setSelected(imported[0]!.kind);
+      setPage(0);
+      setTab("diagnostics");
+      setMessage(
+        `${imported.length} source${imported.length === 1 ? "" : "s"} replaced. Contact data removed; review diagnostics.`,
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not read files.");
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = "";
+      if (folder.current) folder.current.value = "";
+    }
+  };
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      const result = await requestJSON<{ pack: SourcePack; notice: string }>(
+        "/api/repository-sources",
+      );
+      change(await validatePack(result.pack));
+      setMessage(result.notice);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "GitHub unavailable.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const exportPack = () => {
+    if (files.length === 6)
+      download(
+        "hackathon.sources.json",
+        JSON.stringify({ schema: "hackathon.sources.v1", files }, null, 2),
+      );
+  };
+  const importBackend = async () => {
+    setBusy(true);
+    try {
+      const result = await requestJSON<unknown>("/api/data-backend/import", {
+        method: "POST",
+      });
+      download("backend-import-report.json", JSON.stringify(result, null, 2));
+      setMessage("Backend import finished. Downloaded the ingestion report.");
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : "Backend import unavailable.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="data-studio">
+      <header className="studio-header">
+        <div>
+          <span className="eyebrow">Workspace / Data</span>
+          <h1>
+            Data Studio<span className="source-count">6 sources</span>
+          </h1>
+        </div>
+        <div className="studio-actions">
+          <span
+            className={`sync-state ${dirty || cloud.error || saveError ? "sync-pending" : ""}`}
+            role="status"
+          >
+            {saving ? (
+              "Saving…"
+            ) : conflict ? (
+              "Conflict"
+            ) : saveError ? (
+              "Not saved"
+            ) : dirty ? (
+              "Unsaved"
+            ) : cloud.document ? (
+              <>
+                <Check size={14} /> Saved to account
+              </>
+            ) : (
+              "Loading sources…"
+            )}
+          </span>
+          <button onClick={exportPack} disabled={busy || files.length !== 6}>
+            <Download size={16} />
+            Export pack
+          </button>
+          <button
+            className="primary"
+            onClick={() => input.current?.click()}
+            disabled={busy || saving || !files.length}
+          >
+            <Upload size={16} />
+            Import data
+          </button>
+        </div>
+      </header>
+      <input
+        type="file"
+        ref={input}
+        accept=".csv,.json"
+        multiple
+        hidden
+        aria-label="Import source files"
+        onChange={(e) => void importFiles(e.target.files)}
+      />
+      <input
+        type="file"
+        ref={folder}
+        multiple
+        hidden
+        aria-label="Import shop folder"
+        {...{ webkitdirectory: "" }}
+        onChange={(e) => void importFiles(e.target.files, true)}
+      />
+      {(message || cloud.error || saveError) && (
+        <div className="studio-notice" role="status">
+          <AlertTriangle size={17} />
+          <span>{cloud.error || saveError || message}</span>
+          <button
+            className="studio-icon"
+            aria-label="Dismiss message"
+            onClick={() => {
+              setMessage("");
+              setSaveError("");
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {conflict && (
+        <div className="studio-conflict" role="alert">
+          <strong>Another device updated these sources.</strong>
+          <span>Export your draft before loading the account version.</span>
+          <button onClick={exportPack}>Export draft</button>
+          <button
+            onClick={() => {
+              setDraft(null);
+              setDirty(false);
+              setSaveError("");
+            }}
+          >
+            Load account version
+          </button>
+        </div>
+      )}
+      <SandboxControl />
+      <section className="studio-body" aria-label="Source files">
+        <aside className="source-list">
+          <div className="source-list-heading">
+            <strong>Source files</strong>
+            <span>{files.length}/6</span>
+          </div>
+          {SOURCE_DEFS.map((def) => {
+            const entry = parsed.find((f) => f.source.kind === def.kind),
+              count =
+                entry?.parsed.issues.filter((i) => i.level !== "info").length ??
+                0;
+            return (
+              <button
+                key={def.kind}
+                className={current?.kind === def.kind ? "selected" : ""}
+                aria-pressed={current?.kind === def.kind}
+                onClick={() => {
+                  setSelected(def.kind);
+                  setPage(0);
+                  setQuery("");
+                }}
+              >
+                <span className={`source-file-icon source-${def.kind}`}>
+                  {def.file.endsWith(".csv") ? (
+                    <FileSpreadsheet size={20} />
+                  ) : (
+                    <FileJson size={20} />
+                  )}
+                </span>
+                <span>
+                  <strong>{def.name}</strong>
+                  <small>
+                    {entry
+                      ? `${entry.parsed.rows.length.toLocaleString()} records`
+                      : "Loading…"}
+                  </small>
+                </span>
+                {count > 0 && <em aria-label={`${count} issues`}>{count}</em>}
+              </button>
+            );
+          })}
+          <div className="source-list-tools">
+            <button
+              onClick={() => folder.current?.click()}
+              disabled={busy || !files.length}
+            >
+              <FolderOpen size={16} />
+              Import shop folder
+            </button>
+            <button
+              onClick={() => void refresh()}
+              disabled={busy || dirty || !files.length}
+            >
+              <RefreshCw size={16} />
+              Reload from GitHub
+            </button>
+            <button
+              onClick={() => void save()}
+              disabled={!dirty || saving || conflict}
+            >
+              <Save size={16} />
+              Save now
+            </button>
+          </div>
+        </aside>
+        <div className="source-detail">
+          <header className="source-detail-heading">
+            <div>
+              <h2>
+                {SOURCE_DEFS.find((d) => d.kind === current?.kind)?.name ??
+                  "Loading sources"}
+              </h2>
+              <code>{current?.name}</code>
+            </div>
+            <button
+              disabled={!current}
+              onClick={() => current && download(current.name, current.text)}
+            >
+              <Download size={15} />
+              Export file
+            </button>
+          </header>
+          {current && (
+            <div className="source-provenance">
+              <span title={current.origin}>
+                {current.commit
+                  ? `GitHub · ${current.commit.slice(0, 7)}`
+                  : "Uploaded source"}
+              </span>
+              <code title={current.hash}>
+                SHA-256 {current.hash.slice(0, 12)}
+              </code>
+              <span>Notes are untrusted</span>
+            </div>
+          )}
+          <div className="source-toolbar">
+            <div
+              className="studio-tabs"
+              role="tablist"
+              aria-label="Source views"
+            >
+              {(["records", "diagnostics", "schema"] as const).map((t) => (
+                <button
+                  key={t}
+                  role="tab"
+                  aria-selected={tab === t}
+                  aria-controls="source-tab-panel"
+                  onClick={() => {
+                    setTab(t);
+                    setQuery("");
+                  }}
+                >
+                  {t === "schema" ? "Format" : t[0]!.toUpperCase() + t.slice(1)}
+                  {t === "diagnostics" && (
+                    <span>{currentParsed?.issues.length ?? 0}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <label className="source-search">
+              <Search size={16} />
+              <input
+                placeholder={
+                  tab === "diagnostics"
+                    ? "Search diagnostics"
+                    : "Search records"
+                }
+                aria-label="Search source"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(0);
+                }}
+              />
+            </label>
+          </div>
+          <div
+            id="source-tab-panel"
+            className="source-content"
+            role="tabpanel"
+            aria-label={tab}
+          >
+            {!currentParsed ? (
+              <p className="source-empty">Loading your account sources…</p>
+            ) : tab === "records" ? (
+              <>
+                <div className="source-table-wrap">
+                  <table className="source-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        {currentParsed.columns.map((c) => (
+                          <th key={c}>{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered
+                        .slice(
+                          Math.min(page, pages - 1) * 30,
+                          (Math.min(page, pages - 1) + 1) * 30,
+                        )
+                        .map(({ row, index }) => (
+                          <tr key={index}>
+                            <td>{index + 1}</td>
+                            {currentParsed.columns.map((column) => (
+                              <td key={column}>
+                                {typeof row[column] === "object" ? (
+                                  <code>{JSON.stringify(row[column])}</code>
+                                ) : (
+                                  <button
+                                    className="source-cell"
+                                    title={`Edit row ${index + 1}, ${column}`}
+                                    onClick={() =>
+                                      setCell({
+                                        row: index,
+                                        column,
+                                        value: String(row[column] ?? ""),
+                                      })
+                                    }
+                                  >
+                                    {String(row[column] ?? "") || (
+                                      <span className="empty-cell">—</span>
+                                    )}
+                                  </button>
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!filtered.length && (
+                  <p className="source-empty">No matching records.</p>
+                )}
+                <footer className="source-pagination">
+                  <span>{filtered.length.toLocaleString()} records</span>
+                  <button
+                    disabled={page === 0}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    {Math.min(page + 1, pages)} / {pages}
+                  </span>
+                  <button
+                    disabled={page >= pages - 1}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    Next
+                  </button>
+                </footer>
+              </>
+            ) : tab === "diagnostics" ? (
+              <div className="source-diagnostics">
+                {currentParsed.issues
+                  .filter(
+                    (i) =>
+                      !query ||
+                      JSON.stringify(i)
+                        .toLowerCase()
+                        .includes(query.toLowerCase()),
+                  )
+                  .map((issue, index) => (
+                    <article key={index} data-level={issue.level}>
+                      <span>{issue.level}</span>
+                      <div>
+                        <strong>{issue.code}</strong>
+                        <p>{issue.message}</p>
+                        <small>
+                          {issue.row ? `Row ${issue.row}` : "File"}
+                          {issue.column ? ` · ${issue.column}` : ""}
+                        </small>
+                      </div>
+                    </article>
+                  ))}
+                {!currentParsed.issues.length && (
+                  <p className="source-empty">
+                    <Check size={20} />
+                    No format issues found.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="source-schema">
+                <h3>Expected format</h3>
+                <dl>
+                  {SOURCE_DEFS.find(
+                    (d) => d.kind === current?.kind,
+                  )?.required.map((c) => (
+                    <div key={c}>
+                      <dt>{c}</dt>
+                      <dd>Required</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p>
+                  {current?.kind === "inventory"
+                    ? "Supports daily “Ngày” and hourly “Thời điểm cập nhật” snapshots. Internal codes require backend SKU matching."
+                    : current?.kind === "ads"
+                      ? "Timestamps are preserved as written. Backend verifies timezone before combining ads and orders."
+                      : current?.kind === "cost"
+                        ? "Blank cost stays unknown. VND variants such as 45k and 45.000đ are normalized by the backend."
+                        : "Headers detect source type. Uploaded filenames may differ. Originals remain unchanged."}
+                </p>
+              </div>
+            )}
+          </div>
+          <footer className="source-footer">
+            <span>
+              <Database size={14} />
+              {sourceErrors} format errors across sources
+            </span>
+            <button
+              disabled={busy || dirty || saving || conflict || !files.length}
+              onClick={() => void importBackend()}
+            >
+              Send saved sources to backend
+            </button>
+          </footer>
+        </div>
+      </section>
+      {cell && (
+        <dialog
+          ref={edit}
+          className="source-edit"
+          onCancel={() => setCell(null)}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!current || !currentParsed) return;
+              const rows = currentParsed.rows.map((r, i) =>
+                i === cell.row ? { ...r, [cell.column]: cell.value } : r,
+              );
+              const text =
+                currentParsed.payload === undefined
+                  ? Papa.unparse({ fields: currentParsed.columns, data: rows })
+                  : JSON.stringify(
+                      Array.isArray(currentParsed.payload) ? rows : rows[0],
+                    );
+              void makeSource(current.name, text, "edited in workspace").then(
+                (source) => {
+                  change({
+                    schema: "hackathon.sources.v1",
+                    files: files.map((f) =>
+                      f.kind === current.kind ? source : f,
+                    ),
+                  });
+                  setCell(null);
+                },
+              );
+            }}
+          >
+            <header>
+              <h2>Edit value</h2>
+              <button
+                type="button"
+                aria-label="Cancel edit"
+                onClick={() => setCell(null)}
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <label>
+              {cell.column}
+              <textarea
+                autoFocus
+                value={cell.value}
+                onChange={(e) => setCell({ ...cell, value: e.target.value })}
+              />
+            </label>
+            <footer>
+              <button type="button" onClick={() => setCell(null)}>
+                Cancel
+              </button>
+              <button className="primary" type="submit">
+                Apply edit
+              </button>
+            </footer>
+          </form>
+        </dialog>
+      )}
+    </div>
+  );
+}

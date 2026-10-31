@@ -1,0 +1,13 @@
+{
+  "externalModelService": "simulated",
+  "accountStorage": "local Cloudflare SQLite Durable Object",
+  "checks": [
+    "12 model choices, no trash button, real account save, Markdown reply",
+    "Independent signed-in device reopens the saved session and model",
+    "Second device messages appear through authenticated WebSocket notifications",
+    "History survives a full reload",
+    "Chat containment at 320, 390, 768 and 1440 pixels",
+    "Stale writes, unauthenticated reads and cross-origin writes are rejected",
+    "No browser runtime errors"
+  ]
+}

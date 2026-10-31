@@ -1,0 +1,78 @@
+{
+  "data": {
+    "now": "2026-11-11T01:00:00+07:00",
+    "clock": "data",
+    "data_as_of": "2026-11-11T01:00:00+07:00",
+    "sources": [
+      {
+        "source": "orders",
+        "label": "Đơn hàng",
+        "as_of": "2026-11-11T01:00:00+07:00",
+        "received_at": "2026-11-11T01:00:00+07:00",
+        "status": "fresh",
+        "lag_minutes": 0,
+        "threshold_minutes": 30,
+        "missing_skus": null
+      },
+      {
+        "source": "inventory",
+        "label": "Tồn kho",
+        "as_of": "2026-11-11T01:00:00+07:00",
+        "received_at": "2026-11-11T01:00:00+07:00",
+        "status": "fresh",
+        "lag_minutes": 0,
+        "threshold_minutes": 60,
+        "missing_skus": null
+      },
+      {
+        "source": "ads",
+        "label": "Quảng cáo",
+        "as_of": "2026-11-10T21:00:00+07:00",
+        "received_at": "2026-11-11T01:00:00+07:00",
+        "status": "stale",
+        "lag_minutes": 240,
+        "threshold_minutes": 180,
+        "missing_skus": null
+      },
+      {
+        "source": "cost",
+        "label": "Giá vốn",
+        "as_of": "2026-11-11T01:00:00+07:00",
+        "received_at": "2026-11-11T01:00:00+07:00",
+        "status": "partial",
+        "lag_minutes": null,
+        "threshold_minutes": null,
+        "missing_skus": 39
+      },
+      {
+        "source": "campaigns",
+        "label": "Chiến dịch",
+        "as_of": "2026-11-11T01:00:00+07:00",
+        "received_at": "2026-11-11T01:00:00+07:00",
+        "status": "fresh",
+        "lag_minutes": null,
+        "threshold_minutes": null,
+        "missing_skus": null
+      },
+      {
+        "source": "sale_program",
+        "label": "Chương trình sale",
+        "as_of": "2026-11-11T01:00:00+07:00",
+        "received_at": "2026-11-11T01:00:00+07:00",
+        "status": "fresh",
+        "lag_minutes": null,
+        "threshold_minutes": null,
+        "missing_skus": null
+      }
+    ]
+  },
+  "meta": {
+    "data_as_of": "2026-11-11T01:00:00+07:00",
+    "computed_at": "2026-11-11T01:00:00+07:00",
+    "compute_state": "fresh",
+    "confidence": null,
+    "sources": [],
+    "cache_hit": null,
+    "total": null
+  }
+}
