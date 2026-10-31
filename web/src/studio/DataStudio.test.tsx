@@ -15,19 +15,43 @@ const setup = (files: SourcePack["files"] = []) => {
   });
   return render(<MemoryRouter><DataStudio /></MemoryRouter>);
 };
-beforeEach(() => { vi.clearAllMocks(); save.mockResolvedValue({ revision: 8 }); });
+beforeEach(() => {
+  vi.resetAllMocks();
+  save.mockResolvedValue({ revision: 8 });
+  vi.mocked(requestJSON).mockImplementation(async path => path === "/api/auth/session" ? { authenticated: true, account: "admin" } : undefined);
+});
+it.each(["judges", null])("hides restock for account %s", async account => {
+  vi.mocked(requestJSON).mockResolvedValue({ authenticated: !!account, account });
+  setup();
+  await waitFor(() => expect(requestJSON).toHaveBeenCalledWith("/api/auth/session"));
+  expect(screen.queryByRole("button", { name: /restock/i })).not.toBeInTheDocument();
+});
+it.each(["admin", "admin1", "admin2", "admin3", "admin4"])("shows restock for %s", async account => {
+  vi.mocked(requestJSON).mockResolvedValue({ authenticated: true, account });
+  setup();
+  expect(await screen.findByRole("button", { name: "Restock GD0003 +10" })).toBeInTheDocument();
+});
+it("keeps restock hidden while session is loading or unavailable", async () => {
+  let reject!: (reason: Error) => void;
+  vi.mocked(requestJSON).mockReturnValue(new Promise((_resolve, fail) => { reject = fail; }));
+  setup();
+  expect(screen.queryByRole("button", { name: /restock/i })).not.toBeInTheDocument();
+  reject(Error("Session unavailable"));
+  await waitFor(() => expect(requestJSON).toHaveBeenCalledOnce());
+  expect(screen.queryByRole("button", { name: /restock/i })).not.toBeInTheDocument();
+});
 it("triggers GD0003 restock and reuses its operation ID when backend sync needs retry", async () => {
   const file = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nGD0003,Fryer,2", "upload");
   setup([file]);
   vi.mocked(requestJSON).mockResolvedValueOnce({ change: { before: 2, after: 12 }, backend: "pending" })
     .mockResolvedValueOnce({ change: { before: 2, after: 12 }, backend: "synced" });
-  fireEvent.click(screen.getByRole("button", { name: "Restock GD0003 +10" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Restock GD0003 +10" }));
   await screen.findByText(/GD0003 restocked: 2 → 12/);
-  const first = JSON.parse(String(vi.mocked(requestJSON).mock.calls[0]![1]!.body));
+  const first = JSON.parse(String(vi.mocked(requestJSON).mock.calls[1]![1]!.body));
   expect(first.revision).toBe(7);
   fireEvent.click(screen.getByRole("button", { name: "Retry restock sync" }));
   await screen.findByText(/Ready to analyze again/);
-  const second = JSON.parse(String(vi.mocked(requestJSON).mock.calls[1]![1]!.body));
+  const second = JSON.parse(String(vi.mocked(requestJSON).mock.calls[2]![1]!.body));
   expect(second.operationId).toBe(first.operationId);
   expect(save).not.toHaveBeenCalled();
 });
@@ -35,7 +59,7 @@ it("triggers GD0003 restock and reuses its operation ID when backend sync needs 
 it("loads and saves the baseline with one click from an empty studio, without a folder picker", async () => {
   const file = await makeSource("ton_kho_google_sheet.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "shop baseline");
   let resolve!: (value: unknown) => void;
-  vi.mocked(requestJSON).mockReturnValue(new Promise(done => { resolve = done; }));
+  vi.mocked(requestJSON).mockResolvedValueOnce({ authenticated: true, account: "admin" }).mockReturnValue(new Promise(done => { resolve = done; }));
   const view = setup();
   fireEvent.click(screen.getByRole("button", { name: "Import shop folder" }));
   expect(screen.getByRole("button", { name: "Importing shop…" })).toBeDisabled();
