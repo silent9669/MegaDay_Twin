@@ -2,7 +2,7 @@ import { z } from "zod";
 import { modelSelectionSchema } from "../src/planner/demand-contract";
 import { loadContext } from "./sku-assistant";
 import { plannerBackend, type PlannerEnv } from "./sale-planner";
-import { snapshot } from "../src/city/monitor/changes";
+import { workspaceSummary } from "./workspace-summary";
 import type { SourcePack } from "../src/studio/sources";
 import type { Doc, Sandbox } from "../src/studio/workspace-types";
 import type { AssistantContext } from "../src/planner/assistant-contract";
@@ -91,7 +91,7 @@ const historySchema = z.object({ sku: text, grain: z.literal("day"), start: text
 type WorkspaceFacts = { sourceRevision: number; updatedAt: string; sandboxHour: number; observationOnly: true;
   orderRowsAtSandboxHour: number; campaignRows: number;
   selectedStock: { code: string; name: string; stock: number | null; asOf: string } | null;
-  sources: { kind: string; name: string; hash: string; issueCount: number; issues: string[] }[] };
+  sources: { kind: string; name: string; hash: string; issueCount: number | null; issues: string[]; diagnosticsChecked: boolean }[] };
 export type MiloContext = { selection: MiloSelection; skuContext: AssistantContext | null;
   salesHistory: z.infer<typeof historySchema> | null;
   campaign: z.infer<typeof campaignSchema> | null;
@@ -119,14 +119,15 @@ export async function buildMiloContext(
         if (!sourceResponse?.ok || !sandboxResponse?.ok) throw Error("unavailable");
         const sources = await sourceResponse.json() as Doc<SourcePack>;
         const sandbox = await sandboxResponse.json() as Doc<Sandbox>;
-        const current = snapshot(sources, sandbox);
+        const current = workspaceSummary(sources, sandbox, selection.sku);
         const stock = selection.sku ? current.stock.find((row) => row.code === selection.sku) : undefined;
         workspace = { sourceRevision: current.sourceRevision, updatedAt: sources.updatedAt,
           sandboxHour: current.hour, observationOnly: true, orderRowsAtSandboxHour: current.orders,
           campaignRows: current.campaigns, selectedStock: stock ? { code: stock.code.slice(0, 200),
             name: stock.name.slice(0, 200), stock: stock.stock, asOf: stock.asOf.slice(0, 100) } : null,
           sources: current.sources.slice(0, 30).map((source) => ({ kind: source.kind,
-            name: source.name.slice(0, 200), hash: source.hash.slice(0, 100), issueCount: source.issues.length,
+            name: source.name.slice(0, 200), hash: source.hash.slice(0, 100), issueCount: source.issueCount,
+            diagnosticsChecked: source.diagnosticsChecked,
             issues: source.issues.slice(0, 8).map((issue) => issue.slice(0, 200)) })),
         };
       } catch { notices.push("Chưa đọc được dữ liệu Data Studio hiện tại; không suy đoán số liệu từ dữ liệu cũ."); }

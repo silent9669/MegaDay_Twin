@@ -20,14 +20,17 @@ export class DecisionBackend extends Container<Env> {
     AI_ENABLED: this.env.OPENAI_API_KEY ? "true" : "false",
     ...(this.env.OPENAI_API_KEY ? { OPENAI_API_KEY: this.env.OPENAI_API_KEY } : {}),
   };
-  static outboundByHost = {
-    "state.internal": (request: Request, env: Env) => snapshotStorage(request, env.STATE),
-  };
   override async fetch(request: Request): Promise<Response> {
     await this.startAndWaitForPorts({ ports: [8000], cancellationOptions: { portReadyTimeoutMS: 180000 } });
     return this.containerFetch(request);
   }
 }
+
+// Assignment invokes the SDK's registry setter. A static class field shadows it,
+// leaving ContainerProxy unable to resolve this private storage hostname.
+DecisionBackend.outboundByHost = {
+  "state.internal": (request: Request, env: Env) => snapshotStorage(request, env.STATE),
+};
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

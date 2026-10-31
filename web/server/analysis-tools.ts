@@ -8,7 +8,7 @@ import type { Doc } from "../src/studio/workspace-types";
 type Storage = { fetch(request: Request): Promise<Response> };
 /** Saved sources are already validated and sanitized. Stream CSV rows without
  * retaining hundreds of thousands of objects while awaiting a model response. */
-function scanSource(file: SourcePack["files"][number], visit: (row: Record<string, unknown>, index: number) => void) {
+export function scanSource(file: SourcePack["files"][number], visit: (row: Record<string, unknown>, index: number) => void) {
   const text = sourceText(file);
   if (/\.json$/i.test(file.name)) {
     const parsed = inspect(file.name, text);

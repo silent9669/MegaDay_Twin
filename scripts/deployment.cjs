@@ -1,16 +1,22 @@
 // Shared by GitHub Actions and dependency-free local regression tests.
-async function needsDeployment(github, context) {
-  if (context.eventName === 'workflow_dispatch') return true;
+async function deploymentChanges(github, context) {
+  if (context.eventName === 'workflow_dispatch') return { deploy: true, backend: true };
   const { data } = await github.rest.repos.compareCommitsWithBasehead({
     ...context.repo, basehead: `cloudflare-production...${context.sha}`,
   });
   // GitHub caps the comparison at 300 files; never skip an incomplete diff.
-  if (!data.files || data.files.length >= 300) return true;
+  if (!data.files || data.files.length >= 300) return { deploy: true, backend: true };
   const relevant = (path = '') => path.startsWith('web/') || path.startsWith('backend/') || path.startsWith('mock-data/out/') ||
     path === '.dockerignore' || path === '.github/workflows/deploy-backend.yml' ||
     path === '.github/workflows/deploy.yml' || path === 'scripts/deployment.cjs' ||
     path === 'scripts/deployment.test.cjs' || path === 'scripts/hosted-smoke.py';
-  return data.files.some((file) => relevant(file.filename) || relevant(file.previous_filename));
+  const backend = (path = '') => path.startsWith('backend/') || path.startsWith('web/decision-backend/') ||
+    path.startsWith('mock-data/out/') || path === '.dockerignore' || path === 'web/package.json' ||
+    path === 'web/package-lock.json' || path === '.github/workflows/deploy-backend.yml' || path === 'scripts/hosted-smoke.py';
+  return {
+    deploy: data.files.some((file) => relevant(file.filename) || relevant(file.previous_filename)),
+    backend: data.files.some((file) => backend(file.filename) || backend(file.previous_filename)),
+  };
 }
 
 async function promote(github, context) {
@@ -67,4 +73,4 @@ async function verifyProduction(fetchImpl = fetch) {
   }
 }
 
-module.exports = { needsDeployment, promote, waitForBuild, verifyProduction };
+module.exports = { deploymentChanges, promote, waitForBuild, verifyProduction };

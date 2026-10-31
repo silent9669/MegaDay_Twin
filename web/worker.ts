@@ -17,9 +17,8 @@ import { backendConnection, backendFetch, type BackendService } from "./server/b
 import { plannerContext, runSalePlan, activeSalePlan, applySalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
-import { sourceText } from "./src/studio/source-text";
-import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
-import { sourceLayer } from "./src/studio/replay";
+import type { SourcePack } from "./src/studio/sources";
+import { backendImport } from "./server/backend-import";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
   PMEnv & StudioModelEnv & {
@@ -51,7 +50,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       {
         status: healthy ? "ok" : "degraded",
         db: healthy ? "ok" : "error",
-        mode: "fixtures",
+        mode: backendConnection(env) ? "connected" : "fixtures",
       },
       { status: healthy ? 200 : 503 },
     );
@@ -191,23 +190,14 @@ async function handle(request: Request, env: Env): Promise<Response> {
           env.WORKSPACE.idFromName("admin"),
         ).fetch(new Request(new URL("/api/workspace/sources", url)));
         const doc = (await stored.json()) as { data: SourcePack };
-        const form = new FormData();
-        // The Python replay owns event visibility; never ingest future event rows.
-        const shop = { ...doc.data, files: await sourceLayer(doc.data.files, "shop") };
-        const supported = (await withoutDemandLabels(shop)).files.filter(f => f.kind !== "general");
+        const supported = doc.data.files.filter(f => f.kind !== "general" && (!f.replay || f.replay.hours.some(hour => hour < 0)));
         if (!supported.length) return fail(422, "Import a supported business table first.");
-        for (const f of supported)
-          form.append(
-            "files",
-            new Blob([sourceText(f)], {
-              type: f.name.endsWith(".csv") ? "text/csv" : "application/json",
-            }),
-            SOURCE_DEFS.find((d) => d.kind === f.kind)!.file,
-          );
+        const form = backendImport(supported);
+        headers.set("Content-Type", form.contentType);
         return backendFetch(new URL("ingest/files", base), {
           method: "POST",
           headers,
-          body: form,
+          body: form.body,
         }, service);
       }
       const relative = path.slice("/api/v1/".length);
