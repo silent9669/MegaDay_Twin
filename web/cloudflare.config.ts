@@ -24,9 +24,15 @@ export default defineConfig({
       ADMIN_PASSWORD_HASH: bindings.secret(),
       JUDGES_PASSWORD_HASH: bindings.secret(),
       SESSION_SECRET: bindings.secret(),
-      DATA_BACKEND_URL: bindings.secret(),
-      DATA_BACKEND_USER: bindings.secret(),
-      DATA_BACKEND_ROLE: bindings.secret(),
+      // The Python bridge is optional in production. Declaring these as required
+      // secrets would try to inherit bindings that may not exist on the Worker.
+      // Existing deployed secrets are retained by cf deploy. Opt in locally so
+      // the Vite plugin exposes the bridge values from the ignored .dev.vars.
+      ...(process.env.MEGADAY_LOCAL_BACKEND === "1" ? {
+        DATA_BACKEND_URL: bindings.secret(),
+        DATA_BACKEND_USER: bindings.secret(),
+        DATA_BACKEND_ROLE: bindings.secret(),
+      } : {}),
       OPENAI_API_KEY: bindings.secret(),
       OPENAI_MODEL_IMPORT: bindings.text("gpt-6-luna"),
       OPENAI_MODEL_DECISION: bindings.text("gpt-6-luna"),
