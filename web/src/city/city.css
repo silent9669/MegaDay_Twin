@@ -1083,15 +1083,13 @@
   overflow: hidden;
   min-height: 560px;
   isolation: isolate;
-  background: #dce7db;
+  background: #173c34;
 }
 .login-art-image {
   position: absolute;
   inset: 0;
   z-index: -2;
-  background: url('/assets/login-city.webp') center 56% / cover no-repeat;
-  filter: saturate(.82) contrast(.96);
-  transform: scale(1.04);
+  background: #173c34 url('/assets/login-commerce-banner.svg') center / contain no-repeat;
 }
 .login-form-area {
   display: grid;
