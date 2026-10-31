@@ -39,7 +39,7 @@ export class AccountWorkspace {
   constructor(ctx: DurableObjectState, private env: StudioModelEnv = {}) {
     this.ctx = ctx;
     const existing = new Set(ctx.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'").toArray().map(table => table.name));
-    // No-op CREATE statements also fail when Cloudflare's write quota is exhausted.
+    // Avoid redundant schema writes; Cloudflare may still reject reads after quota exhaustion.
     if (!existing.has("documents")) ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS documents (name TEXT PRIMARY KEY, revision INTEGER NOT NULL, updated_at TEXT NOT NULL)",
     );
