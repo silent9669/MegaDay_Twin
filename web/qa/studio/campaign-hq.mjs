@@ -1,8 +1,9 @@
 // Browser integration fixture. No calls to production, Python or paid AI.
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chromium, webkit } from 'playwright';
 const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5186';
+assert(['127.0.0.1', 'localhost'].includes(new URL(base).hostname), 'Local QA only');
 const out = new URL('../../../qa/runs/campaign-hq/', import.meta.url);
 await mkdir(out, { recursive: true });
 const d = mean => ({ mean, p10: mean * .8, p50: mean, p90: mean * 1.2 });
@@ -30,9 +31,12 @@ const scenario = { scenario_id: 'qa-scenario', input_hash: 'qa', blocked: false,
 };
 let rev = 'r1';
 const ctx = () => ({ campaign: { campaign_id: 'CD002', name: 'Nồi chiên mini + giấy lót', daily_budget_vnd: 1864000, spend_today_vnd: 500000, sku_detail: skus.map(s => ({ sku: s.sku_id, name: s.sku_id, is_bundle: s.is_bundle, price_effective_vnd: 600000, stock_available: 83 })) }, goal, revision: rev, dataAsOf: start, sources: { orders: start, inventory: start, ads: '2026-11-11T13:00:00+07:00' }, canRun: true, history: [] });
-const browser = await chromium.launch({ headless: true, channel: process.env.STUDIO_QA_CHANNEL });
+const engine = process.env.QA_ENGINE === 'webkit' ? webkit : chromium;
+const browser = await engine.launch({ headless: true, ...(engine === chromium ? { channel: process.env.STUDIO_QA_CHANNEL } : {}) });
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const login = await context.request.post(base + '/api/auth/login', { headers: { Origin: base }, data: { username: 'admin', password: (await readFile('/tmp/megaday-qa-password', 'utf8')).trim() } });
+  assert(login.ok(), 'Local login failed');
   await context.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith('/api/')) return route.continue();
@@ -40,7 +44,7 @@ try {
     if (path.endsWith('/refresh')) return route.fulfill({ json: { revision: rev, scenario, goal, end, progress: null } });
     if (path.endsWith('/explain')) return route.fulfill({ json: { scenarioId: scenario.scenario_id, method: 'rules', reasons: scenario.recommendation.reasons, cautions: [] } });
     if (path === '/api/pm/models') return route.fulfill({ json: { models: [], selected: null } });
-    const docs = { sources: { schema: 'megaday.sources.v1', files: [] }, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] }, sandbox: { hour: 15, event: 'observe' }, chats: { sessions: [], preferredModel: '' } };
+    const docs = { hq: { tracked: [], active: null, worksheets: {}, activity: [] }, sources: { schema: 'megaday.sources.v1', files: [] }, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] }, sandbox: { hour: 15, event: 'observe' }, chats: { sessions: [], preferredModel: '' } };
     return route.fulfill({ json: { revision: 1, updatedAt: start, data: docs[path.split('/').pop()] ?? {} } });
   });
   const page = await context.newPage();
@@ -60,7 +64,7 @@ try {
   }
   rev = 'r2';
   await page.getByText('Có dữ liệu hoặc mục tiêu mới chưa được tính vào bản đang xem.', { exact: true }).waitFor({ timeout: 20000 });
-  await page.getByRole('button', { name: 'Thông báo Milo' }).click();
+  await page.getByRole('button', { name: 'Milo notifications' }).click();
   await page.getByRole('link', { name: 'Mở campaign để cập nhật & đề xuất lại' }).waitFor();
   assert.deepEqual(errors, []);
   await writeFile(new URL('results.json', out), JSON.stringify({ mode: 'mock APIs, real browser', checks: ['two tables', 'desktop/mobile', 'backend revision -> stale analysis + Milo notification'], errors }, null, 2));

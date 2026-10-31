@@ -416,6 +416,16 @@ attached (10 MB input limit, resized to 1,280 px and at most 512 KB each). Saved
 messages retain images and analysis context for history and retries. The existing
 20 MiB account document limit still applies.
 
+Opening Milo from the sidebar, avatar or keyboard shortcut uses the active tracked
+HQ product. Switching products keeps conversation drafts separate. Images can also
+be pasted into the composer. Voice input uses the browser's speech-recognition
+service and microphone permission; transcripts remain editable until Send. It
+stops on chat close, context changes and submission. Unsupported browsers keep
+text/image input and show the voice control as unavailable.
+
+HQ tabs wrap within the panel. Campaigns can show the selected product or all
+campaigns; Activity Logs can be searched without changing saved events.
+
 The authenticated `/api/pm/chat` endpoint delegates execution to the account
 Durable Object. Milo can list source tables and read/search records through
 read-only tools, with source revisions and record numbers. Each response permits
@@ -429,3 +439,6 @@ stored on the device, and Replay tutorial always opens it explicitly.
 
 Verification: `node qa/hq-workspace.mjs` runs against a local Wrangler preview,
 using local test data and mocked AI replies; it never writes to production.
+`node qa/milo-inputs.mjs` checks product context, image paste and voice controls
+with simulated speech events in Chromium and WebKit; it does not test a physical
+microphone or a speech provider's transcription accuracy.

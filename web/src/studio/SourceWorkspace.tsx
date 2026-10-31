@@ -1,4 +1,5 @@
 import { readSource } from "./read-source";
+import { Button } from "../components/ui/button";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { normalize, type SourcePack } from "./sources";
@@ -21,7 +22,7 @@ export function SourceWorkspace({ pack, district }: { pack: SourcePack | null; d
   const pages = Math.max(1, Math.ceil(rows.length / 30));
   const currentPage = Math.min(page, pages - 1);
   return <section className="source-workspace">
-    <header><h3>{district === "hq" ? "Workspace overview" : "Order records"}</h3><Link to="/mock-data">Data Studio</Link></header>
+    <header><h3>{district === "hq" ? "Workspace overview" : "Order records"}</h3><Button variant="outline" render={<Link to="/mock-data" />}>Data Studio</Button></header>
     {!pack?.files.length ? <p>Import your data in Data Studio to begin.</p> : district === "hq" ? <>
       <dl className="source-metrics">
         <div><dt>Imported tables</dt><dd>{pack.files.length}</dd></div>
@@ -34,7 +35,7 @@ export function SourceWorkspace({ pack, district }: { pack: SourcePack | null; d
       <label className="product-label-search">Search orders<input value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} placeholder="Order, product or status" /></label>
       <div className="warehouse-table" role="region" aria-label="Imported orders" tabIndex={0}><table><thead><tr>{headers.map(header => <th key={header}>{header}</th>)}</tr></thead>
         <tbody>{rows.slice(currentPage * 30, (currentPage + 1) * 30).map((row, index) => <tr key={index}>{headers.map(header => <td key={header}>{String(row[column(header)] ?? "") || "—"}</td>)}</tr>)}</tbody></table></div>
-      <nav className="product-label-pagination" aria-label="Order pages"><button disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>Previous</button><span>{rows.length.toLocaleString()} records · {currentPage + 1} / {pages}</span><button disabled={currentPage + 1 >= pages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>
+      <nav className="product-label-pagination" aria-label="Order pages"><Button variant="outline" disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>Previous</Button><span>{rows.length.toLocaleString()} records · {currentPage + 1} / {pages}</span><Button variant="outline" disabled={currentPage + 1 >= pages} onClick={() => setPage(currentPage + 1)}>Next</Button></nav>
     </>}
   </section>;
 }

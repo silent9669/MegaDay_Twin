@@ -10,6 +10,7 @@ const files=[
  {name:'hq-ads.csv',kind:'ads',text:'Mã chiến dịch,Chi phí,Lượt click,Thời gian,Lượt hiển thị\nQA-C1,120000,32,2026-10-31 09:00+07:00,1000'},
 ];
 for(const [engineName,engine] of Object.entries({chromium,webkit})){
+ if(process.env.QA_ENGINE && process.env.QA_ENGINE !== engineName)continue;
  const browser=await engine.launch();try{
   const page=await browser.newPage({viewport:{width:1440,height:1000},extraHTTPHeaders:{Origin:base},reducedMotion:'reduce'});page.setDefaultTimeout(15000);const errors=[];const failures=[];
   page.on('requestfailed',request=>failures.push({url:request.url(),error:request.failure(),page:page.url()}));
@@ -21,6 +22,7 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   const settings=await(await page.request.get(base+'/api/workspace/settings')).json();
   assert((await page.request.put(base+'/api/workspace/settings',{data:{revision:settings.revision,data:{...settings.data,appearance:'morning'}}})).ok());
   await page.addInitScript(()=>localStorage.setItem('megaday.city.tour.v4','complete'));
+  await page.route('**/api/v1/campaign-analysis/CD002',route=>route.fulfill({json:{campaign:{campaign_id:'CD002'},goal:null,revision:'qa',dataAsOf:null,sources:{},canRun:false,history:[]}}));
   await page.route('**/api/pm/models',route=>route.fulfill({json:{configured:true,models:['gpt-4.1'],defaultModel:'gpt-4.1'}}));
   await page.route('**/api/sale-planner/context', route=>route.fulfill({json:{backendConfigured:true,canCreateGoals:true,canPreview:true,canApply:true,referenceTime:'2026-10-31T00:00:00Z',dataAsOf:'2026-10-31T00:00:00Z',notice:null,campaigns:[{id:'QA-C1',name:'Morning essentials'}]}}));
   await page.route('**/api/sale-planner/active?*',route=>route.fulfill({json:{campaignId:new URL(route.request().url()).searchParams.get('campaignId'),activeGoal:null,baseGoal:null}}));

@@ -1,4 +1,5 @@
 import { readSource } from "../studio/read-source";
+import { Button } from "../components/ui/button";
 import { useMemo, useState } from "react";
 import { type SourcePack } from "../studio/sources";
 import { analyzeWithAI } from "../city/analysis-context";
@@ -13,6 +14,7 @@ export function Campaigns({
   const selection = useHQSelection(),
     sku = selection?.product?.sku;
   const [search, setSearch] = useState("");
+  const [scope, setScope] = useState("product");
   const campaigns = useMemo(
     () =>
       pack?.files
@@ -28,14 +30,15 @@ export function Campaigns({
   );
   const rows = campaigns.filter(
     ({ row }) =>
-      (!sku || (Array.isArray(row.sku) && row.sku.includes(sku))) &&
+      (!sku || scope === "all" || (Array.isArray(row.sku) && row.sku.includes(sku))) &&
       JSON.stringify(row).toLowerCase().includes(search.toLowerCase()),
   );
   return (
     <section className="hq-campaigns">
       <header className="hq-product-toolbar">
         <h2>Campaigns</h2>
-        <button onClick={() => selection?.tab("goals")}>Plan a goal</button>
+        {sku && <label>Scope<select aria-label="Campaign scope" value={scope} onChange={e => setScope(e.target.value)}><option value="product">{sku}</option><option value="all">All campaigns</option></select></label>}
+        <Button variant="outline" onClick={() => selection?.tab("goals")}>Plan a goal</Button>
         <input
           aria-label="Search campaigns"
           placeholder="Search campaigns"
@@ -45,7 +48,7 @@ export function Campaigns({
       </header>
       {!rows.length ? (
         <p className="hq-empty">
-          {sku
+          {search ? "No campaigns match your search." : sku && scope === "product"
             ? "No campaign source explicitly links this product."
             : "Import campaign structure in Data Studio to view campaigns."}
         </p>
@@ -84,7 +87,7 @@ export function Campaigns({
             <div className="hq-campaign-products">
               {Array.isArray(row.sku) &&
                 row.sku.map((code: unknown) => (
-                  <button
+                  <Button variant="outline"
                     key={String(code)}
                     onClick={() =>
                       selection?.open(
@@ -98,15 +101,14 @@ export function Campaigns({
                     }
                   >
                     {String(code)}
-                  </button>
+                  </Button>
                 ))}
             </div>
             <footer>
               <span>
                 {file} · record {record}
               </span>
-              <button
-                className="btn-secondary"
+              <Button variant="outline"
                 onClick={() =>
                   analyzeWithAI(
                     {
@@ -124,7 +126,7 @@ export function Campaigns({
                 }
               >
                 Analyze with AI
-              </button>
+              </Button>
             </footer>
           </article>
         ))

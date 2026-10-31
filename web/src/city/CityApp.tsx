@@ -286,7 +286,7 @@ export function CityApp({ studio = false, campaignHQ = false }: { studio?: boole
               : "Commerce city"}
         </span>
         <div className="city-account">
-          <button className="city-appearance" aria-label="Thông báo Milo"
+          <button className="city-appearance" aria-label="Milo notifications"
             onClick={() => window.dispatchEvent(new Event("workspace:updates"))}>
             <Bell size={16} /><span>{assistant.unread ? assistant.unread : "Milo"}</span>
           </button>
@@ -457,6 +457,8 @@ export function CityApp({ studio = false, campaignHQ = false }: { studio?: boole
                     </SheetTitle>
                     <button className="city-icon panel-expand" aria-label={panel.expanded ? "Restore workspace" : "Expand workspace"}
                       onClick={() => panel.setExpanded(!panel.expanded)}>{panel.expanded ? <Minimize2 /> : <Maximize2 />}</button>
+                    <button className="city-icon" aria-label="Open PM assistant" title="Open PM assistant"
+                      onClick={() => window.dispatchEvent(new Event("workspace:chat"))}><MessageCircle /></button>
                     <button
                       className="city-icon"
                       aria-label="Close workspace"
@@ -470,7 +472,7 @@ export function CityApp({ studio = false, campaignHQ = false }: { studio?: boole
                     {district === "hq" ? (
                       <>
                         <div className="workspace-tabs">
-                          <Link to="/campaign-hq">CD002 · Phân tích và đề xuất <ArrowRight aria-hidden size={16} /></Link>
+                          <Link className="btn-secondary" to="/campaign-hq">CD002 · Analysis & recommendations <ArrowRight aria-hidden size={16} /></Link>
                         </div>
                         <HQWorkspace pack={visiblePack} revision={sources.document?.revision ?? 0} />
                       </>
