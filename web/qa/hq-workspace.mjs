@@ -28,7 +28,7 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   await page.getByRole('tab',{name:'SKU Details',exact:true}).click();await page.getByRole('tab',{name:'Comparisons',exact:true}).click();assert.equal(await page.getByLabel('Available units',{exact:true}).inputValue(),'83');
   await page.getByRole('button',{name:'Save assumptions'}).click();await page.getByRole('button',{name:'Analyze with AI',exact:true}).click();const chat=page.getByRole('dialog',{name:'Milo',exact:true});await chat.waitFor();assert.equal(requests,0);
   const a=await hq.boundingBox(),b=await chat.boundingBox();assert(b.x+b.width<=a.x+1,'Panels overlap');
-  await page.screenshot({path:new URL(`${engineName}-comparison-chat.png`,out).pathname});
+  await hq.locator('.district-workspace-body').evaluate(element=>{element.scrollTop=0;});await page.screenshot({path:new URL(`${engineName}-comparison-chat.png`,out).pathname});
   // Editing in HQ must not close the nonmodal chat.
   await page.getByLabel('New ad spend (VND)',{exact:true}).fill('1000000');assert(await chat.isVisible());
   await page.locator('input[type=file]').setInputFiles(new URL('../public/assets/milo/avatar.png',import.meta.url).pathname);await page.getByRole('button',{name:'Remove avatar.png'}).waitFor();console.log(engineName+': simultaneous panels checked');await page.getByRole('button',{name:'Send message'}).click();await page.getByText('QA mocked reply: comparison uses your assumptions.').waitFor();assert.equal(requests,1);

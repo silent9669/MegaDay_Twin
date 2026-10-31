@@ -4,7 +4,7 @@ import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
 import { HQWorkspace } from "../hq/HQWorkspace";
 import { useAssistant } from "./assistant-context";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link,  useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import {
   ArrowRight,
   Building2,
@@ -199,7 +199,6 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !chatOpen) {
         if (tour !== null) finishTour();
-        else if (workspace) enterRef.current(null);
         else enterRef.current(null);
       }
     };

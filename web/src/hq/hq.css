@@ -360,3 +360,4 @@
   z-index: 3;
   background: var(--city-paper);
 }
+.hq-tracked::before{content:"";position:absolute;inset:-24px 0 auto;height:24px;background:var(--city-paper);}

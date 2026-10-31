@@ -118,6 +118,7 @@ export async function pmChat(
         body: JSON.stringify({
           model: body.model,
           store: false,
+          include: ["reasoning.encrypted_content"],
           max_output_tokens: 2400,
           instructions:
             MILO_INSTRUCTIONS +
