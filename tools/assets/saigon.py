@@ -3,7 +3,7 @@ Exports a web-ready architectural kit, including a shared baked AO atlas.
 """
 import bpy, math, os
 from mathutils import Vector
-ROOT = os.environ.get('MEGADAY_ROOT', '/Users/phucdang/Documents/MegaDay_Twin')
+ROOT = os.environ['MEGADAY_ROOT']
 OUT = ROOT + '/web/public/assets/saigon'
 scene = bpy.data.scenes.get('MegaDay District 1') or bpy.data.scenes.new('MegaDay District 1')
 bpy.context.window.scene = scene

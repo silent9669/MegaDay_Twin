@@ -628,8 +628,13 @@ shared `admin` account; clients cannot choose a tenant. Each document returns
 stale writes. WebSocket messages contain `{name, revision}` and trigger refetch.
 
 `GET /api/pm/models` returns models accessible to the configured key.
-`POST /api/pm/chat` accepts `{sessionId, lastMessageId}`, loads saved messages,
-and persists the reply before returning. It no longer accepts client-supplied
-conversation context. Failed generation leaves the saved user message available
+`POST /api/pm/chat` accepts `{sessionId, lastMessageId, changeReference?}`, loads saved messages,
+and persists the reply before returning. It does not accept client-supplied conversation history. Failed generation leaves the saved user message available
 for retry. See [account workspace](../city-demo/account-workspace.md) for schema
 bounds, synchronization and frontend/backend boundaries.
+
+### In-app workspace change context
+
+`changeReference` is optional and strict: `{kind, sourceRevision, sandboxRevision, hour, source?, entity?, before, after}`. Allowed kinds are `source`, `stock-zero`, `stock-unknown`, `stock-recovered`, `diagnostics`, `diagnostics-resolved`, `orders`, `campaigns`, and `clock`. Revisions are nonnegative integers; hour is 0–24; source uses the existing six source kinds; entity and string values are limited to 200 characters. Before/after accept a finite number, bounded string, or null. Unknown fields return 422; the complete request is limited to 3,000 characters (413 otherwise).
+
+The authenticated server resolves current stock/counts/source diagnostics from account documents. Historical before/after values remain explicitly unverified; revision differences mark the reference stale. No client-supplied chat history is accepted. This adds no database schema, account document, or WebSocket event. Monitoring and Explain alone make no AI call; Send retains the existing rate-limited `/api/pm/chat` flow.

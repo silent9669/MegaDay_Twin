@@ -17,7 +17,13 @@ export function disposeObject(root: T.Object3D) {
         if (value instanceof T.Texture) textures.add(value);
     }
   });
-  textures.forEach((t) => t.dispose());
+  const bitmaps = new Set<ImageBitmap>();
+  textures.forEach((t) => {
+    if (typeof ImageBitmap !== "undefined" && t.image instanceof ImageBitmap)
+      bitmaps.add(t.image);
+    t.dispose();
+  });
+  bitmaps.forEach((bitmap) => bitmap.close());
   materials.forEach((m) => m.dispose());
   geometries.forEach((g) => g.dispose());
 }
@@ -30,7 +36,8 @@ export function loadArchitecture(scene: T.Scene, host: HTMLElement) {
     roughness: 0.85,
   });
   for (const [x, y, z, w, h, d] of [
-    [0, 9, -3, 6, 18, 5],
+    [0, 2.7, -3, 7, 4.8, 5.5],
+    [40, 10, -19, 5, 20, 4],
     [-20, 3, 16, 17, 6, 8],
     [-20, 3, -21, 17, 6, 7],
     [20, 3, 17, 22, 6, 8],

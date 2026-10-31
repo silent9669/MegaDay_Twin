@@ -63,9 +63,9 @@ try {
     await page
       .getByRole("button", { name: "Open workspace", exact: true })
       .click();
-    await page.getByRole("dialog", { name: "Warehouse workspace" }).waitFor();
+    await page.getByRole("dialog", { name: "Warehouse" }).waitFor();
     const box = await page
-      .getByRole("dialog", { name: "Warehouse workspace" })
+      .getByRole("dialog", { name: "Warehouse" })
       .boundingBox();
     assert(
       box.x >= 0 &&
@@ -83,6 +83,15 @@ try {
     await page
       .getByRole("textbox", { name: "Message Milo" })
       .fill("Keep my draft");
+    const composer = await page
+      .getByRole("textbox", { name: "Message Milo" })
+      .boundingBox();
+    assert(
+      composer.width > 120 &&
+        composer.x >= 0 &&
+        composer.x + composer.width <= width,
+      `Composer not visible at ${width}`,
+    );
     if (width < 900) {
       await page.keyboard.press("Shift+Tab");
       assert(
@@ -222,17 +231,17 @@ try {
       .locator(".milo-updates article")
       .filter({ hasText: "Stock reached zero" });
     await notice.getByRole("button", { name: "Explain", exact: true }).click();
-    assert(
-      (
-        await page.getByRole("textbox", { name: "Message Milo" }).inputValue()
-      ).includes("QA-SKU"),
+    assert.equal(
+      await page.getByRole("textbox", { name: "Message Milo" }).inputValue(),
+      "Keep my draft",
     );
+    await page.getByText("Workspace change attached").waitFor();
     assert.equal(calls.length, 0);
     await page.screenshot({ path: out + "milo-explain.png" });
     await page.getByRole("tab", { name: /Updates/ }).click();
     await notice.getByRole("link", { name: "View source" }).click();
     await page.waitForURL("**/*stock=QA-SKU");
-    await page.getByRole("dialog", { name: "Warehouse workspace" }).waitFor();
+    await page.getByRole("dialog", { name: "Warehouse" }).waitFor();
     assert.equal(
       await page.locator(".stock-highlight code").innerText(),
       "QA-SKU",

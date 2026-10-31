@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SourcePack } from "../../studio/sources";
 import type { Doc, Sandbox } from "../../studio/workspace-types";
 import { snapshot, WorkspaceMonitor, type ChangeNotice } from "./changes";
@@ -39,12 +39,16 @@ export function useWorkspaceMonitor(
     const timer = setTimeout(() => setToast(null), 8000);
     return () => clearTimeout(timer);
   }, [toast]);
+  const markRead = useCallback(
+    () => setRead(new Set(notices.map((n) => n.id))),
+    [notices],
+  );
   return {
     notices,
     toast,
     unread: notices.filter((n) => !read.has(n.id)).length,
     dismissToast: () => setToast(null),
-    markRead: () => setRead(new Set(notices.map((n) => n.id))),
+    markRead,
     dismiss: (id: string) => {
       setNotices((old) => old.filter((n) => n.id !== id));
       setToast((old) => (old?.id === id ? null : old));

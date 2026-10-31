@@ -1004,7 +1004,7 @@
   outline: 2px solid #4b7b50;
   outline-offset: 1px;
 }
-.city-app .chat-composer textarea {
+.city-chat .chat-composer textarea {
   resize: none;
   flex: 1;
   min-width: 0;
@@ -1609,3 +1609,16 @@
  .city-app .milo-thinking img.milo-motion,.city-chat .milo-thinking img.milo-motion {animation-iteration-count:infinite;animation-duration:2.4s;}
 }
 @keyframes milo-frames {to{transform:translateX(-100%);}}
+/* Modal backdrops sit below both sheet variants. */
+.city-chat[data-slot=sheet-content], .district-workspace[data-slot=sheet-content] {z-index:51;}
+.milo-body {flex:1;min-height:0;gap:0;}
+.milo-content {display:flex;flex:1;min-height:0;flex-direction:column;overflow:hidden;}
+.milo-content[hidden] {display:none;}
+
+.warehouse-table th:nth-child(2), .warehouse-table td:nth-child(2) {text-align:right;}
+.warehouse-table td:nth-child(3) {white-space:normal;min-width:150px;}
+.district-workspace .platform-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(max-width:540px){.warehouse-table td,.warehouse-table th{padding:12px 10px;}.warehouse-table th:nth-child(2){font-size:9px;letter-spacing:.4px;}.warehouse-table th:nth-child(1){font-size:9px;letter-spacing:.4px;}}
+.milo-body {flex-direction:column;}
+.milo-content {width:100%;min-width:0;}
+.chat-identity .milo-sprite {border:0;padding:0;}

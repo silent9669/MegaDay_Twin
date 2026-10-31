@@ -100,7 +100,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   const reduced = useRef(false);
   const state: WorldState = {
     ...viewSettings,
-    motion: viewSettings.motion && !reduced.current,
+    motion: viewSettings.motion,
     orders: feed.orderRows,
     adRows: feed.adRows,
     occupancy: feed.stock.length
@@ -215,6 +215,12 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     }, 100);
     return () => clearTimeout(initial);
   }, [ready, studio]);
+  const selectedStock = params.get('stock');
+  useEffect(() => {
+    if (!workspace || district !== 'warehouse' || chatOpen || !selectedStock) return;
+    const frame = requestAnimationFrame(() => document.querySelector('.stock-highlight')?.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    return () => cancelAnimationFrame(frame);
+  }, [workspace, district, chatOpen, selectedStock]);
   const closeSettings = () => {
     const next = new URLSearchParams(params);
     next.delete("panel");
@@ -486,17 +492,13 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                             <ArrowRight size={16} />
                           </Link>
                         </div>
-                        <p className="workspace-note">
-                          Internal warehouse codes · source snapshots · backend
-                          SKU matching required
-                        </p>
                         <div className="warehouse-table">
                           <table>
                             <thead>
                               <tr>
                                 <th>Internal code</th>
-                                <th>Product</th>
                                 <th>Available units</th>
+                                <th>Product</th>
                                 <th>Source timestamp</th>
                               </tr>
                             </thead>
@@ -513,7 +515,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                                   <td>
                                     <code>{row.code}</code>
                                   </td>
-                                  <td>{row.name}</td>
                                   <td>
                                     {row.stock === null ? (
                                       <span className="stock-unknown">
@@ -523,6 +524,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                                       row.stock.toLocaleString()
                                     )}
                                   </td>
+                                  <td>{row.name}</td>
                                   <td>{row.asOf}</td>
                                 </tr>
                               ))}
