@@ -26,7 +26,7 @@ from app.api.snapshot import (
 from app.core.errors import NotFound, ValidationFailed
 from app.core.timeutil import floor_hour, iso_local, to_utc, utcnow
 from app.forecast.base import DEMAND_GROUPS
-from app.forecast.demand import demand_summary
+from app.forecast.demand import demand_summary, inventory_mapping
 from app.forecast.service import set_demand_group
 from app.warehouse.repo import fetch_all
 
@@ -186,6 +186,39 @@ def list_skus(
         data=[_summary(r, status) for r in page],
         meta=Meta(data_as_of=ck.as_of, computed_at=utcnow(), total=len(rows)),
         next_cursor=nxt,
+    )
+
+
+class SkuIdentity(BaseModel):
+    code: str
+    sku: str | None
+    campaign_ids: list[str]
+
+
+@router.get("/sku-resolution", response_model=Envelope[SkuIdentity])
+def resolve_sku(
+    conn: Conn, _user: Viewer, code: Annotated[str, Query(min_length=1, max_length=300)]
+) -> Envelope[SkuIdentity]:
+    # A pending/rejected or conflicting inventory alias must never fall through
+    # to a guessed name (or an accidentally identical canonical code).
+    aliases = conn.execute(
+        "SELECT count(*) FROM sku_aliases WHERE source_type='inventory' AND raw_code=?", [code]
+    ).fetchone()
+    sku = inventory_mapping(conn).get(code)
+    if not aliases or not aliases[0]:
+        canonical = conn.execute("SELECT sku_id FROM skus WHERE sku_id=?", [code]).fetchone()
+        sku = str(canonical[0]) if canonical else None
+    campaigns = (
+        conn.execute(
+            "SELECT DISTINCT campaign_id FROM campaign_skus WHERE sku_id=? ORDER BY campaign_id",
+            [sku],
+        ).fetchall()
+        if sku
+        else []
+    )
+    return Envelope(
+        data=SkuIdentity(code=code, sku=sku, campaign_ids=[str(row[0]) for row in campaigns]),
+        meta=Meta(computed_at=utcnow()),
     )
 
 

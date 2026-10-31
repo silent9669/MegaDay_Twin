@@ -2,9 +2,10 @@
 // no goal → lead sets one with POST /goals (others are told who must); goal but no
 // run → operator runs POST /scenarios/run; 422 BLOCKING_DATA_ISSUE → what is missing.
 import { useQueryClient } from '@tanstack/react-query';
+import { useHQSelection } from '../../hq/selection';
 import { Play, Target, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useCreateGoal, useMe, useRunScenario } from '../../api/queries';
 import type { CampaignDetail, Envelope, GoalKind, ScenarioRun } from '../../api/types';
 import { EmptyState, ErrorState } from '../../components/states';
@@ -21,6 +22,7 @@ function useFirstRun(campaignId: string) {
   const run = useRunScenario();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
   function start(goalId: string | null) {
     run.mutate(
       { body: { campaign_id: campaignId, goal_id: goalId, samples: 1000, seed: DEFAULT_SEED } },
@@ -31,7 +33,10 @@ function useFirstRun(campaignId: string) {
           void qc.invalidateQueries({ queryKey: ['recommendations'] });
           if (rec) {
             qc.setQueryData(queryKeys.recommendation(rec.recommendation_id), { data: rec, meta: res.meta });
-            void navigate(`?rec=${encodeURIComponent(rec.recommendation_id)}`, { replace: true });
+            const next = new URLSearchParams(search);
+            next.set('rec', rec.recommendation_id);
+            next.set('campaign', campaignId);
+            void navigate(`?${next}`, { replace: true });
           }
         },
       },
@@ -128,6 +133,7 @@ function GoalForm({ campaign, dataAsOf, onCreated }: { campaign: CampaignDetail;
 }
 
 export function NeedsRecommendation({ campaign, dataAsOf }: { campaign: CampaignDetail; dataAsOf: string | null | undefined }) {
+  const hq = useHQSelection();
   const me = useMe();
   const { run, start } = useFirstRun(campaign.campaign_id);
   // /me decides; until it answers (or if it fails) fall back to the configured dev role.
@@ -140,7 +146,9 @@ export function NeedsRecommendation({ campaign, dataAsOf }: { campaign: Campaign
     return (
       <div className="card p-4">
         <EmptyState icon={Target} title={t.needGoalTitle(campaign.campaign_id)} body={t.needGoalBody} />
-        {canGoal ? (
+        {hq ? (
+          <Link className="btn-primary mt-2" to={`/city-demo?district=hq&hq=goals&campaign=${encodeURIComponent(campaign.campaign_id)}`}>Review a goal and preview before applying</Link>
+        ) : canGoal ? (
           <GoalForm campaign={campaign} dataAsOf={dataAsOf} onCreated={(goalId) => canRun && start(goalId)} />
         ) : (
           <p className="mt-2 text-sm text-warn">{t.needGoalAsk}</p>

@@ -48,7 +48,7 @@ export function useCompareTarget(selectedSku?: string): CompareTarget {
   if (!recommendationId && sku && skuItem?.recommendation) recommendationId = skuItem.recommendation.recommendation_id;
 
   const resolving = (Boolean(sku) && skuQ.isPending) || (needsList && recsQ.isPending);
-  const resolveError = (sku && skuQ.error) || (needsList && recsQ.error) || null;
+  const resolveError = (sku && skuQ.error) || (!recommendationId && campaignQ.error) || (needsList && recsQ.error) || null;
   const campaign = campaignQ.data?.data;
   const campaignSkuNames = (campaign?.sku_detail ?? []).map((s) => (s.variant ? `${s.name} · ${s.variant}` : s.name));
 
