@@ -47,6 +47,7 @@ export function CityChat({
   workspaceOpen = false,
   onWidthChange,
   launcherAnchor,
+  showLauncher = true,
   updates,
   onOpenChange,
   open: controlledOpen,
@@ -55,6 +56,7 @@ export function CityChat({
   workspaceOpen?: boolean;
   onWidthChange?: (width:number)=>void;
   launcherAnchor?: HTMLElement | null;
+  showLauncher?: boolean;
   updates?: WorkspaceUpdates;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
@@ -417,7 +419,7 @@ export function CityChat({
 
   return (
     <div className={`city-pm ${launcherAnchor ? "" : "pm-global-launcher"}`}>
-      {launcherAnchor ? createPortal(launcher, launcherAnchor) : launcher}
+      {showLauncher && (launcherAnchor ? createPortal(launcher, launcherAnchor) : launcher)}
       <Sheet open={open} onOpenChange={setOpen} modal={mobile} disablePointerDismissal={!mobile}>
         <SheetContent
           id="city-pm-chat"

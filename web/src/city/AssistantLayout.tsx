@@ -61,6 +61,7 @@ export function AssistantLayout() {
             : {}),
         }}
         open={open}
+        showLauncher={location.pathname !== "/mock-data"}
         onOpenChange={setOpen}
         launcherAnchor={launcherAnchor}
         updates={updates}
