@@ -37,16 +37,45 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/mock-data`);
   await page.getByText('Saved to account', { exact: true }).waitFor();
+  await page.getByText('All 6 sources are repository demo data.', { exact: false }).waitFor();
+  await page.locator('.source-list').getByRole('button', { name: /Product costs/ }).click();
+  await page.getByRole('tab', { name: /Diagnostics/ }).click();
+  await page.getByRole('heading', { name: 'Money formats ready for normalization' }).waitFor();
+  assert.ok(await page.locator('.source-diagnostics article').count() < 10, 'Repeated money checks should be grouped');
+  const moneySummary = page.locator('.source-diagnostics article').filter({ hasText: 'Money formats ready for normalization' }).locator('summary');
+  await moneySummary.click();
+  assert.ok(await page.locator('.diagnostic-value').count() > 100);
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await moneySummary.scrollIntoViewIfNeeded();
+    assert.equal(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth + 1), true);
+    await page.screenshot({ path: fileURLToPath(new URL(`money-preview-${width}.png`, out)) });
+  }
+  await moneySummary.click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  results.push('Demo currency formats are grouped as informational previews with original values, at desktop and mobile widths');
+
+  const beforeRejected = JSON.stringify(docs.sources);
+  await page.getByLabel('Import source files').setInputFiles(Array.from({ length: 7 }, (_, i) => ({
+    name: `extra-${i}.csv`, mimeType: 'text/csv', buffer: Buffer.from('a,b\n1,2'),
+  })));
+  await page.getByText(/Selected 7 files; choose at most 6/).waitFor();
+  assert.equal(JSON.stringify(docs.sources), beforeRejected);
+  await page.getByText(/Nothing was imported; existing sources are unchanged/).waitFor();
+  results.push('Rejected seven-file import keeps the existing demo workspace and reports the specific limit');
+
   await page.locator('.source-list').getByRole('button', { name: /Inventory/ }).click();
   await page.getByRole('tab', { name: /Diagnostics/ }).click();
   await page.getByText(/Repository demo sources include intentional data issues/).waitFor();
   results.push('Demo checks are explained without hiding actual data problems');
+  await page.getByRole('textbox', { name: 'Search source' }).fill('old filter must not hide new import');
 
   const csv = 'Mã nội bộ,Tồn thực tế,Tên hàng,Thời điểm cập nhật\n' +
     Array.from({ length: 40 }, (_, i) => `SKU${i + 1},${i === 31 ? -2 : 5},Item ${i + 1},2026-11-11 01:00`).join('\n');
   await page.getByLabel('Import source files').setInputFiles({ name: 'inventory.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await page.getByRole('heading', { name: 'Negative inventory' }).waitFor();
   await page.getByText('Saved to account', { exact: true }).waitFor();
+  await page.getByText(/5 demo sources · 1 uploaded or edited sources/).waitFor();
   assert.ok(docs.sources.data.files.find((f) => f.kind === 'inventory').text.includes('SKU32,-2'));
   assert.equal(await page.getByText(/Repository demo sources include intentional data issues/).count(), 0);
   results.push('Upload retains negative inventory for review and autosaves the actual source');

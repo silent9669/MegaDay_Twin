@@ -98,6 +98,7 @@ export function DataStudio() {
   const pages = Math.max(1, Math.ceil(filtered.length / 30));
   const sourceErrors = logs.filter((i) => i.level === "error").length;
   const sourceWarnings = logs.filter((i) => i.level === "warning").length;
+  const demoCount = files.filter((f) => f.commit).length;
   useEffect(() => {
     if (tab === "records" && focusRow !== null && current) {
       window.document.getElementById(`source-record-${current.kind}-${focusRow}`)?.focus();
@@ -151,11 +152,11 @@ export function DataStudio() {
     try {
       let incoming = Array.from(list);
       if (isFolder) incoming = selectUploads(incoming).map((i) => incoming[i]!);
-      if (
-        incoming.length > 6 ||
-        incoming.reduce((sum, f) => sum + f.size, 0) > MAX_BYTES
-      )
-        throw Error("Import up to six sources, maximum 20 MiB.");
+      if (incoming.length > 6)
+        throw Error(`Selected ${incoming.length} files; choose at most 6 (one per source). Nothing was imported; existing sources are unchanged.`);
+      const bytes = incoming.reduce((sum, f) => sum + f.size, 0);
+      if (bytes > MAX_BYTES)
+        throw Error(`Selected files total ${(bytes / 1024 / 1024).toFixed(1)} MiB; the limit is 20 MiB. Nothing was imported; existing sources are unchanged.`);
       const imported: Source[] = [];
       if (incoming.length === 1 && incoming[0]!.name.endsWith(".json")) {
         const text = await incoming[0]!.text();
@@ -190,6 +191,8 @@ export function DataStudio() {
       });
       setSelected(imported[0]!.kind);
       setPage(0);
+      setQuery("");
+      setFocusRow(null);
       setTab("diagnostics");
       setMessage(
         `${imported.length} source${imported.length === 1 ? "" : "s"} replaced. Contact data removed; review diagnostics.`,
@@ -283,6 +286,15 @@ export function DataStudio() {
           </button>
         </div>
       </header>
+      {!!files.length && (
+        <p className="studio-source-summary">
+          {demoCount === files.length
+            ? `All ${files.length} sources are repository demo data.`
+            : `${demoCount} demo sources · ${files.length - demoCount} uploaded or edited sources.`}
+          {" "}Import replaces matching sources; the total source count is not an upload receipt.
+          {" "}The complete set is 4 CSV files and 2 JSON files. See each source's Format tab.
+        </p>
+      )}
       <input
         type="file"
         ref={input}
@@ -371,6 +383,7 @@ export function DataStudio() {
                       ? `${entry.parsed.rows.length.toLocaleString()} records`
                       : "Loading…"}
                   </small>
+                  {entry && <small className="source-origin-label">{entry.source.commit ? "Demo data" : "Uploaded / edited"}</small>}
                 </span>
                 {count > 0 && <em aria-label={`${count} issues`}>{count}</em>}
               </button>
@@ -421,8 +434,8 @@ export function DataStudio() {
             <div className="source-provenance">
               <span title={current.origin}>
                 {current.commit
-                  ? `GitHub · ${current.commit.slice(0, 7)}`
-                  : "Uploaded source"}
+                  ? `Demo data · GitHub ${current.commit.slice(0, 7)}`
+                  : current.origin === "edited in workspace" ? "Edited in workspace" : "Uploaded source"}
               </span>
               <code title={current.hash}>
                 SHA-256 {current.hash.slice(0, 12)}

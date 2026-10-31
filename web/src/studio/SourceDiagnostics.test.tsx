@@ -54,4 +54,21 @@ describe("source diagnostics", () => {
     open({ issues: [] });
     expect(screen.getByText(/does not certify forecast or profit accuracy/)).toBeInTheDocument();
   });
+  it("groups repeated formats, counts distinct records, and keeps errors above information", () => {
+    const view = open({ issues: [
+      { level: "info", code: "MONEY_NORMALIZATION", row: 2, column: "giá vốn", message: "Preview only", value: "45k", normalizedVnd: 45000 },
+      { level: "info", code: "MONEY_NORMALIZATION", row: 2, column: "phí đóng gói", message: "Preview only", value: "3k", normalizedVnd: 3000 },
+      { level: "error", code: "MISSING_COST", row: 3, message: "Unknown cost" },
+    ] });
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getAllByRole("heading", { level: 4 })[0]).toHaveTextContent("Product cost is missing");
+    const summary = screen.getByText("Inspect 2 checks · affected records: 1");
+    const details = summary.closest("details")!;
+    expect(details.open).toBe(false);
+    fireEvent.click(summary);
+    expect(details.open).toBe(true);
+    expect(screen.getByText("45.000 ₫")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "View record 1" })[0]!);
+    expect(view).toHaveBeenCalledWith(0);
+  });
 });

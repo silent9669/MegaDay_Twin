@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { previewVnd } from "./money-preview";
 
 export const SOURCE_DEFS = [
   {
@@ -56,6 +57,8 @@ export type Issue = {
   row?: number;
   column?: string;
   message: string;
+  value?: string;
+  normalizedVnd?: number;
 };
 export type Source = {
   kind: SourceKind;
@@ -115,7 +118,14 @@ export function inspect(
   name: string,
   text: string,
 ): ParsedSource & { kind: SourceKind } {
-  const issues: Issue[] = [];
+  const buckets: Record<Issue["level"], Issue[]> = { error: [], warning: [], info: [] };
+  let issueCount = 0;
+  const addIssues = (...items: Issue[]) => {
+    for (const issue of items) {
+      issueCount++;
+      if (buckets[issue.level].length < 500) buckets[issue.level].push(issue);
+    }
+  };
   let columns: string[],
     rows: Record<string, unknown>[],
     kind: SourceKind | undefined,
@@ -161,7 +171,7 @@ export function inspect(
     columns = original.filter((k) => !piiColumn(k));
     const removed = original.filter(piiColumn);
     if (removed.length)
-      issues.push({
+      addIssues({
         level: "info",
         code: "PII_DROPPED",
         message: `Removed contact columns: ${removed.join(", ")}.`,
@@ -181,7 +191,7 @@ export function inspect(
         ]),
       ),
     );
-    issues.push(
+    addIssues(
       ...parsed.errors
         .slice(0, 100)
         .map((e) => ({
@@ -199,11 +209,10 @@ export function inspect(
   const definition = SOURCE_DEFS.find((d) => d.kind === kind)!;
   const seen = new Set<string>();
   rows.forEach((row, i) => {
-    if (issues.length >= 500) return;
     const rowNumber = i + (payload === undefined ? 2 : 1);
     for (const key of definition.required)
       if (!(key in row))
-        issues.push({
+        addIssues({
           level: "error",
           code: "MISSING_FIELD",
           row: rowNumber,
@@ -218,7 +227,7 @@ export function inspect(
           normalize(value),
         )
       )
-        issues.push({
+        addIssues({
           level: "warning",
           code: "UNTRUSTED_NOTE",
           row: rowNumber,
@@ -226,7 +235,7 @@ export function inspect(
           message: "Instruction-like note; treated only as untrusted data.",
         });
       if (column === "Tồn thực tế" && value !== "" && Number(value) < 0)
-        issues.push({
+        addIssues({
           level: "error",
           code: "NEG_STOCK",
           row: rowNumber,
@@ -239,28 +248,35 @@ export function inspect(
           column,
         )
       ) {
-        if (!value && column === "giá vốn")
-          issues.push({
+        if (!value.trim() && column === "giá vốn")
+          addIssues({
             level: "error",
             code: "MISSING_COST",
             row: rowNumber,
             column,
             message: "Unknown cost; economics must wait for a value.",
           });
-        else if (value && !/^\d+$/.test(value))
-          issues.push({
-            level: "warning",
-            code: "MONEY_FORMAT",
+        else if (value.trim() && !/^\d+$/.test(value)) {
+          const amount = previewVnd(value);
+          const readable = amount !== null && amount >= 0;
+          addIssues({
+            level: readable ? "info" : "warning",
+            code: readable ? "MONEY_NORMALIZATION" : "MONEY_FORMAT",
             row: rowNumber,
             column,
-            message: "Formatted VND; backend normalization required.",
+            value,
+            normalizedVnd: amount ?? undefined,
+            message: readable
+              ? "Recognized VND format. Preview only; the source value is unchanged."
+              : "This amount needs review before calculations; confirm the value and currency.",
           });
+        }
       }
     }
     if (kind === "orders") {
       const key = JSON.stringify(row);
       if (seen.has(key))
-        issues.push({
+        addIssues({
           level: "warning",
           code: "DUP_ORDER",
           row: rowNumber,
@@ -269,7 +285,7 @@ export function inspect(
       seen.add(key);
     }
     if (kind === "campaigns" && !Array.isArray(row.sku))
-      issues.push({
+      addIssues({
         level: "error",
         code: "INVALID_SKUS",
         row: rowNumber,
@@ -277,13 +293,6 @@ export function inspect(
         message: "Campaign sku must be an array.",
       });
   });
-  if (issues.length >= 500)
-    issues.push({
-      level: "warning",
-      code: "LOG_LIMIT",
-      message:
-        "Showing the first 500 diagnostics. Export or import into the backend for a full report.",
-    });
   if (
     kind === "ads" &&
     rows.some((row) => {
@@ -291,12 +300,20 @@ export function inspect(
       return !/(?:T|\s)\d{2}:\d{2}.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp);
     })
   )
-    issues.push({
+    addIssues({
       level: "warning",
       code: "TIMEZONE_REVIEW",
       column: "Thời gian",
       message:
         "Some ads timestamps have no explicit timezone. Confirm the export timezone before combining ads and orders; do not assume local time.",
+    });
+  // Scan all records; repeated formatting notices must not hide a later error.
+  const issues = [...buckets.error, ...buckets.warning, ...buckets.info].slice(0, 500);
+  if (issueCount > issues.length)
+    issues.push({
+      level: "warning",
+      code: "LOG_LIMIT",
+      message: `Showing ${issues.length} of ${issueCount} checks, with errors and warnings first. Use the backend ingestion report for the full detail.`,
     });
   return { kind, columns, rows, issues, payload };
 }
