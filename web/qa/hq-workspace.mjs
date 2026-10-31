@@ -11,7 +11,8 @@ const files=[
 ];
 for(const [engineName,engine] of Object.entries({chromium,webkit})){
  const browser=await engine.launch();try{
-  const page=await browser.newPage({viewport:{width:1440,height:1000},extraHTTPHeaders:{Origin:base},reducedMotion:'reduce'});page.setDefaultTimeout(15000);const errors=[];
+  const page=await browser.newPage({viewport:{width:1440,height:1000},extraHTTPHeaders:{Origin:base},reducedMotion:'reduce'});page.setDefaultTimeout(15000);const errors=[];const failures=[];
+  page.on('requestfailed',request=>failures.push({url:request.url(),error:request.failure(),page:page.url()}));
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
   const login=await page.request.post(base+'/api/auth/login',{data:{username:'admin',password:(await readFile('/tmp/megaday-qa-password','utf8')).trim()}});assert(login.ok(),'Local login failed');
   for(const [key,data] of Object.entries({sources:{schema:'hackathon.sources.v1',files:files.map(f=>({...f,hash:'qa',origin:'QA upload'}))},hq:{tracked:[],active:null,worksheets:{},activity:[]},chats:{preferredModel:'gpt-4.1',sessions:[]}})){
@@ -25,7 +26,7 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   await page.route('**/api/sale-assistant/context?*', route=>{const sku=new URL(route.request().url()).searchParams.get('sku');return route.fulfill({json:{sku:{sku,name:sku,variant:'',stockAvailable:83,soldTodayUnits:2,priceEffectiveVnd:600000,contributionPerUnitVnd:45000,demandGroup:'on_dinh'},campaigns:[{id:'QA-C1',name:'Morning essentials',skus:[sku]}],dataAsOf:'2026-10-31T00:00:00Z',source:{id:'qa',kind:'sku',label:'QA backend'},canPlan:true,notices:[],opening:'Review this product with Milo.'}});});
   let requests=0;
   await page.route('**/api/pm/chat',async route=>{requests++;const body=route.request().postDataJSON();const doc=await(await page.request.get(base+'/api/workspace/chats')).json();const session=doc.data.sessions.find(s=>s.id===body.sessionId);assert(session.messages.at(-1).analysis);assert(session.messages.at(-1).attachments?.[0]?.dataUrl.startsWith('data:image/jpeg;base64,'));session.messages.push({id:crypto.randomUUID(),role:'assistant',content:'QA mocked reply: comparison uses your assumptions.'});await page.request.put(base+'/api/workspace/chats',{data:{revision:doc.revision,data:doc.data}});await route.fulfill({json:{reply:'QA mocked reply: comparison uses your assumptions.'}});});
-  console.log(engineName+': setup');await page.goto(base+'/city-demo');await page.getByRole('button',{name:'MegaDay HQ',exact:true}).click();const hq=page.getByRole('dialog',{name:'MegaDay HQ',exact:true});await hq.waitFor();
+  console.log(engineName+': setup');await page.waitForLoadState('networkidle');await page.goto(base+'/city-demo');await page.getByRole('button',{name:'MegaDay HQ',exact:true}).click();const hq=page.getByRole('dialog',{name:'MegaDay HQ',exact:true});await hq.waitFor();
   assert.equal(await page.locator('.city-camera').count(),0);
   assert.equal(await page.locator('.city-sidebar a[href="/sale-planner"], .city-sidebar a[href="/sku-assistant"]').count(),0);
   assert((await hq.boundingBox()).width>=1000);assert.equal(await page.getByRole('button',{name:'Hide workspace',exact:true}).count(),0);
@@ -47,12 +48,13 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   await page.setViewportSize({width:1024,height:800});await page.getByRole('button',{name:'Open PM assistant',exact:true}).first().click();await chat.waitFor();const smallHQ=await hq.boundingBox(),smallChat=await chat.boundingBox();assert(smallChat.x+smallChat.width<=smallHQ.x+1);await page.screenshot({path:new URL(`${engineName}-1024.png`,out).pathname});
   await page.setViewportSize({width:390,height:844});await chat.waitFor();assert.equal(await hq.count(),0);await page.getByRole('button',{name:'Close chat'}).click();await hq.waitFor();assert((await hq.boundingBox()).width<=390);await page.screenshot({path:new URL(`${engineName}-mobile.png`,out).pathname});
   await page.getByRole('button',{name:'Close workspace'}).click();await page.getByRole('heading',{name:'Commerce city',exact:true}).waitFor();
-  await page.getByRole('button',{name:'Replay tutorial',exact:true}).click();await page.getByRole('heading',{name:'Start at HQ',exact:true}).waitFor();await page.getByRole('button',{name:'Close tutorial'}).click();await page.reload();await page.getByRole('button',{name:'Replay tutorial',exact:true}).waitFor();assert.equal(await page.getByRole('region',{name:'City tutorial'}).count(),0);
+  await page.getByRole('button',{name:'Replay tutorial',exact:true}).click();await page.getByRole('heading',{name:'Start at HQ',exact:true}).waitFor();await page.getByRole('button',{name:'Close tutorial'}).click();await page.waitForLoadState('networkidle');await page.reload();await page.getByRole('button',{name:'Replay tutorial',exact:true}).waitFor();assert.equal(await page.getByRole('region',{name:'City tutorial'}).count(),0);
   // Legacy goal routes retain the SKU and open HQ; selecting scope clears approval/drafts.
   await page.setViewportSize({width:1440,height:1000});
-  await page.goto(base+'/sku-assistant?sku=QA-A');
+  await page.waitForLoadState('networkidle');await page.goto(base+'/sku-assistant?sku=QA-A');
   await hq.waitFor();await page.getByLabel('Goal quantity scope').waitFor();
   assert(new URL(page.url()).pathname==='/city-demo');
+  assert((await page.getByLabel('Goal quantity scope').boundingBox()).height>=44);
   await page.getByRole('button',{name:'Select QA-A',exact:true}).last().waitFor();
   await page.getByLabel('Goal description',{exact:true}).fill('Sell 100 units');
   await page.getByRole('button',{name:'Enter parameters manually',exact:true}).click();
@@ -69,8 +71,8 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   await page.getByRole('button',{name:'Close workspace'}).click();await page.getByRole('heading',{name:'Commerce city',exact:true}).waitFor();
   await page.setViewportSize({width:1440,height:1000});await page.getByRole('button',{name:'Night mode',exact:true}).click();
   await page.waitForFunction(()=>globalThis.document.body.dataset.cityAppearance==='morning');
-  await page.goto(base+'/sale-planner');await hq.waitFor();await page.getByLabel('Goal description',{exact:true}).waitFor();
+  await page.waitForLoadState('networkidle');await page.goto(base+'/sale-planner');await hq.waitFor();await page.getByLabel('Goal description',{exact:true}).waitFor();
   assert.equal(new URL(page.url()).searchParams.get('hq'),'goals');
-  assert.deepEqual(errors,[]);await writeFile(new URL(`${engineName}-results.json`,out),JSON.stringify({passed:true,aiRequests:requests,errors},null,2));console.log(engineName+': HQ, chat, campaigns, ads, notes, mobile and close-to-city passed');
+  await page.waitForLoadState('networkidle');assert.deepEqual(errors,[],JSON.stringify(failures));await writeFile(new URL(`${engineName}-results.json`,out),JSON.stringify({passed:true,aiRequests:requests,errors},null,2));console.log(engineName+': HQ, chat, campaigns, ads, notes, mobile and close-to-city passed');
  }finally{await browser.close();}
 }
