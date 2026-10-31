@@ -34,7 +34,14 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   assert.equal(await page.locator('.city-sidebar a[href="/sale-planner"], .city-sidebar a[href="/sku-assistant"]').count(),0);
   assert((await hq.boundingBox()).width>=1000);assert.equal(await page.getByRole('button',{name:'Hide workspace',exact:true}).count(),0);
   await page.getByText('Travel mug',{exact:true}).waitFor();await page.getByRole('row').filter({hasText:'Travel mug'}).getByRole('button',{name:'Compare',exact:true}).click();
-  await page.getByRole('button',{name:'Load reference example'}).click();await page.getByText('2,535,000 VND',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Load best suggestion'}).click();
+  assert.equal(await page.getByLabel('Selling price (VND)',{exact:true}).inputValue(),'');
+  for(const [label,value] of Object.entries({'Selling price (VND)':600000,'Unit cost (VND)':540000,'Packaging / unit (VND)':3000,'Platform fee (%)':2,'Demand with ads (units)':83,'Demand without ads (units)':63,'New ad spend (VND)':1200000})) await page.getByLabel(label,{exact:true}).fill(String(value));
+  await page.getByText('How this is calculated',{exact:true}).click();
+  await page.getByRole('heading',{name:'Pause ads has the higher estimated result'}).waitFor();
+  assert((await page.locator('.hq-calculation').innerText()).includes('27 whole units'));
+  await page.screenshot({path:new URL(`${engineName}-calculation.png`,out).pathname});
+  await page.getByText('How this is calculated',{exact:true}).click();await page.getByRole('cell',{name:'2,535,000 VND',exact:true}).waitFor();
   await page.getByRole('tab',{name:'SKU Details',exact:true}).click();await page.getByRole('tab',{name:'Comparisons',exact:true}).click();assert.equal(await page.getByLabel('Available units',{exact:true}).inputValue(),'83');
   await page.getByRole('button',{name:'Save assumptions'}).click();await page.getByRole('button',{name:'Analyze with AI',exact:true}).click();const chat=page.getByRole('dialog',{name:'Milo',exact:true});await chat.waitFor();assert.equal(requests,0);
   const a=await hq.boundingBox(),b=await chat.boundingBox();assert(b.x+b.width<=a.x+1,'Panels overlap');
