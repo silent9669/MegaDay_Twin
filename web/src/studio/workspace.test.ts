@@ -59,7 +59,7 @@ const req = (name: string, data?: unknown, revision = 1) =>
   );
 afterEach(() => vi.unstubAllGlobals());
 describe("persistent account documents", () => {
-  it("reads saved sources after reconstruction when the write quota is exhausted", async () => {
+  it("reads saved sources without writes and preserves data after a rejected save", async () => {
     const { workspace, database, reconstruct, blockWrites } = setup();
     const file = await makeSource("saved.csv", "item,value\nA,1", "upload");
     const saved = await (await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [file] }, 0))).json();
