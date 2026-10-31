@@ -54,8 +54,6 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'Warehouse', exact: true }).click();
-  await page.getByRole('button', { name: 'Close tutorial', exact: true }).click();
-  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.locator('.warehouse-table').getByText('Ceramic cup', { exact: true }).waitFor();
   assert.equal(await page.locator('.warehouse-table').getByText('17', { exact: true }).count(), 1);
   assert.equal(await page.locator('.warehouse-table').getByText('Sold-out item', { exact: true }).count(), 0);

@@ -47,9 +47,6 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.reload();
   await page.getByRole('button', { name: 'MegaDay HQ', exact: true }).click();
-  const closeTour = page.getByRole('button', { name: 'Close tutorial', exact: true });
-  await closeTour.click();
-  await page.getByRole('button', { name: 'Open HQ', exact: true }).click();
   await page.getByRole('heading', { name: 'Workspace overview' }).waitFor();
   assert.equal(await page.locator('.source-metrics').getByText('4,156', { exact: true }).count(), 1);
   assert.equal(await page.locator('.source-metrics').getByText('262', { exact: true }).count(), 1);
@@ -62,7 +59,6 @@ try {
   await page.screenshot({ path: new URL('neighborhood.png', out).pathname });
   await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Warehouse', exact: true }).click();
-  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByRole('region', { name: 'Inventory table', exact: true }).waitFor();
   const labels = await (await context.request.get(base + '/api/product-labels')).json();
   assert.equal(labels.products.length, 262);
