@@ -34,7 +34,7 @@ from app.warehouse.db import Database
 log = get_logger(__name__)
 MAX_SNAPSHOT = 96 * 1024 * 1024
 MAX_EXPANDED = 2 * 1024 * 1024 * 1024
-STATE_DIRS = {"megaday-replay", "live"}
+STATE_DIRS = {"megaday-replay", "live", "uploads"}
 
 
 class SnapshotStore:

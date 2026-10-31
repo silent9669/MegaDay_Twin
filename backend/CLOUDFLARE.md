@@ -45,6 +45,8 @@ The web campaign-explanation feature continues to use its existing web AI key.
   are passed to Python.
 * On boot, Python restores `admin/state-v1.zip` before starting FastAPI. Only an
   actual 404 initializes from the seed. Corrupt/unavailable state blocks startup.
+* Uploaded source files are retained with the database so pending SKU matches can
+  still be confirmed after a restart.
 * HTTP mutations and automatic replay hours share a gate. Background recompute
   settles, DuckDB checkpoints, and DB + uploaded replay + live files are uploaded
   before the mutation response is acknowledged. Upload failure returns 503 and

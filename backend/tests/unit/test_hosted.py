@@ -54,6 +54,16 @@ def test_restart_restores_database_and_replay_files(tmp_path: Path) -> None:
     ).read_bytes()
 
 
+def test_restart_retains_uploads_needed_to_confirm_pending_skus(tmp_path: Path) -> None:
+    original, restarted = tmp_path / "original", tmp_path / "restarted"
+    seed(original)
+    upload = original / "uploads/batch-1/orders.csv"
+    upload.parent.mkdir(parents=True)
+    upload.write_text("SKU,Quantity\nPENDING,2\n", encoding="utf-8")
+    restore_archive(snapshot_archive(original), restarted)
+    assert (restarted / "uploads/batch-1/orders.csv").read_bytes() == upload.read_bytes()
+
+
 @pytest.mark.parametrize("name", ["../escape", "/escape", "live/../../escape"])
 def test_bad_snapshot_never_touches_existing_state(tmp_path: Path, name: str) -> None:
     data = io.BytesIO()

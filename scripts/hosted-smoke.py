@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -72,13 +73,15 @@ def api(path, body=None, raw=None):
 
 
 def start(image):
-    args = ["docker", "run", "--detach", "--network", "host", "--memory", "4g"]
+    desktop = sys.platform != "linux"
+    network = ["--publish", "127.0.0.1:8000:8000"] if desktop else ["--network", "host"]
+    args = ["docker", "run", "--detach", *network, "--memory", "4g"]
     env = {
         "APP_ENV": "demo", "AI_ENABLED": "false", "LIVE_ENABLED": "false",
         "DEMO_MODE": "true", "DUCKDB_PATH": "/state/megaday.duckdb",
         "LIVE_DIR": "/state/live", "DATA_DIR": "/seed-input",
         "MEGADAY_STATE_ROOT": "/state", "MEGADAY_SEED_DB": "/seed/megaday.duckdb",
-        "MEGADAY_STATE_URL": "http://127.0.0.1:9000/state",
+        "MEGADAY_STATE_URL": f"http://{'host.docker.internal' if desktop else '127.0.0.1'}:9000/state",
     }
     for key, value in env.items():
         args += ["--env", f"{key}={value}"]
@@ -104,7 +107,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", required=True)
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", 9000), Storage)
+    server = ThreadingHTTPServer(("0.0.0.0" if sys.platform != "linux" else "127.0.0.1", 9000), Storage)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     cid = None
     try:

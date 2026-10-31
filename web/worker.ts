@@ -18,6 +18,7 @@ import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
 import { sourceText } from "./src/studio/source-text";
 import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
+import { sourceLayer } from "./src/studio/replay";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
   PMEnv & StudioModelEnv & {
@@ -186,7 +187,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
         ).fetch(new Request(new URL("/api/workspace/sources", url)));
         const doc = (await stored.json()) as { data: SourcePack };
         const form = new FormData();
-        const supported = (await withoutDemandLabels(doc.data)).files.filter(f => f.kind !== "general");
+        // The Python replay owns event visibility; never ingest future event rows.
+        const shop = { ...doc.data, files: await sourceLayer(doc.data.files, "shop") };
+        const supported = (await withoutDemandLabels(shop)).files.filter(f => f.kind !== "general");
         if (!supported.length) return fail(422, "Import a supported business table first.");
         for (const f of supported)
           form.append(
