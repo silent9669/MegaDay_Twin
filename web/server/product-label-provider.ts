@@ -31,7 +31,7 @@ export function getProductLabelProvider(env: StudioModelEnv): ProductLabelProvid
           const codes = new Set(products.map(p => p.reference));
           const batch = { ...input, products, context: { ...context, evidence: context.evidence.filter(e => codes.has(e.productCode)) } };
           try {
-            const raw = await modelJSON(env, model, DEMAND_PROMPT, batch, outputSchema, AbortSignal.any([signal, AbortSignal.timeout(30000)]));
+            const raw = await modelJSON(env, model, DEMAND_PROMPT, batch, outputSchema, AbortSignal.any([signal, AbortSignal.timeout(60_000)]));
             const result = validateLabelResponse(raw, batch);
             if (result.length !== products.length) throw Error("Incomplete product labels.");
             if (result.some(label => label.group === null)) throw Error("A best-fit label is required for every product.");
@@ -44,5 +44,6 @@ export function getProductLabelProvider(env: StudioModelEnv): ProductLabelProvid
     },
   };
 }
-export const LABEL_TIMEOUT_MS = 120_000;
+// Two waves of three batches can each use their full 60-second deadline.
+export const LABEL_TIMEOUT_MS = 150_000;
 export const LABEL_LEASE_MS = LABEL_TIMEOUT_MS + 5_000;

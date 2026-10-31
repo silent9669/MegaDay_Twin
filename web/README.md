@@ -234,7 +234,7 @@ in `server/demand-prompt.ts`; these labels do not change forecast groups or ads.
 
 Both routes require authentication and same-origin writes. Classification runs
 only on button click, uses batches of 50 (up to three concurrent calls), with
-a 30-second timeout per batch and a 120-second overall timeout. At most 2,000 candidates and 100 evidence records are
+a 60-second timeout per batch and a 150-second overall timeout. At most 2,000 candidates and 100 evidence records are
 accepted. Long jobs can time out; there is no background queue. Results retain
 assessment context, model/prompt version and source fingerprint in account
 storage. Invalid/duplicate/unknown results are rejected. Concurrent calls are
