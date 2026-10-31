@@ -1,6 +1,8 @@
 import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { PLATFORM_IDS, PLATFORMS } from "./platforms";
+import { createPlatformSign } from "./platform-sign";
 export type District = "hq" | "warehouse" | "ads" | "homes";
 export type WorldState = {
   signals: boolean;
@@ -14,7 +16,7 @@ export type WorldState = {
 const LOCATIONS: Record<District, [number, number, number]> = {
   hq: [0, 0, -3],
   warehouse: [-18, 0, 13],
-  ads: [19, 0, -13],
+  ads: [19, 0, -19],
   homes: [-19, 0, -18],
 };
 export function createCity(
@@ -216,18 +218,9 @@ export function createCity(
   }
   const platformGroups = new T.Group();
   scene.add(platformGroups);
-  const platformColors: Record<string, string> = {
-    shopee: "#ec886c",
-    tiktok: "#6f8d91",
-    meta: "#91b1d6",
-    google: "#dcb975",
-  };
-  const platformNames: Record<string, string> = {
-    shopee: "Shopee Ads",
-    tiktok: "TikTok Ads",
-    meta: "Meta Ads",
-    google: "Google Ads",
-  };
+  const platformSigns = new Map(PLATFORM_IDS.map((id) => [
+    id, createPlatformSign(id, Math.min(4, renderer.capabilities.getMaxAnisotropy())),
+  ]));
   let platformSignature = "";
   const updatePlatforms = () => {
     const signature = state.platforms.join();
@@ -239,17 +232,20 @@ export function createCity(
         if (o instanceof T.Mesh) {
           o.geometry.dispose();
           if (o.material instanceof T.MeshBasicMaterial) {
-            o.material.map?.dispose();
             o.material.dispose();
           }
         }
       });
       platformGroups.remove(child);
     }
-    state.platforms.forEach((id, index) => {
+    // Fixed plots: adding/removing a platform never moves its neighbours.
+    PLATFORM_IDS.forEach((id, index) => {
+      if (!state.platforms.includes(id)) return;
+      const brand = PLATFORMS[id];
       const x = 15 + (index % 2) * 8,
         z = -23 + Math.floor(index / 2) * 8,
-        h = id === "shopee" ? 7 : 5;
+        h = brand.height;
+      box(platformGroups, x, 0.6, z, 6.2, 0.35, 5.9, brand.primary);
       box(
         platformGroups,
         x,
@@ -258,23 +254,34 @@ export function createCity(
         5.5,
         h,
         5.2,
-        platformColors[id] ?? "#c8c6b8",
+        brand.body,
       );
-      box(platformGroups, x, h + 1, z, 6, 0.35, 5.8, "#f3e7d2");
-      for (let i = 0; i < 3; i++)
-        box(
-          platformGroups,
-          x - 1.7 + i * 1.7,
-          h / 2,
-          z + 2.65,
-          0.9,
-          h - 1.5,
-          0.08,
-          "#dcebe5",
-        );
-      const sign = label(platformNames[id] ?? id, x, h + 1.7, z + 2.75, 6);
-      scene.remove(sign);
-      platformGroups.add(sign);
+      box(platformGroups, x, h + 0.9, z, 6, 0.5, 5.8, brand.primary);
+      for (let floor = 0; floor < 3; floor++) {
+        const y = 1.8 + floor * (h - 1.5) / 3;
+        for (let column = 0; column < 3; column++) {
+          box(platformGroups, x - 1.7 + column * 1.7, y, z + 2.65, 1.05, 0.9, 0.1, brand.glass);
+          box(platformGroups, x + 2.8, y, z - 1.65 + column * 1.65, 0.1, 0.9, 1.05, brand.glass);
+        }
+      }
+      // Brand-coloured roof rails are legible even from the city overview.
+      brand.accents.forEach((color, i) => {
+        const segment = 6 / brand.accents.length;
+        box(platformGroups, x - 3 + segment * (i + 0.5), h + 1.22, z + 2.7, segment, 0.2, 0.32, color);
+        box(platformGroups, x + 2.8, 0.9 + h / 2, z - 2.1 + i * 0.38, 0.16, h, 0.2, color);
+      });
+      box(platformGroups, x, 1.25, z + 2.72, 1.1, 1.3, 0.16, brand.primary);
+      box(platformGroups, x, h + 1.4, z, id === "meta" ? 4.5 : 3.5, 0.5, 3, brand.primary);
+      const signMaterial = new T.MeshBasicMaterial({
+        map: platformSigns.get(id)!.texture, toneMapped: false,
+      });
+      const front = new T.Mesh(new T.PlaneGeometry(6, 1.5), signMaterial);
+      front.position.set(x, h + 2.1, z + 2.76);
+      platformGroups.add(front);
+      const side = new T.Mesh(new T.PlaneGeometry(4.8, 1.2), signMaterial);
+      side.rotation.y = Math.PI / 2;
+      side.position.set(x + 2.81, h - 0.25, z);
+      platformGroups.add(side);
     });
   };
   updatePlatforms();
@@ -300,7 +307,7 @@ export function createCity(
     for (const dx of [-1.3, 1.3])
       box(scene, x + dx, h, z + 1.8, 0.9, 0.8, 0.1, "#f9df9b");
   }
-  // Trees use shared instanced geometry; all assets are authored in this repo.
+  // Trees use shared instanced geometry.
   const trunks = new T.InstancedMesh(
     new T.CylinderGeometry(0.15, 0.2, 1.6, 6),
     mat("#9e8c6f"),
@@ -538,9 +545,12 @@ export function createCity(
   const focus = (district: District | null) => {
     const point = district ? LOCATIONS[district] : [0, 0, -2];
     destination = new T.Vector3(...(point as [number, number, number]));
+    if (district === "ads") destination.y = 3;
     eye = destination
       .clone()
-      .add(district ? new T.Vector3(19, 20, 25) : new T.Vector3(69, 62, 78));
+      .add(district === "ads"
+        ? new T.Vector3(23, 22, 30)
+        : district ? new T.Vector3(19, 20, 25) : new T.Vector3(69, 62, 78));
   };
   return {
     focus,
@@ -571,6 +581,7 @@ export function createCity(
       });
       materials.forEach((m) => m.dispose());
       labelTextures.forEach((t) => t.dispose());
+      platformSigns.forEach((sign) => sign.dispose());
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();
