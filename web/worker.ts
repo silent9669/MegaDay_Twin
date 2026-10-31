@@ -14,6 +14,7 @@ import type { StudioModelEnv } from "./server/model-json";
 import { plannerContext, runSalePlan, activeSalePlan, applySalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
+import { sourceText } from "./src/studio/source-text";
 import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
@@ -190,7 +191,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
         for (const f of supported)
           form.append(
             "files",
-            new Blob([f.text], {
+            new Blob([sourceText(f)], {
               type: f.name.endsWith(".csv") ? "text/csv" : "application/json",
             }),
             SOURCE_DEFS.find((d) => d.kind === f.kind)!.file,

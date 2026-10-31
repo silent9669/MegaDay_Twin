@@ -1,6 +1,7 @@
+import { visibleSources } from "../../studio/replay";
+import { readSource } from "../../studio/read-source";
 import { z } from "zod";
 import {
-  inspect,
   SOURCE_DEFS,
   type SourceKind,
   type SourcePack,
@@ -62,7 +63,7 @@ export function snapshot(
   sources: Doc<SourcePack>,
   sandbox: Doc<Sandbox>,
 ): MonitorSnapshot {
-  const view = sourceView(sources.data, sandbox.data.hour);
+  const view = sourceView(visibleSources(sources.data, sandbox.data.hour), sandbox.data.hour);
   return {
     sourceRevision: sources.revision,
     sandboxRevision: sandbox.revision,
@@ -74,7 +75,7 @@ export function snapshot(
       kind: file.kind,
       name: file.name,
       hash: file.hash,
-      issues: inspect(file.name, file.text)
+      issues: readSource(file)
         .issues.filter((i) => i.level !== "info")
         .map((i) => `${i.code}:${i.row ?? ""}:${i.column ?? ""}`),
     })),
@@ -93,7 +94,7 @@ export class WorkspaceMonitor {
     if (
       previous &&
       next.sourceRevision === previous.sourceRevision &&
-      next.sandboxRevision === previous.sandboxRevision
+      next.sandboxRevision === previous.sandboxRevision && next.hour === previous.hour
     )
       return [];
     this.previous = next;

@@ -1,7 +1,8 @@
+import { readSource } from "../studio/read-source";
 import { config } from "../lib/config";
 import { useMemo } from "react";
 import { useSku } from "../api/queries";
-import { inspect, normalize, type SourcePack } from "../studio/sources";
+import { normalize, type SourcePack } from "../studio/sources";
 import type { StockRow } from "../studio/source-view";
 import { analyzeWithAI } from "../city/analysis-context";
 import { ErrorState, SkeletonRows } from "../components/states";
@@ -19,7 +20,7 @@ const codeColumns = new Set([
 function matchingRecords(pack: SourcePack | null, sku: string) {
   return (pack?.files ?? [])
     .map((file) => {
-      const parsed = inspect(file.name, file.text),
+      const parsed = readSource(file),
         columns = parsed.columns.filter((c) => codeColumns.has(normalize(c)));
       const rows = parsed.rows.filter((row) =>
         columns.some((c) =>

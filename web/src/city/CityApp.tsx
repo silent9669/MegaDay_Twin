@@ -40,6 +40,8 @@ import type { SourcePack } from "../studio/sources";
 import { SourceWorkspace } from "../studio/SourceWorkspace";
 import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
+import { visibleSources } from "../studio/replay";
+import { usePlaybackHour } from "../studio/use-playback-hour";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
@@ -86,13 +88,15 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     };
   }, [appearance]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const hour = usePlaybackHour(sandbox.document?.data);
+  const visiblePack = useMemo(() => visibleSources(sources.document?.data ?? null, hour), [sources.document, hour]);
   const feed = useMemo(
     () =>
       sourceView(
-        sources.document?.data ?? null,
-        sandbox.document?.data.hour ?? 1,
+        visiblePack,
+        hour,
       ),
-    [sources.document, sandbox.document],
+    [visiblePack, hour],
   );
   const [compact, setCompact] = useState(true),
     [district, setDistrict] = useState<District | null>(null),
@@ -422,7 +426,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                 <Link to="/mock-data">
                   <Database size={16} />
                   <span>
-                    {String(sandbox.document?.data.hour ?? 1).padStart(2, "0")}
+                    {String(hour).padStart(2, "0")}
                     :00 · Source clock
                   </span>
                   <ArrowRight size={16} />
@@ -456,7 +460,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                   {tour !== null && <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />}
                   <div className="district-workspace-body">
                     {district === "hq" ? (
-                      <HQWorkspace pack={sources.document?.data ?? null} revision={sources.document?.revision ?? 0} />
+                      <HQWorkspace pack={visiblePack} revision={sources.document?.revision ?? 0} />
                     ) : district === "warehouse" ? (
                       <>
                         <ProductLabels
@@ -468,7 +472,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                       </>
                     ) : district === "ads" ? (
                       <>
-                        <AdsStats pack={sources.document?.data??null} revision={sources.document?.revision??0}/>
+                        <AdsStats pack={visiblePack} revision={sources.document?.revision??0}/>
                         <h3>Platform buildings</h3>
                         <div className="platform-grid">
                           {PLATFORM_IDS.map((p) => (
@@ -539,7 +543,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                         </Link>
                       </>
                     ) : (
-                      <SourceWorkspace pack={sources.document?.data ?? null} district="residential" />
+                      <SourceWorkspace pack={visiblePack} district="residential" />
                     )}
                   </div>
                 </SheetContent>

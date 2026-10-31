@@ -1,6 +1,7 @@
+import { readSource } from "../studio/read-source";
 import { useMemo } from "react";
 import { Link } from "react-router";
-import { inspect, normalize, type SourcePack } from "../studio/sources";
+import { normalize, type SourcePack } from "../studio/sources";
 import { analyzeWithAI } from "./analysis-context";
 export function AdsStats({
   pack,
@@ -13,7 +14,7 @@ export function AdsStats({
     () =>
       pack?.files
         .filter((f) => f.kind === "ads")
-        .map((file) => ({ file, parsed: inspect(file.name, file.text) })) ?? [],
+        .map((file) => ({ file, parsed: readSource(file) })) ?? [],
     [pack],
   );
   const field = (row: Record<string, unknown>, names: string[]) =>

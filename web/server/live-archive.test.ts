@@ -7,6 +7,7 @@ import { expect, it, vi } from "vitest";
 import { analyzeArchive } from "./studio-import";
 import { AccountWorkspace } from "./workspace";
 import { inspect, type SourcePack } from "../src/studio/sources";
+import { sourceText } from "../src/studio/source-text";
 import { sourceView } from "../src/studio/source-view";
 import type { LabelResponse } from "../src/studio/product-labels";
 
@@ -14,7 +15,7 @@ it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("imports the live 11.11 archive and pe
   const start = performance.now();
   const analysis = await analyzeArchive(new Uint8Array(readFileSync(process.env.LIVE_ARCHIVE_PATH!)), {}, false);
   expect(analysis.tables.map(table => table.rowCount).sort((a, b) => a - b)).toEqual([1176, 4156, 7176]);
-  expect(analysis.skipped.some(file => file.file.endsWith("_replay.json"))).toBe(true);
+  expect(analysis.tables.every(table => !!table.source.replay)).toBe(true);
   const pack: SourcePack = { schema: "hackathon.sources.v1", files: analysis.tables.map(table => table.source) };
   const feed = sourceView(pack, 1);
   expect(feed.orderRows).toBe(4156);
@@ -31,6 +32,8 @@ it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("imports the live 11.11 archive and pe
   try {
     const save = await workspace.fetch(new Request("https://test/api/workspace/sources", { method: "PUT", body: JSON.stringify({ revision: 0, data: pack }) }));
     expect(save.status).toBe(200);
+    const clock = await (await workspace.fetch(new Request("https://test/api/workspace/sandbox"))).json() as { revision: number };
+    await workspace.fetch(new Request("https://test/api/workspace/sandbox", { method: "PUT", body: JSON.stringify({ revision: clock.revision, data: { hour: 24, event: "observe" } }) }));
     const savedAt = performance.now();
     const model = vi.fn<typeof fetch>(async (_url, init) => {
       const batch = JSON.parse(JSON.parse(init!.body as string).input).untrusted_evidence;
@@ -46,7 +49,7 @@ it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("imports the live 11.11 archive and pe
     expect(model).toHaveBeenCalledTimes(6);
     const stored = await (await workspace.fetch(new Request("https://test/api/workspace/sources"))).json() as { data: SourcePack };
     const inventory = stored.data.files.find(file => file.kind === "inventory")!;
-    expect(inspect(inventory.name, inventory.text).columns).toContain("Demand label");
+    expect(inspect(inventory.name, sourceText(inventory)).columns).toContain("Demand label");
     expect(database.prepare("SELECT COUNT(*) AS count FROM studio_rows").get()).toMatchObject({ count: 12508 });
     console.info(JSON.stringify({ localImportAndSaveMs: Math.round(savedAt - start), localMockedLabelAndSaveMs: Math.round(performance.now() - savedAt), rows: 12508, products: 262, modelCalls: 6 }));
   } finally { database.close(); vi.unstubAllGlobals(); }

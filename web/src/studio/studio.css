@@ -66,6 +66,14 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.product-label-panel select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #c6d4ba;
+  border-radius: 6px;
+  font: inherit;
+}
 .product-label-panel button {
   min-height: 44px;
   white-space: normal;
@@ -1168,6 +1176,14 @@
 .archive-preview th, .archive-preview td { padding: 8px; text-align: left; border-bottom: 1px solid #d9e2ce; white-space: nowrap; }
 
 .district-workspace-body .product-label-panel { margin: 16px 0; color: #304136; }
+.product-label-panel select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #c6d4ba;
+  border-radius: 6px;
+  font: inherit;
+}
 .product-label-panel button { cursor: pointer; border: 1px solid #d6dfce; border-radius: 6px; padding: 8px 12px; background: #fbfcf6; color: #486047; }
 .product-label-panel button:disabled { opacity: .45; cursor: not-allowed; }
 .product-label-panel .product-label-actions button { display: inline-flex; align-items: center; gap: 7px; }

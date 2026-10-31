@@ -339,3 +339,34 @@ describe("label route boundaries", () => {
     expect((await workspace.fetch(new Request(origin + "/api/workspace/product-labels", { method: "PUT", body: "{}" }))).status).toBe(404);
   });
 });
+
+it("persists manual labels, rejects stale edits and preserves the override through AI labeling", async () => {
+  const { workspace, input, saveSources } = await setup();
+  const patch = (revision: number, group: string) => new Request(origin + "/api/product-labels", { method: "PATCH", body: JSON.stringify({ sourceRevision: revision, productId: input.products[0]!.id, group }) });
+  expect((await productLabels(patch(1, "Trendy"), workspace, null)).status).toBe(200);
+  expect((await productLabels(patch(1, "Normal"), workspace, null)).status).toBe(409);
+  expect((await productLabels(patch(2, "Unknown"), workspace, null)).status).toBe(422);
+  const provider: ProductLabelProvider = { id: "test", classify: async input => labels(input) };
+  const result = await productLabels(request(2), workspace, provider);
+  expect(result.status).toBe(200);
+  const response = await result.json() as LabelResponse;
+  expect(response.run?.results[0]).toMatchObject({ group: "Trendy", manual: true });
+  const saved = await (await workspace.fetch(new Request(origin + "/api/workspace/sources"))).json() as Doc<SourcePack>;
+  expect(saved.data.files.find(source => source.kind === "inventory")?.text).toContain("Trendy");
+  expect((await saveSources(saved.revision, saved.data)).status).toBe(200);
+  const imported = await (await workspace.fetch(new Request(origin + "/api/workspace/sources"))).json() as Doc<SourcePack>;
+  expect(imported.data.files.find(source => source.kind === "inventory")?.text).toContain("Trendy");
+});
+
+it("starts event playback once at import and does not restart it when labels save", async () => {
+  const { workspace, saveSources } = await setup();
+  const stock = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-11 00:00,A,Cup,9\n2026-11-11 23:00,A,Cup,1", "event");
+  stock.replay = { date: "2026-11-11", hours: [0, 23], lagHours: 0 };
+  expect((await saveSources(1, { schema: "hackathon.sources.v1", files: [stock] })).status).toBe(200);
+  const clock = await (await workspace.fetch(new Request(origin + "/api/workspace/sandbox"))).json() as Doc<{ hour: number; startedAt: string }>;
+  expect(clock.data.hour).toBe(0);
+  expect(clock.data.startedAt).toBeTruthy();
+  expect((await productLabels(request(2), workspace, { id: "test", classify: async input => labels(input) })).status).toBe(200);
+  const after = await (await workspace.fetch(new Request(origin + "/api/workspace/sandbox"))).json();
+  expect(after).toEqual(clock);
+});

@@ -1,3 +1,5 @@
+import { sourceText, encodeSource } from "../src/studio/source-text";
+import { playbackHour, visibleSources } from "../src/studio/replay";
 import { savedChat } from "./chat-store";
 import type { PlannerEnv } from "./sale-planner";
 import { hqSchema, defaultHQ } from "../src/hq/types";
@@ -17,7 +19,7 @@ import Papa from "papaparse";
 import { validatePack, MAX_BYTES, inspect, sourceKey, hashText, normalize, DEMAND_COLUMN, withoutDemandLabels } from "../src/studio/sources";
 import type { Source, SourcePack } from "../src/studio/sources";
 import {
-  labelRunSchema, sourceFingerprint, type LabelRun,
+  labelRunSchema, sourceFingerprint, buildLabelInput, productLabelSchema, type ProductLabel, type LabelRun,
 } from "../src/studio/product-labels";
 import { getProductLabelProvider, LABEL_LEASE_MS } from "./product-label-provider";
 import { productLabels } from "./product-labels";
@@ -32,7 +34,7 @@ function isUntouchedDemo(source: Source) {
   if (!demo) return false;
   if (source.hash === demo.hash) return true;
   if (source.kind !== "inventory") return false;
-  const parsed = inspect(source.name, source.text);
+  const parsed = inspect(source.name, sourceText(source));
   return parsed.columns.includes(DEMAND_COLUMN) &&
     Papa.unparse({ fields: parsed.columns.filter(column => column !== DEMAND_COLUMN), data: parsed.rows }) === demo.text;
 }
@@ -134,16 +136,16 @@ export class AccountWorkspace {
     for (const source of pack.files) {
       const id = sourceKey(source);
       if (catalog.some(table => table.id === id) && previous?.files.some(old => sourceKey(old) === id && old.hash === source.hash)) continue;
-      const parsed = inspect(source.name, source.text);
-      const previousRows = new Map(this.ctx.storage.sql.exec<{ position: number; record_json: string }>("SELECT position, record_json FROM studio_rows WHERE table_id = ?", id).toArray().map(row => [row.position, row.record_json]));
-      if ([...previousRows.keys()].some(position => position >= parsed.rows.length))
-        this.ctx.storage.sql.exec("DELETE FROM studio_rows WHERE table_id = ? AND position >= ?", id, parsed.rows.length);
+      const parsed = inspect(source.name, sourceText(source));
+      this.ctx.storage.sql.exec("DELETE FROM studio_rows WHERE table_id = ? AND position >= ?", id, parsed.rows.length);
       this.ctx.storage.sql.exec("INSERT INTO studio_tables VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, columns_json=excluded.columns_json, source_revision=excluded.source_revision", id, source.name, source.kind, JSON.stringify(parsed.columns), revision);
-      parsed.rows.forEach((row, index) => {
-        const record = JSON.stringify(row);
-        if (previousRows.get(index) === record) return;
-        this.ctx.storage.sql.exec("INSERT INTO studio_rows VALUES (?, ?, ?) ON CONFLICT(table_id, position) DO UPDATE SET record_json = excluded.record_json", id, index, record);
-      });
+      // One bound JSON batch avoids hundreds of thousands of JS/SQLite crossings.
+      for (let offset = 0; offset < parsed.rows.length; offset += 200) {
+        this.ctx.storage.sql.exec(
+          "INSERT INTO studio_rows SELECT ?, CAST(key AS INTEGER) + ?, json(value) FROM json_each(?) WHERE 1 ON CONFLICT(table_id, position) DO UPDATE SET record_json=excluded.record_json WHERE studio_rows.record_json != excluded.record_json",
+          id, offset, JSON.stringify(parsed.rows.slice(offset, offset + 200)),
+        );
+      }
     }
   }
   private notify(name: string, revision: number) {
@@ -168,7 +170,38 @@ export class AccountWorkspace {
     const sources = this.read("sources")!;
     const archive = this.read("product-labels");
     if (operation === "snapshot")
-      return Response.json({ sources, run: archive?.data.run ?? null });
+      return Response.json({ sources, hour: playbackHour(this.read("sandbox")?.data), run: archive?.data.run ?? null });
+    if (operation === "manual") {
+      let body: { sourceRevision: number; productId: string; group: string };
+      let label: ProductLabel;
+      try {
+        const raw = await request.text();
+        if (raw.length > 4000) return fail(413, "Label change too large.");
+        body = JSON.parse(raw);
+        label = productLabelSchema.parse({ productId: body.productId, group: body.group, reason: "Manually selected", manual: true });
+        if (!label.group) throw Error("Choose a label.");
+      } catch { return fail(422, "Choose Trendy, Seasonal or Normal for a saved product."); }
+      if (body.sourceRevision !== sources.revision) return fail(409, "Sources changed. Refresh before relabeling.");
+      const input = await buildLabelInput(visibleSources({ ...sources.data, files: (sources.data as SourcePack).files.filter(file => file.kind === "inventory") }, playbackHour(this.read("sandbox")?.data))!, sources.revision, false);
+      if (!input.products.some(product => product.id === label.productId)) return fail(422, "Product is not in the current inventory.");
+      const run = archive?.data.run as LabelRun | undefined;
+      if (run?.status === "running" && Date.parse(run.startedAt) + LABEL_LEASE_MS > Date.now()) return fail(409, "Wait for labeling to finish before changing a label.");
+      const results = [...(run?.results ?? []).filter(result => result.productId !== label.productId), label];
+      const overrides = [...(archive?.data.overrides ?? []).filter((item: ProductLabel) => item.productId !== label.productId), label];
+      const candidate: LabelRun = { id: crypto.randomUUID(), sourceRevision: sources.revision, sourceFingerprint: input.sourceFingerprint,
+        context: input.context ?? { market: "Vietnam", asOf: new Date().toISOString().slice(0, 10), evidence: [] }, provider: run?.provider ?? "manual",
+        status: "partial", startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), error: null, results };
+      const labeledPack = await this.labeledSources(sources.data, results);
+      candidate.sourceRevision++;
+      candidate.sourceFingerprint = await sourceFingerprint(labeledPack);
+      if (this.read("sources")?.revision !== sources.revision || this.read("product-labels")?.revision !== archive?.revision) return fail(409, "Workspace changed. Retry the label change.");
+      this.ctx.storage.transactionSync(() => {
+        this.writeDocument("sources", labeledPack, sources.revision);
+        this.writeDocument("product-labels", { run: candidate, overrides }, archive?.revision ?? 0);
+      });
+      this.notify("sources", candidate.sourceRevision); this.notify("product-labels", (archive?.revision ?? 0) + 1);
+      return Response.json({ saved: true });
+    }
     let candidate: LabelRun;
     try {
       const raw = await request.text();
@@ -205,16 +238,9 @@ export class AccountWorkspace {
     }
     let labeledPack: SourcePack | null = null;
     if (operation === "finish" && ["completed", "partial"].includes(candidate.status)) {
-      const labels = new Map(candidate.results.map(r => [r.productId, r.group]));
-      labeledPack = { ...sources.data, files: await Promise.all((sources.data as SourcePack).files.map(async source => {
-        if (source.kind !== "inventory") return source;
-        const parsed = inspect(source.name, source.text);
-        const code = parsed.columns.find(c => normalize(c) === normalize("Mã nội bộ"))!;
-        const columns = [...parsed.columns.filter(c => c !== DEMAND_COLUMN), DEMAND_COLUMN];
-        const rows = parsed.rows.map(row => ({ ...row, [DEMAND_COLUMN]: labels.get(JSON.stringify(["inventory", "internal_code", String(row[code] ?? "").trim()])) ?? "" }));
-        const text = Papa.unparse({ fields: columns, data: rows });
-        return { ...source, text, hash: await hashText(text) };
-      })) };
+      const overrides = new Map<string, ProductLabel>((current?.data.overrides ?? []).map((label: ProductLabel) => [label.productId, label]));
+      candidate.results = candidate.results.map(label => overrides.get(label.productId) ?? label);
+      labeledPack = await this.labeledSources(sources.data, candidate.results);
       candidate.sourceFingerprint = await sourceFingerprint(labeledPack!);
       candidate.sourceRevision = sources.revision + 1;
     }
@@ -223,12 +249,27 @@ export class AccountWorkspace {
       return fail(409, "Workspace changed while labeling. Retry with the latest sources.", "LABEL_SOURCES_CHANGED");
     const saved = this.ctx.storage.transactionSync(() => {
       if (labeledPack) this.writeDocument("sources", labeledPack, sources.revision);
-      return this.writeDocument("product-labels", { run: candidate }, current?.revision ?? 0);
+      return this.writeDocument("product-labels", { run: candidate, overrides: current?.data.overrides ?? [] }, current?.revision ?? 0);
     });
     if (!saved) return fail(409, "Labeling status changed. Refresh and try again.");
     if (labeledPack) this.notify("sources", candidate.sourceRevision);
     this.notify("product-labels", saved.revision);
     return Response.json({ acquired: true, run: candidate });
+  }
+
+  private async labeledSources(pack: SourcePack, results: ProductLabel[]): Promise<SourcePack> {
+    const labels = new Map(results.map(label => [label.productId, label.group]));
+    const files: Source[] = [];
+    for (const source of pack.files) {
+      if (source.kind !== "inventory") { files.push(source); continue; }
+      const parsed = inspect(source.name, sourceText(source));
+      const code = parsed.columns.find(column => normalize(column) === normalize("Mã nội bộ"))!;
+      const columns = [...parsed.columns.filter(column => column !== DEMAND_COLUMN), DEMAND_COLUMN];
+      const rows = parsed.rows.map(row => ({ ...row, [DEMAND_COLUMN]: labels.get(JSON.stringify(["inventory", "internal_code", String(row[code] ?? "").trim()])) ?? row[DEMAND_COLUMN] ?? "" }));
+      const text = Papa.unparse({ fields: columns, data: rows });
+      files.push({ ...source, encoding: undefined, ...encodeSource(text), hash: await hashText(text) });
+    }
+    return { ...pack, files };
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -238,7 +279,7 @@ export class AccountWorkspace {
     if (url.pathname === "/internal/milo/chat") return savedChat(request,this.env,{decisionToolsConnected:!!this.env.DATA_BACKEND_URL},this);
     if (url.pathname === "/internal/studio/import") return studioImport(request, this.env);
     if (url.pathname === "/internal/product-labels") return productLabels(request, this, getProductLabelProvider(this.env));
-    const labelOperation = /^\/internal\/product-labels\/(snapshot|claim|finish)$/.exec(url.pathname)?.[1];
+    const labelOperation = /^\/internal\/product-labels\/(snapshot|claim|finish|manual)$/.exec(url.pathname)?.[1];
     if (labelOperation) return this.productLabels(request, labelOperation);
     if (name === "events") {
       if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket")
@@ -289,7 +330,7 @@ export class AccountWorkspace {
       const body = JSON.parse(raw);
       if (!Number.isSafeInteger(body.revision) || body.revision < 0)
         return fail(422, "A valid revision is required.");
-      const data =
+      let data =
         name === "sources"
           ? await withoutDemandLabels(await validatePack(body.data))
           : name === "hq"
@@ -299,7 +340,16 @@ export class AccountWorkspace {
             : name === "chats"
               ? chatArchiveSchema.parse(body.data)
               : sandboxSchema.parse(body.data);
-      const saved = this.write(name, data, body.revision);
+      const overrides = name === "sources" ? this.read("product-labels")?.data.overrides as ProductLabel[] | undefined : undefined;
+      if (overrides?.length) data = await this.labeledSources(data as SourcePack, overrides);
+      const previousSources = name === "sources" ? this.read("sources")?.data as SourcePack | undefined : undefined;
+      const replayChanged = name === "sources" && (data as SourcePack).files.some(file => file.replay && !previousSources?.files.some(old => old.kind === file.kind && JSON.stringify(old.replay) === JSON.stringify(file.replay)));
+      const saved = this.ctx.storage.transactionSync(() => {
+        const result = this.writeDocument(name, data, body.revision);
+        if (result && replayChanged) this.writeDocument("sandbox", { hour: 0, event: "observe", startedAt: new Date().toISOString() }, this.read("sandbox")?.revision ?? 0);
+        return result;
+      });
+      if (saved && replayChanged) this.notify("sandbox", this.read("sandbox")!.revision);
       if (!saved)
         return fail(
           409,

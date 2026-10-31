@@ -87,3 +87,16 @@ it("does not display late labels after a newer source revision arrives", async (
   expect(screen.queryByText("Cup")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Label data" })).toBeDisabled();
 });
+
+it("filters demand groups and saves a manual dropdown change", async () => {
+  request.mockResolvedValue(response);
+  render(<ProductLabels sourceRevision={1} blocked={false} inventory={[
+    { code: "A", name: "Cup", stock: 2, asOf: "", demand: "Trendy" },
+    { code: "B", name: "Lamp", stock: 1, asOf: "", demand: "Seasonal" },
+  ]} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Label data" })).toBeEnabled());
+  fireEvent.change(screen.getByLabelText("Filter demand labels"), { target: { value: "Trendy" } });
+  expect(screen.queryByText("Lamp")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Demand label for Cup"), { target: { value: "Normal" } });
+  await waitFor(() => expect(request).toHaveBeenCalledWith("/api/product-labels", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ sourceRevision: 1, productId: '["inventory","internal_code","A"]', group: "Normal" }) })));
+});

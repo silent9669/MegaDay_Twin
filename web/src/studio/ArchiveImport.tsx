@@ -1,3 +1,4 @@
+import { sourceText } from "./source-text";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Upload, Sparkles } from "lucide-react";
 import { strToU8, zipSync } from "fflate";
@@ -49,6 +50,7 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
       if (review && result.skipped.length) throw Error("AI review could not read every saved table. Your tables are unchanged.");
       if (review) for (const table of result.tables) {
         const original = sources.find(source => source.name === table.file);
+        if (original?.replay) table.source.replay = original.replay;
         if (original && table.source.kind === "general") table.source.name = original.name;
       }
       setAnalysis(result);
@@ -67,7 +69,7 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
       <div className="archive-actions">
         {!!sources.length && <button disabled={blocked || !!busy} onClick={() => {
           if (new Set(sources.map(source => source.name)).size !== sources.length) { setError("Resolve duplicate filenames before AI repair."); return; }
-          const bytes = zipSync(Object.fromEntries(sources.map(source => [source.name, strToU8(source.text)])), { level: 1 });
+          const bytes = zipSync(Object.fromEntries(sources.map(source => [source.name, strToU8(sourceText(source))])), { level: 1 });
           void analyze(new File([new Uint8Array(bytes)], "workspace.zip", { type: "application/zip" }), true);
         }}><Sparkles size={16} aria-hidden /> Review &amp; fix with AI</button>}
         <button className="primary" disabled={blocked || !!busy} onClick={() => input.current?.click()}><Upload size={16} aria-hidden /> Import ZIP</button>
