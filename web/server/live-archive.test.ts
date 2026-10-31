@@ -6,8 +6,6 @@ import type { DurableObjectState } from "@cloudflare/workers-types";
 import { expect, it, vi } from "vitest";
 import { analyzeArchive } from "./studio-import";
 import { AccountWorkspace } from "./workspace";
-import { productLabels } from "./product-labels";
-import { getProductLabelProvider } from "./product-label-provider";
 import { inspect, type SourcePack } from "../src/studio/sources";
 import { sourceView } from "../src/studio/source-view";
 import type { LabelResponse } from "../src/studio/product-labels";
@@ -29,7 +27,7 @@ it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("imports the live 11.11 archive and pe
       statement.run(...bindings); return { toArray: () => [] };
     } },
     transactionSync: <T>(fn: () => T) => { database.exec("BEGIN"); try { const result = fn(); database.exec("COMMIT"); return result; } catch (error) { database.exec("ROLLBACK"); throw error; } },
-  }, getWebSockets: () => [] } as unknown as DurableObjectState);
+  }, getWebSockets: () => [] } as unknown as DurableObjectState, { OPENAI_API_KEY: "test", OPENAI_MODEL_DECISION: "test" });
   try {
     const save = await workspace.fetch(new Request("https://test/api/workspace/sources", { method: "PUT", body: JSON.stringify({ revision: 0, data: pack }) }));
     expect(save.status).toBe(200);
@@ -39,8 +37,7 @@ it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("imports the live 11.11 archive and pe
       return Response.json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ labels: batch.products.map((p: { id: string }) => ({ productId: p.id, group: null, reason: "Need dated demand evidence", confidence: 0 })) }) }] }] });
     });
     vi.stubGlobal("fetch", model);
-    const provider = getProductLabelProvider({ OPENAI_API_KEY: "test", OPENAI_MODEL_DECISION: "test" });
-    const result = await productLabels(new Request("https://test/api/product-labels", { method: "POST", body: JSON.stringify({ sourceRevision: 1, context: { market: "Vietnam", asOf: "2026-11-12", evidence: [] } }) }), workspace, provider);
+    const result = await workspace.fetch(new Request("https://test/internal/product-labels", { method: "POST", body: JSON.stringify({ sourceRevision: 1, context: { market: "Vietnam", asOf: "2026-11-12", evidence: [] } }) }));
     expect(result.status).toBe(200);
     const body = await result.json() as LabelResponse;
     expect(body.run?.results).toHaveLength(262);

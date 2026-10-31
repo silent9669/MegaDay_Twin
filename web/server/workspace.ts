@@ -16,7 +16,10 @@ import type { Source, SourcePack } from "../src/studio/sources";
 import {
   labelRunSchema, sourceFingerprint, type LabelRun,
 } from "../src/studio/product-labels";
-import { LABEL_LEASE_MS } from "./product-label-provider";
+import { getProductLabelProvider, LABEL_LEASE_MS } from "./product-label-provider";
+import { productLabels } from "./product-labels";
+import { studioImport } from "./studio-import";
+import type { StudioModelEnv } from "./model-json";
 import { fail } from "./auth";
 import repositoryPack from "./repository-sources.json";
 function isUntouchedDemo(source: Source) {
@@ -32,7 +35,7 @@ function isUntouchedDemo(source: Source) {
 declare const WebSocketPair: { new (): { 0: WorkerSocket; 1: WorkerSocket } };
 export class AccountWorkspace {
   private ctx: DurableObjectState;
-  constructor(ctx: DurableObjectState) {
+  constructor(ctx: DurableObjectState, private env: StudioModelEnv = {}) {
     this.ctx = ctx;
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS documents (name TEXT PRIMARY KEY, revision INTEGER NOT NULL, updated_at TEXT NOT NULL)",
@@ -219,6 +222,9 @@ export class AccountWorkspace {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url),
       name = url.pathname.split("/").pop() ?? "";
+    // Parse archives and inventory here, not in the gateway's 10 ms CPU budget.
+    if (url.pathname === "/internal/studio/import") return studioImport(request, this.env);
+    if (url.pathname === "/internal/product-labels") return productLabels(request, this, getProductLabelProvider(this.env));
     const labelOperation = /^\/internal\/product-labels\/(snapshot|claim|finish)$/.exec(url.pathname)?.[1];
     if (labelOperation) return this.productLabels(request, labelOperation);
     if (name === "events") {

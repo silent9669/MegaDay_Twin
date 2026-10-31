@@ -35,7 +35,7 @@ const request = (sourceRevision?: number) => new Request(origin + "/api/product-
 const labels = (input: LabelInput) => ({
   labels: input.products.map((product) => ({ productId: product.id, group: "Normal", reason: "Provider evidence", confidence: 0.8 })),
 });
-async function setup() {
+async function setup(env = {}) {
   const database = new DatabaseSync(":memory:");
   databases.push(database);
   const sent: string[] = [];
@@ -58,7 +58,7 @@ async function setup() {
       send: (value: string) => sent.push(value), close: () => {},
     }],
   } as unknown as DurableObjectState;
-  const workspace = new AccountWorkspace(state);
+  const workspace = new AccountWorkspace(state, env);
   const saveSources = (revision: number, data: SourcePack = pack) => workspace.fetch(new Request(origin + "/api/workspace/sources", {
     method: "PUT", body: JSON.stringify({ revision, data }),
   }));
@@ -69,6 +69,21 @@ async function setup() {
 }
 
 describe("product label workflow", () => {
+  it("runs labeling in account storage with the same OpenAI secret binding as Milo", async () => {
+    const { workspace } = await setup({ OPENAI_API_KEY: "test-secret", OPENAI_MODEL_DECISION: "decision-test" });
+    const upstream = vi.fn<typeof fetch>(async (_url, init) => {
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-secret");
+      const body = JSON.parse(init!.body as string);
+      expect(body.model).toBe("decision-test");
+      const input = JSON.parse(body.input).untrusted_evidence;
+      return Response.json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(labels(input)) }] }] });
+    });
+    vi.stubGlobal("fetch", upstream);
+    const result = await workspace.fetch(new Request(origin + "/internal/product-labels", request(1)));
+    expect(result.status).toBe(200);
+    expect(await result.json()).toMatchObject({ run: { status: "completed" } });
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
   it("saves successful products and retries only missing products", async () => {
     const { workspace, saveSources } = await setup();
     const inventory = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2\nB,Lamp,3", "upload");
@@ -291,11 +306,23 @@ describe("label route boundaries", () => {
     }), base);
     expect(response.status).toBe(403);
   });
+  it.each(["/api/product-labels", "/api/studio/import?review=1"])("streams %s to account storage without parsing data in the gateway", async path => {
+    const storage = vi.fn(async (request: Request) => {
+      expect(new URL(request.url).pathname).toBe(path.startsWith("/api/studio") ? "/internal/studio/import" : "/internal/product-labels");
+      expect(new URL(request.url).search).toBe(path.includes("?") ? "?review=1" : "");
+      expect(await request.text()).toBe("opaque payload");
+      return new Response("streamed response", { status: 200 });
+    });
+    const response = await worker.fetch(new Request(origin + path, { method: "POST", body: "opaque payload", headers: { Cookie: cookie(), Origin: origin } }),
+      { ...base, WORKSPACE: { idFromName: () => "admin", get: () => ({ fetch: storage }) } });
+    expect(await response.text()).toBe("streamed response");
+    expect(storage).toHaveBeenCalledTimes(1);
+  });
   it("does not proxy forged label writes or internal path aliases", async () => {
     const fetch = vi.fn(async () => Response.json({ unexpected: true }));
     const env = { ...base, WORKSPACE: { idFromName: () => "admin", get: () => ({ fetch }) } };
     for (const path of ["/api/workspace/product-labels", "/api/workspace/internal/product-labels/finish",
-      "/api/workspace/%70roduct-labels", "/api/workspace/../../internal/product-labels/claim", "/internal/product-labels/finish"]) {
+      "/api/workspace/%70roduct-labels", "/api/workspace/../../internal/product-labels/claim", "/internal/product-labels/finish", "/internal/product-labels", "/internal/studio/import"]) {
       await worker.fetch(new Request(origin + path, { method: "PUT", headers: {
         Cookie: cookie(), Origin: origin, "X-Internal": "true", "X-Label-Write": "true",
       }, body: "{}" }), env);

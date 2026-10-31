@@ -12,22 +12,25 @@ export function sourceView(pack: SourcePack | null, hour: number) {
   if (inventory) {
     const parsed = inspect(inventory.name, inventory.text);
     const column = (name: string) => parsed.columns.find(c => normalize(c) === normalize(name)) ?? name;
+    const timestampColumn = column("Thời điểm cập nhật"), dateColumn = column("Ngày"),
+      codeColumn = column("Mã nội bộ"), stockColumn = column("Tồn thực tế"), nameColumn = column("Tên hàng");
+    const hasDemand = parsed.columns.includes(DEMAND_COLUMN);
     for (const row of parsed.rows) {
-      const asOf = String(row[column("Thời điểm cập nhật")] ?? row[column("Ngày")] ?? "");
+      const asOf = String(row[timestampColumn] ?? row[dateColumn] ?? "");
       const rowHour = asOf.includes(":") ? Number(asOf.slice(11, 13)) : 0;
       if (inventory.commit && rowHour > hour) continue;
-      const code = String(row[column("Mã nội bộ")] ?? "").trim();
+      const code = String(row[codeColumn] ?? "").trim();
       if (!code) continue;
       const previous = latest.get(code);
       if (previous && previous.asOf > asOf) continue;
-      const raw = String(row[column("Tồn thực tế")] ?? "").trim(),
+      const raw = String(row[stockColumn] ?? "").trim(),
         value = raw ? Number(raw) : NaN;
       latest.set(code, {
         code,
-        name: String(row[column("Tên hàng")] ?? code),
+        name: String(row[nameColumn] ?? code),
         stock: Number.isFinite(value) && value >= 0 ? value : null,
         asOf,
-        ...(parsed.columns.includes(DEMAND_COLUMN) ? { demand: String(row[DEMAND_COLUMN] ?? "") } : {}),
+        ...(hasDemand ? { demand: String(row[DEMAND_COLUMN] ?? "") } : {}),
       });
     }
   }

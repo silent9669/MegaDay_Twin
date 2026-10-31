@@ -10,10 +10,7 @@ import {
 import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
 import { savedChat } from "./server/chat-store";
-import { studioImport } from "./server/studio-import";
 import type { StudioModelEnv } from "./server/model-json";
-import { productLabels } from "./server/product-labels";
-import { getProductLabelProvider } from "./server/product-label-provider";
 import { plannerContext, runSalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
@@ -97,15 +94,16 @@ async function handle(request: Request, env: Env): Promise<Response> {
     if (path === "/api/studio/import") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "studio:admin" })).success)
         return fail(429, "Studio is busy. Try again in a minute.");
-      return studioImport(request, env);
+      if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
+      return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
+        new Request(new URL("/internal/studio/import" + url.search, url), request));
     }
     if (path === "/api/product-labels") {
       if (request.method === "POST" && env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "labels:admin" })).success)
         return fail(429, "Labeling is busy. Try again in a minute.");
       if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
-      return productLabels(request,
-        env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
-        getProductLabelProvider(env));
+      return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
+        new Request(new URL("/internal/product-labels", url), request));
     }
     if (path === "/api/sale-planner/context" && request.method === "GET")
       return plannerContext(env);

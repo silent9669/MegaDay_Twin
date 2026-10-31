@@ -176,6 +176,11 @@ CSV/JSON and immediately save recognized and general tables. If several files
 match the same business table, choose one before saving. Import does not wait
 for AI. **Review & fix with AI** reviews the current saved tables and applies
 validated column mappings with revision checks; failed review leaves them unchanged.
+Repair also standardizes recognized headers, trims surrounding whitespace and
+normalizes readable, nonnegative VND amounts using the existing money contract.
+It never invents missing values, resolves ambiguous SKU identities, drops rows or
+assumes timezones. The result shows applied repairs and remaining diagnostics.
+An unchanged review does not rewrite sources or clear demand labels.
 Cell edits retain revision-checked autosave. SQLite
 `studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
 with the source document revision. Unchanged table rows are not rewritten; no
@@ -183,6 +188,12 @@ user or model SQL is executed. The
 map uses saved inventory. HQ shows imported table, order, ad and stocked-product
 counts; Neighborhood shows searchable, paginated imported orders. The demo clock
 only filters repository demo data, not uploaded inventory or orders.
+
+The authenticated gateway streams import and labeling requests to the existing
+AccountWorkspace Durable Object. Extraction, parsing, model calls and persistence
+run there, avoiding the gateway CPU limit that caused HTTP 503 responses for
+the 11.11 archive. The object receives the same `OPENAI_API_KEY` binding as Milo;
+no second key or public internal route is introduced.
 
 `POST /api/studio/import` accepts raw ZIP bytes and returns `{ tables, skipped,
 model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
