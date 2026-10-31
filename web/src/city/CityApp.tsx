@@ -11,6 +11,8 @@ import {
   Layers3,
   LogOut,
   Megaphone,
+  Maximize2,
+  Minimize2,
   MessageCircle,
   Minus,
   Moon,
@@ -47,6 +49,7 @@ import type { createCity, District, WorldState } from "./world";
 import "./city.css";
 import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
 import { Tutorial } from "./Tutorial";
+import { usePanelResize } from "./usePanelResize";
 import { TOUR, TOUR_KEY } from "./tutorial-steps";
 import { useWorkspaceMonitor } from "./monitor/useWorkspaceMonitor";
 import type { Landmark } from "./map-labels";
@@ -78,6 +81,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     connected,
   );
   const [chatOpen, setChatOpen] = useState(false);
+  const panel = usePanelResize(980, 560);
   const viewSettings = settings.document?.data ?? defaultSettings;
   const appearance = viewSettings.appearance ?? "morning";
   useEffect(() => {
@@ -127,10 +131,14 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   };
   const latest = useRef(state);
   latest.current = state;
-  const enter = (next: District | null) => {
+  useEffect(() => {
+    worldRef.current?.setPanelInset(!mobile && workspace && !chatOpen ? panel.style?.width ?? 0 : 0);
+  }, [mobile, workspace, chatOpen, panel.style?.width, ready]);
+  const enter = (next: District | null, tourIndex: number | null = null) => {
+    setTour(tourIndex);
     setChatOpen(false);
     setDistrict(next);
-    setWorkspace(false);
+    setWorkspace(next === "hq" || next === "warehouse" || next === "ads");
     worldRef.current?.focus(next);
   };
   const enterRef = useRef(enter);
@@ -222,14 +230,13 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     }
   }
   function tourStep(index: number) {
-    setTour(index);
-    enter(TOUR[index]?.place ?? null);
+    enter(TOUR[index]?.place ?? null, index);
   }
   useEffect(() => {
     if (!ready || studio) return;
     const initial = setTimeout(() => {
       try {
-        if (!localStorage.getItem(TOUR_KEY)) setTour(0);
+        if (!localStorage.getItem(TOUR_KEY) && !window.location.search) enterRef.current(TOUR[0]!.place, 0);
       } catch {
         /* Replay remains available. */
       }
@@ -479,13 +486,15 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               </button>
             </div>
             {workspace && district && !chatOpen && (
-              <Sheet open onOpenChange={setWorkspace} modal={mobile}>
+              <Sheet open onOpenChange={open => { setWorkspace(open); if (!open) finishTour(); }} modal={mobile}>
                 <SheetContent
                   showCloseButton={false}
+                  style={panel.style}
                   overlay={mobile}
                   className={`district-workspace city-sheet ${district === "hq" ? "hq-workspace" : ""}`}
                   aria-label={`${DISTRICTS.find((d) => d.id === district)?.name} workspace`}
                 >
+                  <div className="panel-resize-grip" {...panel.grip} />
                   <header>
                     <SheetTitle>
                       {DISTRICTS.find((d) => d.id === district)?.name}
@@ -506,14 +515,17 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                         </button>
                       </div>
                     )}
+                    <button className="city-icon panel-expand" aria-label={panel.expanded ? "Restore workspace" : "Expand workspace"}
+                      onClick={() => panel.setExpanded(!panel.expanded)}>{panel.expanded ? <Minimize2 /> : <Maximize2 />}</button>
                     <button
                       className="city-icon"
                       aria-label="Close workspace"
-                      onClick={() => setWorkspace(false)}
+                      onClick={() => { setWorkspace(false); finishTour(); }}
                     >
                       <X />
                     </button>
                   </header>
+                  {tour !== null && <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />}
                   <div className="district-workspace-body">
                     {district === "hq" ? (
                       hqTab === "overview" ? (
@@ -624,14 +636,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                 </SheetContent>
               </Sheet>
             )}
-            {tour !== null && (
-              <Tutorial step={tour} onStep={tourStep} onFinish={finishTour}
-                actionDisabled={TOUR[tour]?.action === "appearance" && (!settings.document || savingSettings)}
-                onAction={() => {
-                  if (TOUR[tour]?.action === "river") worldRef.current?.focusRiver();
-                  else void setSettings({ ...viewSettings, appearance: appearance === "night" ? "morning" : "night" });
-                }} />
-            )}
+
           </>
         )}
       </main>

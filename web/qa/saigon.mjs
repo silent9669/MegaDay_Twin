@@ -16,7 +16,7 @@ const password = await readFile(
 const out = new URL("../../qa/runs/saigon-city-milo/", import.meta.url)
   .pathname;
 await mkdir(out, { recursive: true });
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: process.env.QA_HEADED !== "1" });
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 1,
@@ -40,6 +40,8 @@ try {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL("**/city-demo");
   await page.getByRole("button", { name: "Close tutorial" }).click();
+  await page.getByRole("button", { name: "Close workspace" }).click();
+  await page.getByRole("link", { name: "View city", exact: true }).click();
   await page.waitForFunction(
     () => document.querySelector(".city-canvas")?.dataset.assets === "ready",
   );
@@ -67,7 +69,8 @@ try {
   await page.getByRole("link", { name: "View city", exact: true }).click();
   await page.waitForTimeout(1800);
   await page.getByRole("button", { name: "Visit MegaDay Twin", exact: true }).click();
-  await page.getByRole("button", { name: "Open HQ", exact: true }).waitFor();
+  await page.getByRole("dialog", { name: "MegaDay HQ", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Close workspace" }).click();
   await page.screenshot({ path: out + "hq-night.png" });
   await page.getByRole("link", { name: "View city", exact: true }).click();
   results.appearance = { persisted: true, panels: [] };
@@ -88,9 +91,7 @@ try {
       `Overflow at ${width}`,
     );
     await page.getByRole("button", { name: "Warehouse", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Open workspace", exact: true })
-      .click();
+
     await page.getByRole("dialog", { name: "Warehouse" }).waitFor();
     const box = await page
       .getByRole("dialog", { name: "Warehouse" })
@@ -164,17 +165,13 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Replay tutorial" }).click();
-  await page.getByRole("button", { name: "View river & bridge" }).click();
-  await page.waitForTimeout(1600);
-  await page.screenshot({ path: out + "river-night.png" });
-
-  for (let i = 0; i < 6; i++)
-    await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByRole("button", { name: "Done", exact: true }).click();
-  assert.equal(
-    await page.evaluate(() => localStorage.getItem("megaday.city.tour.v3")),
-    "complete",
-  );
+  for (const [index, title] of ["Start at HQ", "Choose ad platforms", "Check the warehouse"].entries()) {
+    await page.getByRole("heading", { name: title, exact: true }).waitFor();
+    await page.getByRole("region", { name: "City tutorial" }).getByRole("button", { name: index === 2 ? "Done" : "Next", exact: true }).click();
+  }
+  assert.equal(await page.evaluate(() => localStorage.getItem("megaday.city.tour.v4")), "complete");
+  await page.getByRole("button", { name: "Close workspace" }).click();
+  await page.getByRole("link", { name: "View city", exact: true }).click();
   await page.waitForTimeout(1500);
   results.performance = await page.evaluate(async () => {
     const samples = [];

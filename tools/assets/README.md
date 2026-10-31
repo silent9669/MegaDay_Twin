@@ -11,7 +11,7 @@ npx @gltf-transform/cli optimize tools/assets/district1.raw.glb web/public/asset
 npx @gltf-transform/cli validate web/public/assets/saigon/district1.glb
 ```
 
-The runtime uses GLTFLoader + MeshoptDecoder, an immediate low-detail fallback, and explicit GPU disposal. Roads and paving use original deterministic canvas textures. Palms, vehicles, pedestrians, stock cartons and wakes use instancing. Vehicle wheels and lean, pedestrian gait, river ripples, ship movement and foliage sway follow delta time. Small vehicle hubs/arms are omitted at a distant camera position. Motion is illustrative and respects reduced motion and the app's motion setting.
+The runtime uses GLTFLoader + MeshoptDecoder, an immediate low-detail fallback, and explicit GPU disposal. Roads and paving use original deterministic canvas textures. Palms, vehicles, pedestrians, stock cartons and wakes use instancing. Vehicle wheels and lean, pedestrian gait, river ripples, ship movement and foliage sway follow delta time. Small vehicle hubs and citizen face, collar, strap and bag details are omitted at a distant camera position. Motion is illustrative and respects reduced motion and the app's motion setting.
 
 ## Milo
 
@@ -36,3 +36,9 @@ The refined 64×96 character uses PixelLab Pixflux with the previous Milo sprite
 - thinking: `dd31921e-f61c-4c42-b29e-63c31f92047e`
 - notification: `46722f9a-1b55-425b-b3f0-dce31d7e93f0`
 - error: `8092c471-2cc8-491f-8960-a67361cf549f`
+
+## Surface and street detail
+
+`web/src/city/detail-textures.ts` creates original 128px tiling plaster, terracotta, timber, cloth, tire and vehicle-paint textures locally. Architectural detail uses a separate metre-scaled UV channel; the Blender AO atlas remains on its original coordinates. Color maps use sRGB and bump maps remain linear. Shared textures are disposed with the scene. No external asset services or licensed textures are required.
+
+Citizens retain instancing and now have separate sleeve/forearm and thigh/shin motion, collars, faces, bags and a mix of conical hats. Scooters have seated limbs; delivery vehicles have glazing, mirrors, lights, bumpers and original MegaDay livery. Fine details are hidden at distant camera positions; the existing reduced-motion setting freezes the scene.

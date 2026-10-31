@@ -174,3 +174,17 @@ it('keeps updates quiet and attaches bounded evidence only when an explanation i
   const request=vi.mocked(fetch).mock.calls.find(([path])=>path==='/api/pm/chat')!;
   expect(JSON.parse(String(request[1]?.body)).changeReference).toEqual(reference);
 });
+
+it('opens Chat directly from the avatar and sidebar after viewing Updates', async () => {
+  const { MemoryRouter } = await import('react-router');
+  const updates = { notices: [], toast: null, unread: 0, dismissToast: vi.fn(), markRead: vi.fn(), dismiss: vi.fn() };
+  render(<MemoryRouter><CityChat updates={updates} /></MemoryRouter>);
+  await open();
+  fireEvent.click(screen.getByRole('tab', { name: /Updates/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open PM assistant' }));
+  expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+  fireEvent.click(screen.getByRole('tab', { name: /Updates/ }));
+  fireEvent(window, new Event('workspace:chat'));
+  expect(screen.getByRole('textbox', { name: 'Message Milo' })).toBeVisible();
+});

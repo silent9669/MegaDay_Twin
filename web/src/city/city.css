@@ -439,72 +439,6 @@
   font-size: 11px;
   margin-top: 14px;
 }
-.city-tour {
-  position: absolute;
-  right: 30px;
-  top: 30px;
-  width: 360px;
-  max-width: calc(100% - 32px);
-  background: #fffdf3;
-  border: 1px solid #d4dfca;
-  border-radius: 12px;
-  padding: 22px;
-  box-shadow: 0 16px 60px #29442a24;
-  animation: city-appear 0.2s ease-out;
-  z-index: 15;
-}
-.city-tour header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: #758162;
-}
-.city-tour button {
-  border: 0;
-  background: transparent;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.city-tour h2 {
-  font-size: 23px;
-  line-height: 1.2;
-  margin: 18px 0 12px;
-  letter-spacing: -0.5px;
-  font-weight: 600;
-}
-.city-tour p {
-  font-size: 13px;
-  line-height: 1.7;
-  color: #65735c;
-}
-.city-tour footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 22px;
-  font-size: 12px;
-}
-.city-tour footer > button {
-  padding: 8px 10px;
-  border-radius: 6px;
-}
-.city-tour footer > div {
-  display: flex;
-  gap: 6px;
-}
-.city-tour footer > div button {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  padding: 0;
-  background: #d8dfcb;
-}
-.city-tour footer > div button[aria-current] {
-  background: #4a7952;
-}
 .district-workspace {
   position: absolute;
   inset: 18px;
@@ -529,8 +463,8 @@
   font-size: 18px;
   font-weight: 650;
 }
-.district-workspace header > .city-icon {
-  margin-left: auto;
+.district-workspace > header > .city-icon {
+  margin-left: 0;
 }
 .district-workspace-body {
   padding: 24px;
@@ -1232,10 +1166,6 @@
   .city-stats a span {
     max-width: 80px;
   }
-  .city-tour {
-    width: 310px;
-    top: 160px;
-  }
   .platform-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1338,26 +1268,6 @@
   }
   .city-footer > span:last-child {
     display: none;
-  }
-  .city-tour {
-    left: 12px;
-    right: 12px;
-    top: auto;
-    bottom: 172px;
-    width: auto;
-    max-width: none;
-    padding: 17px;
-  }
-  .city-tour h2 {
-    font-size: 21px;
-    margin: 12px 0 10px;
-  }
-  .city-tour p {
-    font-size: 12px;
-    line-height: 1.6;
-  }
-  .city-tour footer {
-    margin-top: 16px;
   }
   .district-workspace {
     inset: 10px;
@@ -1474,10 +1384,6 @@
     padding-top: 7px;
     padding-bottom: 7px;
   }
-  .city-tour {
-    top: 20px;
-    bottom: auto;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .city-app *,
@@ -1578,11 +1484,6 @@
 @media(prefers-reduced-motion:reduce) {
   .city-app *, .city-login *, .city-sheet * {animation:none!important;transition:none!important;scroll-behavior:auto!important;}
 }
-.guided-tour {position:fixed;z-index:60;right:auto;transform:none;max-width:calc(100vw - 32px);}
-.guided-tour footer {justify-content:space-between;gap:8px;}
-.guided-tour button {min-width:44px;min-height:44px;}
-.guided-tour h2:focus {outline:none;}
-.tour-target {position:fixed;z-index:59;border:2px solid var(--city-green);border-radius:10px;pointer-events:none;box-shadow:0 0 0 5px #32675218;}
 .city-sheet {--city-ink:#253d38;--city-muted:#687b73;--city-line:#dce4dc;--city-paper:#fbfcf7;--city-green:#326752;--city-soft:#e9f0e6;color:var(--city-ink);font-family:Inter,ui-sans-serif,system-ui,sans-serif;}
 .city-sheet button {cursor:pointer;font:inherit;touch-action:manipulation;}
 .city-sheet :focus-visible {outline:2px solid var(--city-green);outline-offset:2px;}
@@ -1635,20 +1536,19 @@
   color-scheme: dark; background: var(--city-paper); color: var(--city-ink);
 }
 [data-city-appearance="night"] :is(.city-scene-title h1, .city-sidebar a, .city-sidebar button,
-  .city-stats strong, .city-camera button, .city-tour h2, .city-tour p, .city-tour button,
-  .chat-composer textarea, .chat-history-list > button, .chat-search input, .chat-welcome button,
+  .city-stats strong, .city-camera button, .chat-composer textarea, .chat-history-list > button, .chat-search input, .chat-welcome button,
   .chat-session-title, .chat-form select, .workspace-tabs button) {color:var(--city-ink);}
 [data-city-appearance="night"] :is(.city-scene-title > span, .city-stats span, .city-footer,
   .chat-role, .chat-form footer, .chat-history-list small, .chat-history-list time,
   .chat-identity span, .chat-thinking, .district-workspace-body > p) {color:var(--city-muted);}
 [data-city-appearance="night"] :is(.city-stats, .city-stats > a, .city-camera, .city-camera button,
-  .city-tour, .city-loading, .city-chat > header, .chat-composer, .chat-form select,
+  .city-loading, .city-chat > header, .chat-composer, .chat-form select,
   .platform-card, .city-district-actions button, .city-settings select) {
   background:var(--city-paper); border-color:var(--city-line);
 }
 [data-city-appearance="night"] :is(.chat-user, .chat-welcome button, .chat-table th,
   .chat-markdown code, .city-sidebar [aria-current], .city-sidebar button:hover,
-  .city-sidebar a:hover, .workspace-tabs button[aria-selected="true"], .city-settings section > a) {
+  .city-sidebar a:hover, .workspace-tabs button[aria-pressed="true"], .city-settings section > a) {
   background:var(--city-soft);color:var(--city-ink);border-color:var(--city-line);
 }
 [data-city-appearance="night"] :is(.chat-search, .chat-table td, .chat-table th, .city-chat > header) {border-color:var(--city-line);}
@@ -1656,15 +1556,11 @@
 [data-city-appearance="night"] .chat-markdown a {color:var(--city-green);}
 [data-city-appearance="night"] .city-footer {background:#142426;border-color:var(--city-line);}
 [data-city-appearance="night"] .city-demo-badge {background:#3b3829;color:#e5cd91;border-color:#685e3e;}
-[data-city-appearance="night"] .city-tour .primary,
 [data-city-appearance="night"] .city-district-actions .primary {background:#326752;color:#fff;}
 @media(max-width:600px) {
   .city-appearance {padding:0;}
   .city-appearance span {display:none;}
 }
-
-.city-tour .tour-action {width:100%;border:1px solid var(--city-line);background:var(--city-soft);color:var(--city-ink);border-radius:7px;margin-bottom:12px;}
-.guided-tour {max-height:calc(100dvh - 100px);overflow-y:auto;}
 [data-city-appearance="night"] :is(.city-app, .city-sheet) {--surface:#182a2b;--surface-2:#263e3e;--accent:#9ccfb5;}
 [data-city-appearance="night"] .district-workspace tr:hover {background:var(--city-soft);}
 [data-city-appearance="night"] .district-workspace :is(td, th) {border-color:var(--city-line);}
@@ -1710,3 +1606,22 @@
  .pm-launcher:hover .pm-preview img.milo-motion,
  .pm-launcher:focus-visible .pm-preview img.milo-motion {animation-name:milo-frames;}
 }
+
+.workspace-tour {flex:none;margin:0 20px 12px;padding:12px 16px;border:1px solid var(--city-line);border-radius:10px;background:var(--city-soft);color:var(--city-ink);}
+.workspace-tour header,.workspace-tour footer {display:flex;align-items:center;gap:8px;}
+.workspace-tour header {justify-content:space-between;}
+.workspace-tour header span {font-size:12px;color:var(--city-muted);}
+.city-sheet .workspace-tour h2 {font-size:16px;font-weight:600;margin:0 0 4px;outline:none;}
+.workspace-tour p {font-size:13px;margin:0;}
+.workspace-tour button {display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;min-width:36px;border:0;border-radius:6px;background:transparent;color:var(--city-ink);}
+.workspace-tour footer {margin-top:8px;}
+.workspace-tour footer button:first-child {margin-right:auto;}
+.workspace-tour .primary {padding:0 12px;background:var(--city-green);color:var(--city-paper);}
+.workspace-tour button:disabled {opacity:.45;}
+@media(max-width:899px){.workspace-tour{margin:0 16px 8px;padding:8px 12px;}.workspace-tour button{min-height:44px;min-width:44px;}}
+.panel-resize-grip {position:absolute;inset:0 auto 0 0;width:10px;z-index:3;cursor:ew-resize;touch-action:none;border-radius:8px;}
+.panel-resize-grip::after {content:"";position:absolute;top:calc(50% - 24px);left:2px;width:3px;height:48px;border-radius:3px;background:var(--city-line);}
+.panel-resize-grip:hover::after,.panel-resize-grip:focus-visible::after {background:var(--city-green);}
+.district-workspace>header>.panel-expand {margin-left:auto;}
+.city-chat[data-slot=sheet-content] {max-width:calc(100vw - 112px);}
+@media(max-width:899px){.panel-resize-grip,.panel-expand{display:none;}.district-workspace>header>.city-icon:last-child{margin-left:auto;}.city-chat[data-slot=sheet-content]{max-width:none;}}

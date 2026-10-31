@@ -384,13 +384,17 @@ export function createCity(
   renderer.domElement.addEventListener("pointermove", onHover);
   renderer.domElement.addEventListener("pointerdown", onDown);
   renderer.domElement.addEventListener("pointerup", onClick);
-  const observer = new ResizeObserver(() => {
+  let panelInset = 0;
+  const resize = () => {
     const w = host.clientWidth,
       h = host.clientHeight;
     renderer.setSize(w, h);
     camera.aspect = w / Math.max(h, 1);
+    if (panelInset) camera.setViewOffset(w, h, Math.min(panelInset, w - 160) / 2, 0, w, h);
+    else camera.clearViewOffset();
     camera.updateProjectionMatrix();
-  });
+  };
+  const observer = new ResizeObserver(resize);
   observer.observe(host);
   let destination: T.Vector3 | null = null,
     eye: T.Vector3 | null = null;
@@ -461,6 +465,7 @@ export function createCity(
         : district ? new T.Vector3(19, 20, 25) : new T.Vector3(94, 91, 120));
   };
   return {
+    setPanelInset: (width: number) => { panelInset = width; resize(); },
     focus,
     focusRiver: () => focusLandmark("river"),
     focusLandmark,
