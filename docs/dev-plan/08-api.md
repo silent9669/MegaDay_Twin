@@ -835,3 +835,17 @@ profile and saved model selection. Forecasts and immutable calculation traces ad
 model ID, historical-test selection flag, independent new/sparse/insufficient-data flags,
 thresholds and reasons. Old results without this evidence remain readable. See
 [selection policy](../quyet-dinh/M6-nhan-va-chon-mo-hinh.md) for temporal and validation rules.
+
+### HQ product identity
+
+`GET /api/v1/sku-resolution?code=<inventory-code>` (viewer) returns an envelope
+with `{ code, sku, campaign_ids }`. Only unambiguous confirmed/auto-accepted
+inventory aliases resolve. Pending, rejected or conflicting aliases return
+`sku: null`; names are never used as identity. Exact canonical IDs are accepted
+only when no inventory alias claims the code. This read does not import data or
+approve matches.
+
+HQ uses the resolved SKU for model comparisons and product goals, and the
+campaign IDs to restrict goal scope. Manual worksheets retain the original
+workspace code and their assumptions. Campaign cards link directly to the
+campaign goal review; HQ comparison setup uses the same preview/apply flow.

@@ -26,6 +26,7 @@ import {
   type Worksheet,
 } from "./types";
 import { ScenarioWorksheet } from "./ScenarioWorksheet";
+import { ModelComparison } from "./ModelComparison";
 import { ProductDetails } from "./ProductDetails";
 import { analyzeWithAI } from "../city/analysis-context";
 import "./hq.css";
@@ -499,7 +500,7 @@ export function HQWorkspace({
                           <summary>
                             Decision model · actions, reasons & evidence
                           </summary>
-                          <ComparePage key={activeKey} sku={active.sku} />
+                          <ModelComparison key={activeKey} product={active} />
                         </details>
                       ) : (
                         <p className="hq-provenance">

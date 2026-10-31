@@ -7,7 +7,7 @@ vi.mock("../planner/SaleGoalPlanner", () => ({ SaleGoalPlanner: (props: { campai
 vi.mock("../planner/SkuGoalAssistant", () => ({ SkuGoalAssistant: () => null }));
 
 it("keeps the campaign scope when arriving from CD002 despite an existing product selection", () => {
-  render(<Goals campaignId="CD002" product={{ sku: "NOICHIEN2L", name: "Mini cooker" } as TrackedProduct} />);
+  render(<Goals campaignId="CD002" product={{ sku: "NOICHIEN2L", name: "Mini cooker", mode: "model" } as TrackedProduct} />);
   expect(screen.getByLabelText("Goal quantity scope")).toHaveValue("campaign");
   const props = JSON.parse(screen.getByTestId("planner").textContent!);
   expect(props.campaignIds).toEqual(["CD002"]);
@@ -15,7 +15,7 @@ it("keeps the campaign scope when arriving from CD002 despite an existing produc
 });
 
 it("keeps the existing product workflow without a campaign link", () => {
-  render(<Goals product={{ sku: "NOICHIEN2L", name: "Mini cooker" } as TrackedProduct} />);
+  render(<Goals product={{ sku: "NOICHIEN2L", name: "Mini cooker", mode: "model" } as TrackedProduct} />);
   expect(screen.getByLabelText("Goal quantity scope")).toHaveValue("product");
   const props = JSON.parse(screen.getByTestId("planner").textContent!);
   expect(props.focusSku).toBe("NOICHIEN2L");
