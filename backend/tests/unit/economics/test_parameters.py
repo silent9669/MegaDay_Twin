@@ -28,7 +28,18 @@ def conn() -> duckdb.DuckDBPyConnection:
 
 
 def test_catalogue_matches_plan() -> None:
-    assert len(CATALOGUE) == 15
+    assert len(CATALOGUE) == 17  # economics + the two bounded forecast-selection controls
+    for key, default, lo, hi in (
+        ("forecast_min_history_days", 14, 14, 90),
+        ("forecast_sparse_adi", 1.32, 1, 7),
+    ):
+        policy = CATALOGUE[key]
+        assert (policy.default, policy.min, policy.max) == (default, lo, hi)
+        assert policy.editable_by == {"lead"} and policy.scopes == {"shop"}
+        with pytest.raises(ParamOutOfRange):
+            validate_value(key, lo - 1)
+        with pytest.raises(ParamOutOfRange):
+            validate_value(key, hi + 1)
     d = CATALOGUE["platform_fee_rate"]
     assert (d.default, d.min, d.max, d.scopes, d.editable_by) == (0.12, 0, 0.3, {"shop"}, {"lead"})
     assert CATALOGUE["reduce_budget_options"].default_list == [0.3, 0.5]

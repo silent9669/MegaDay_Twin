@@ -223,11 +223,16 @@ export class AccountWorkspace {
       if (!input.products.some(product => product.id === label.productId)) return fail(422, "Product is not in the current inventory.");
       const run = archive?.data.run as LabelRun | undefined;
       if (run?.status === "running" && Date.parse(run.startedAt) + LABEL_LEASE_MS > Date.now()) return fail(409, "Wait for labeling to finish before changing a label.");
-      const results = [...(run?.results ?? []).filter(result => result.productId !== label.productId), label];
+        const reusable = run?.sourceRevision === sources.revision && run.sourceFingerprint === await sourceFingerprint(sources.data);
+        const results = [...(reusable ? run.results : []).filter(result => result.productId !== label.productId), label];
       const overrides = [...(archive?.data.overrides ?? []).filter((item: ProductLabel) => item.productId !== label.productId), label];
       const candidate: LabelRun = { id: crypto.randomUUID(), sourceRevision: sources.revision, sourceFingerprint: input.sourceFingerprint,
         context: input.context ?? { market: "Vietnam", asOf: new Date().toISOString().slice(0, 10), evidence: [] }, provider: run?.provider ?? "manual",
         status: "partial", startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), error: null, results };
+        if (candidate.context && (sources.data as SourcePack).files.some(file => file.replay))
+          candidate.context.eventHour = Math.max(playbackHour(this.read("sandbox")?.data), reusable ? run?.context?.eventHour ?? 0 : 0);
+        if (candidate.context && reusable && run.context && run.context.asOf > candidate.context.asOf)
+          candidate.context.asOf = run.context.asOf;
       const labeledPack = await this.labeledSources(sources.data, results);
       candidate.sourceRevision++;
       candidate.sourceFingerprint = await sourceFingerprint(labeledPack);

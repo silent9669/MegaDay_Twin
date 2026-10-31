@@ -804,3 +804,34 @@ to run a scenario. Chat performs no backend mutations. Review still requires a
 campaign choice, valid time window, unresolved-item acknowledgement and explicit
 confirmation. A stale conversation or changed scope during generation prevents
 saving the late reply (409). Failed calls retain the user's saved message for retry.
+
+### Shared demand labels (migration 7)
+
+`GET /api/v1/demand-labels` (viewer) returns `{data:{version:1,labels:{[canonicalSku]:evidence}},meta}`.
+Only labels matching the latest successfully imported inventory and an unambiguous resolved
+inventory alias are active. Evidence includes `run_id`, `source_revision`, `source_fingerprint`,
+`inventory_sha256`, `provider`, `market`, `assessed_on`, `completed_at`, `raw_code`, `sku_id`,
+`label`, `reason`, `manual`, `evidence_through` and optional nullable `confidence` (an AI support score, not calibrated accuracy).
+
+`POST /api/v1/demand-labels/sync` (operator/lead) accepts the same run/source fields plus
+`labels:[{raw_code,name,label,reason,confidence?,manual?}]`, and optional `evidence_through`.
+Labels are `Trendy|Seasonal|Normal`. Manual provenance survives synchronization.
+Duplicate codes are invalid; unresolved or many-to-one SKU matches return `pending`.
+The response is `{data:{version:1,run_id,accepted:[{raw_code,sku_id,entry_id}],pending:[{raw_code,reason}]},meta}`.
+The source hash must match current inventory (409 otherwise), market must match the Vietnam
+calendar, completion cannot be future-dated, and assessment/evidence dates must be bounded
+by the received inventory's business date (including demo/replay dates). Forecasts before
+the evidence cutoff cannot use the label. Retrying identical content is
+idempotent. Newly inserted labels request recomputation; they do not execute ads or apply goals.
+
+The authenticated web gateway `GET|POST /api/product-labels/sync` resolves the saved account
+snapshot itself; browser-supplied labels and canonical mappings are not accepted as input.
+It reports `synced|pending|stale|empty|unconfigured`, a message and counts where available.
+Data Studio attempts sync after source import; Warehouse supports an explicit safe retry.
+
+`GET /api/v1/skus/{sku}` adds `demand` with current primary label, provenance, historical
+profile and saved model selection. Forecasts and immutable calculation traces add
+`model_selection`: policy version, forecast origin, primary label used, evidence, actual
+model ID, historical-test selection flag, independent new/sparse/insufficient-data flags,
+thresholds and reasons. Old results without this evidence remain readable. See
+[selection policy](../quyet-dinh/M6-nhan-va-chon-mo-hinh.md) for temporal and validation rules.

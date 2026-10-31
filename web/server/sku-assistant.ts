@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { demandSummarySchema } from "../src/planner/demand-contract";
 import { assistantSkuSchema, assistantTurnSchema, type AssistantContext, type AssistantSkuList, type AssistantTurnResponse } from "../src/planner/assistant-contract";
 import { goalInterpretResponseSchema, type GoalDraft } from "../src/planner/goal-contract";
 import { interpretGoal, ruleGoalDraft } from "./goal-interpret";
@@ -7,6 +8,7 @@ import type { PMEnv } from "./pm";
 
 const numeric = z.number().finite().nullable().optional();
 const skuData = z.object({
+  demand: demandSummarySchema.optional(),
   sku: z.string(), name: z.string(), variant: z.string().default(""), stock_available: numeric,
   sold_today_units: numeric, price_effective_vnd: numeric, contribution_per_unit_vnd: numeric,
   demand_group: z.string().nullable().optional(), as_of: z.string().nullable().optional(),
@@ -85,7 +87,8 @@ export async function loadContext(sku: string, env: PlannerEnv, signal?: AbortSi
   return {
     sku: { sku: row.sku, name: row.name, variant: row.variant, stockAvailable: row.stock_available ?? null,
       soldTodayUnits: row.sold_today_units ?? null, priceEffectiveVnd: row.price_effective_vnd ?? null,
-      contributionPerUnitVnd: row.contribution_per_unit_vnd ?? null, demandGroup: row.demand_group ?? null },
+      contributionPerUnitVnd: row.contribution_per_unit_vnd ?? null, demandGroup: row.demand_group ?? null,
+      ...(row.demand ? { demand: row.demand } : {}) },
     campaigns, dataAsOf: row.as_of ?? asOf(result), source: row.source ?? null, canPlan, notices,
     opening: `Với ${row.name} (${row.sku}), buổi sale này bạn muốn ưu tiên bán đủ số lượng, xả hàng, lợi nhuận hay hiệu quả chi? Bạn có thể mô tả mục tiêu bằng lời.`,
   };

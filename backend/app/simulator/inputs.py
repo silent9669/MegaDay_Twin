@@ -209,6 +209,9 @@ def load_forecasts(
 ) -> dict[str, ForecastResult]:
     """Latest stored forecast with ``origin = start`` covering the horizon; missing ones are
     computed with the champion models (``forecast_skus``, persisted)."""
+    from app.forecast.demand import forecast_signature
+
+    signature = forecast_signature(conn, start)
     out: dict[str, ForecastResult] = {}
     rows = conn.execute(
         "SELECT sku_id, payload FROM forecasts WHERE list_contains(?, sku_id) AND origin = ?"
@@ -217,7 +220,9 @@ def load_forecasts(
         [list(sku_ids), start, horizon],
     ).fetchall()
     for sku, payload in rows:
-        out[str(sku)] = ForecastResult.model_validate_json(payload)
+        result = ForecastResult.model_validate_json(payload)
+        if result.selection_signature == signature:
+            out[str(sku)] = result
     missing = [s for s in sku_ids if s not in out]
     if missing:
         from app.forecast import service

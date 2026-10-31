@@ -1,4 +1,5 @@
 import type { Dist } from '../api/types';
+import type { ModelSelection } from './demand-contract';
 
 /** Immutable snapshot supplied by the simulator, never reconstructed by the UI. */
 export type CalculationTrace = {
@@ -11,7 +12,7 @@ export type CalculationTrace = {
   sources: {
     batches_truncated?: boolean;
     batches: { batch_id: string; source_type: string; file_name: string; file_sha256: string | null; as_of: string | null }[];
-    forecasts: { forecast_id: string; sku_id: string; model_id: string; origin: string | null; data_as_of: string | null; panel_version: unknown }[];
+    forecasts: { forecast_id: string; sku_id: string; model_id: string; origin: string | null; data_as_of: string | null; panel_version: unknown; model_selection?: ModelSelection }[];
     parameters: { key: string; value: unknown; version: unknown; scope: string | null; scope_id: string | null; set_by: string | null }[];
     iroas: { source: string; estimate_id: string | null; confidence: string | null; delta: number; spend_scale: number };
   };

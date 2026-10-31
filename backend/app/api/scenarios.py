@@ -31,9 +31,10 @@ from typing import Annotated, Any, Literal
 
 import duckdb
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PlainSerializer
 
 from app.api.common import MAX_LIMIT, compute_state, data_as_of, paginate, parse_json
+from app.api.demand_view import trace_view
 from app.api.deps import Conn, Operator, Viewer, audit, publish
 from app.api.schemas import Envelope, LocalDatetime, Meta, Page, SourceRef
 from app.core.errors import DataQualityError, NotFound, ParamOutOfRange, ValidationFailed
@@ -127,7 +128,9 @@ class ScenarioRun(BaseModel):
     timings_ms: dict[str, float] = Field(default_factory=dict)
     requested_by: str | None = None
     created_at: LocalDatetime | None = None
-    calculation_trace: dict[str, Any] | None = None
+    calculation_trace: Annotated[
+        dict[str, Any] | None, PlainSerializer(trace_view, when_used="json")
+    ] = None
 
 
 # ---------------------------------------------------------------------- mapping
