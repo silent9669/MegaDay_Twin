@@ -142,6 +142,7 @@ class ActionRun:
     demand_by_sku: dict[str, FloatArr]
     first_lost_t: dict[str, IntArr]
     contribution_by_sku: dict[str, FloatArr] = field(default_factory=dict)
+    revenue_by_sku: dict[str, FloatArr] = field(default_factory=dict)
 
 
 @dataclass
@@ -263,7 +264,15 @@ def simulate(
     d_combo = np.stack([demand[s.sku_id] for s in cs]) if cs else np.zeros((0, n_a, samples, t_len))
     m_single = np.stack([s.m for s in js]) if js else np.zeros((0, t_len))
     m_combo = np.stack([s.m for s in cs]) if cs else np.zeros((0, t_len))
-    res = simulate_stock(setup, d_single, d_combo, m_single, m_combo)
+    res = simulate_stock(
+        setup,
+        d_single,
+        d_combo,
+        m_single,
+        m_combo,
+        np.array([s.price for s in js]),
+        np.array([s.price for s in cs]),
+    )
 
     v = np.array([s.leftover_value for s in js], dtype=np.float64)
     leftover_val = np.einsum("j,jas->as", v, res.stock_end) if js else np.zeros((n_a, samples))
@@ -303,6 +312,10 @@ def simulate(
                 lost_by_sku=lost_by,
                 demand_by_sku={k: d[ai].sum(axis=1) for k, d in demand.items()},
                 first_lost_t=first,
+                revenue_by_sku={
+                    **{s.sku_id: res.revenue_single[j, ai] for j, s in enumerate(js)},
+                    **{s.sku_id: res.revenue_combo[c, ai] for c, s in enumerate(cs)},
+                },
                 contribution_by_sku={
                     **{s.sku_id: res.contribution_single[j, ai] for j, s in enumerate(js)},
                     **{s.sku_id: res.contribution_combo[c, ai] for c, s in enumerate(cs)},
