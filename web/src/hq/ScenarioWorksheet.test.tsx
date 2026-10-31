@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import { fireEvent, render as testingRender, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { ScenarioWorksheet } from "./ScenarioWorksheet";
 import { exampleWorksheet, type Worksheet } from "./types";
@@ -40,3 +42,5 @@ it("explains actual inputs, source disagreements, results and break-even without
   expect(calculation).toHaveTextContent("Available stock cannot cover that threshold.");
   expect(calculation).toHaveTextContent("600,000 − 540,000 − 3,000 − 12,000 = 45,000 VND");
 });
+
+function render(ui: ReactElement) { return testingRender(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>{ui}</QueryClientProvider>); }

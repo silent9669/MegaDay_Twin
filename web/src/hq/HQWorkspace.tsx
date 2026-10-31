@@ -26,6 +26,7 @@ import {
   type Worksheet,
 } from "./types";
 import { ScenarioWorksheet } from "./ScenarioWorksheet";
+import type { ModelComparison as ComparisonDraft } from "./model-comparison";
 import { ModelComparison } from "./ModelComparison";
 import { ProductDetails } from "./ProductDetails";
 import { analyzeWithAI } from "../city/analysis-context";
@@ -84,6 +85,7 @@ export function HQWorkspace({
   const [worksheetDrafts, setWorksheetDrafts] = useState<
     Record<string, Worksheet>
   >({});
+  const [comparisonDrafts, setComparisonDrafts] = useState<Record<string, ComparisonDraft | null>>({});
   const inventory = useMemo(() => sourceView(pack, 24).stock, [pack]);
   const active =
     data.tracked.find((p) => productKey(p) === data.active) ?? null;
@@ -482,6 +484,8 @@ export function HQWorkspace({
                         pack={pack}
                         stock={selectedStock}
                         revision={revision}
+                        model={comparisonDrafts[activeKey] ?? null}
+                        onModelChange={value => setComparisonDrafts(previous => ({ ...previous, [activeKey]: value }))}
                         saved={
                           worksheetDrafts[activeKey] ??
                           data.worksheets[activeKey]
