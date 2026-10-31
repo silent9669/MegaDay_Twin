@@ -40,7 +40,7 @@ from app.economics.breakeven import (
     make_zone_bar,
     uniform_breakeven,
 )
-from app.economics.goals import Outcome, Selection, select_actions
+from app.economics.goals import Outcome, Selection, select_actions, validate_goal_params
 from app.simulator.constraints import MUST_RUN
 from app.simulator.engine import ActionRun, Perturb, SimRun, stockout_hour
 from app.simulator.inputs import SimInputs
@@ -123,13 +123,21 @@ def select(run: SimRun) -> Selection:
     inp = run.inputs
     g = inp.goal
     p = inp.params
-    max_loss = float(g.params.get("max_loss_vnd", p.num("max_loss_vnd")))
+    validate_goal_params(g.params)
+    max_loss = (
+        float(g.params["max_loss_vnd"])
+        if "max_loss_vnd" in g.params
+        else p.num("max_loss_vnd")
+        if g.kind == "clear_stock"
+        else None
+    )
     return select_actions(
         g.kind,
         [Outcome(r.action.key, r.feasible, r.j, r.units_sold, r.spend) for r in run.runs],
         target_units=g.target_units,
         sell_target_prob=float(g.params.get("sell_target_prob", p.num("sell_target_prob"))),
         max_loss_vnd=max_loss,
+        max_spend_vnd=float(g.params["max_spend_vnd"]) if "max_spend_vnd" in g.params else None,
         min_marginal_return=float(
             g.params.get("min_marginal_return", p.num("min_marginal_return"))
         ),
@@ -176,6 +184,17 @@ def zone_bar(run: SimRun, resim: Resim) -> tuple[ZoneBar | None, str | None]:
         )
         by = {**extra.by_key(), **by}
     c, p = by["continue"], by["pause"]
+    spend_limit = inp.goal.params.get("max_spend_vnd")
+    loss_limit = inp.goal.params.get("max_loss_vnd")
+    if any(
+        (spend_limit is not None and not np.all(action.spend <= spend_limit))
+        or (loss_limit is not None and float(np.mean(action.j)) < -loss_limit)
+        for action in (c, p)
+    ):
+        return (
+            None,
+            "Không hiển thị thanh chạy/dừng vì một lựa chọn vượt giới hạn chi hoặc lỗ đã xác nhận.",
+        )
     js = inp.stock_skus
     restock = inp.restock_matrix().sum(axis=1)
     n_j = np.array([s.stock0 for s in js]) + restock
@@ -498,7 +517,14 @@ def build_recommendation(
         keep = run.by_key().get("pause")
         if keep is not None and keep.feasible and keep is not best:
             partner = keep
-    flips = flip_conditions(run, best, partner, resim) if (with_flips and partner) else []
+    has_goal_limits = any(k in inp.goal.params for k in ("max_spend_vnd", "max_loss_vnd"))
+    # Existing economic flip thresholds do not re-check goal limits after a perturbation.
+    # Do not advertise those thresholds as actionable under a confirmed hard constraint.
+    flips = (
+        flip_conditions(run, best, partner, resim)
+        if with_flips and partner and not has_goal_limits
+        else []
+    )
 
     # reasons
     reasons = []

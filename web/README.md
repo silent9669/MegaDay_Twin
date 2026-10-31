@@ -209,6 +209,35 @@ Kiểm tra với `npm run check`. Browser QA: chạy Vite cổng 5186 rồi
 dùng API giả lập; test server dùng SQLite thật với provider giả, không gọi tool
 hay ghi production. Ảnh và kết quả nằm trong `qa/runs/product-labels/` ở gốc repo.
 
+## Mục tiêu buổi sale (Task 1)
+
+Mở `/sale-planner` từ sidebar hoặc MegaDay HQ. Nhập mong muốn, phân tích,
+chỉnh thông số và chọn chiến dịch, sau đó xác nhận để lưu mục tiêu đang áp dụng
+và chạy mô phỏng. Bản đầu hỗ trợ **một chiến dịch, 1–72 giờ tròn**; bốn mục tiêu
+là lợi nhuận, số lượng bán, xả hàng và hiệu quả chi. Ngân sách là tổng cho cả kỳ.
+Thao tác này không thực thi thay đổi quảng cáo. Sửa thông số hủy xác nhận và
+ẩn kết quả cũ. Nếu đã lưu mục tiêu nhưng mô phỏng lỗi, nút thử lại dùng mục tiêu đó.
+
+Gateway dùng `DATA_BACKEND_URL` (gốc API, ví dụ `https://backend.example/api/v1/`),
+`DATA_BACKEND_USER`, `DATA_BACKEND_ROLE=lead` như kết nối Data Studio. Backend
+phải có `/goal-planner/capabilities` phiên bản 1 và dữ liệu đã ingest. Chỉ dùng
+backend trên mạng tin cậy theo mô hình xác thực hiện có. Frontend gọi trực tiếp
+gateway cùng origin; không dùng fixture để thay kết quả thật. Backend chưa nối,
+chưa nâng cấp hoặc không đủ quyền sẽ có thông báo và không cho chạy.
+
+Diễn giải dùng cấu hình `OPENAI_API_KEY` và bộ chọn model sẵn có của Ask your PM.
+Khi chưa cấu hình/lỗi, chuyển sang quy tắc có thông báo hoặc nhập thủ công.
+AI chỉ trích thông số mục tiêu; các con số dự báo và đề xuất do simulator tính.
+Yêu cầu chưa hỗ trợ phải được người dùng kiểm tra và đồng ý loại khỏi lần tính.
+Mức lỗ là giới hạn **kỳ vọng J**, không phải bảo đảm không lỗ; J có giá trị tồn
+cuối kỳ nên không đồng nhất với lợi nhuận kế toán.
+
+Kiểm chứng: `npm.cmd run check`; chạy Vite cổng 5186 rồi
+`node qa/studio/sale-planner.mjs` (Windows có thể đặt `STUDIO_QA_CHANNEL=msedge`).
+Browser QA dùng API giả lập; ảnh/kết quả ở `qa/runs/sale-planner/`.
+Ảnh review (số minh họa từ API giả lập): [desktop](../docs/images/sale-planner-desktop.png),
+[mobile](../docs/images/sale-planner-mobile.png).
+
 ## Cấu trúc
 
 ```

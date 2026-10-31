@@ -633,3 +633,49 @@ and persists the reply before returning. It no longer accepts client-supplied
 conversation context. Failed generation leaves the saved user message available
 for retry. See [account workspace](../city-demo/account-workspace.md) for schema
 bounds, synchronization and frontend/backend boundaries.
+
+## Sale goal planner extension (Task 1)
+
+Worker routes require the existing authenticated account; POSTs require the
+same-origin mutation guard. Backend identity remains server-configured through
+`DATA_BACKEND_USER/ROLE`; it is never accepted from request JSON.
+
+- `GET /api/sale-planner/context`: `{backendConfigured, canCreateGoals,
+  referenceTime, dataAsOf, campaigns:[{id,name}], notice}`. Checks backend
+  capabilities and `me` permissions; reads up to 2,000 campaigns with pagination.
+- `POST /api/sale-planner/interpret`: `{text}` (1–4,000 characters) returns
+  `{draft, method:"ai"|"rules", notices}`. Uses the PM rate limit. No goal or
+  scenario is created. AI failure produces an explicit rules fallback.
+- `POST /api/sale-planner/run`: `{campaignId, draft, confirmed:true,
+  acknowledgedUnresolved:boolean, goalId?:string}` saves a campaign goal and
+  calls the real scenario API. Returns `{goalId, scenario:Envelope<ScenarioRun>}`.
+  Errors contain `{error:{code,message,details?}, goalId:null|string,
+  stage:"validation"|"goal"|"simulation"}`. A simulation error can follow a
+  successful goal save; clients must retain the returned ID for retry.
+
+`GoalDraft` includes the original `text`, nullable `kind` (`profit`, `sell_target`,
+`clear_stock`, `efficiency`), `targetUnits`, `start`, `deadline`, `maxSpendVnd`,
+`maxLossVnd`, `sellTargetProbability`, `minMarginalReturn`, and `unresolved:string[]`.
+Run requires absolute timezone-qualified start/deadline on whole hours, duration
+1–72 hours, a selected kind, positive integer target for sell_target, and explicit
+acknowledgement of excluded requirements. Probability/target apply only to
+sell_target; marginal return only to efficiency. Inapplicable supplied fields are
+rejected, never silently dropped. Numeric limits must be finite and nonnegative;
+probability is in (0,1]. Null means not explicitly supplied; zero is meaningful.
+
+Python adds authenticated `GET /api/v1/goal-planner/capabilities`, returning
+`{data:{version:1,constraints:["max_spend_vnd","max_loss_vnd","sell_target_prob",
+"min_marginal_return"]},meta}`. Worker refuses unsupported backends before writes.
+No database migration: confirmed constraints use existing goal `params`.
+`max_spend_vnd` caps total simulated spend over the requested horizon, including
+efficiency fallback candidates. `max_loss_vnd` bounds expected J for every kind;
+clear_stock keeps its existing default when absent. Existing goal API validates
+numeric parameters and rejects conflicting constraints/params values.
+
+Goal params also retain `planner_request_hash`, `planner_source_text`,
+`planner_excluded_requirements`, `planner_start` for audit/recovery. Retry reuses
+an active goal only when campaign/kind/target/deadline, hash and all confirmed
+numeric parameters match; otherwise 409. When no ID was received, Worker can
+recover the matching active goal. This handles sequential retries, not a
+transactional idempotency guarantee for simultaneous independent requests.
+Scenario runs use 1,000 samples and seed 20261111. No fixture fallback or ad execution.

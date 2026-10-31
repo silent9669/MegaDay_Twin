@@ -18,7 +18,8 @@ cheapest feasible action, normally ``pause``).
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -57,9 +58,35 @@ class Goal(BaseModel):
     version: int = 1
 
 
-def _validate(goal: Goal) -> None:
-    if goal.kind == "sell_target" and (goal.target_units is None or goal.target_units <= 0):
+def validate_goal_params(params: Mapping[str, Any]) -> None:
+    """Validate the numeric constraints consumed by the simulator, without coercion."""
+    for key in ("max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"):
+        if key not in params:
+            continue
+        value = params[key]
+        try:
+            finite = isinstance(value, (int, float)) and math.isfinite(value)
+        except OverflowError:
+            finite = False
+        if (
+            isinstance(value, bool)
+            or not finite
+            or value < 0
+            or (key == "sell_target_prob" and not 0 < value <= 1)
+        ):
+            raise ValidationFailed(f"Ràng buộc {key} không hợp lệ.", key=key)
+
+
+def validate_target_units(value: Any, *, required: bool) -> None:
+    if (required and value is None) or (
+        value is not None and (isinstance(value, bool) or not isinstance(value, int) or value <= 0)
+    ):
         raise ValidationFailed("Mục tiêu bán đủ số lượng cần số sp mục tiêu (> 0).")
+
+
+def _validate(goal: Goal) -> None:
+    validate_target_units(goal.target_units, required=goal.kind == "sell_target")
+    validate_goal_params(goal.params)
     who = goal.confirmed_by.strip().lower()
     if not who or who.startswith("ai"):
         raise ValidationFailed("Mục tiêu phải do người dùng xác nhận; AI không tự tạo mục tiêu.")
@@ -77,6 +104,7 @@ def create_goal(
     params: dict[str, Any] | None = None,
     goal_id: str | None = None,
 ) -> Goal:
+    validate_target_units(target_units, required=kind == "sell_target")
     now = utcnow()
     goal = Goal(
         goal_id=goal_id or new_id("goal"),
@@ -202,9 +230,17 @@ def select_actions(
     *,
     target_units: int | None = None,
     sell_target_prob: float = 0.8,
-    max_loss_vnd: float = 0.0,
+    max_loss_vnd: float | None = None,
     min_marginal_return: float = 1.0,
+    max_spend_vnd: float | None = None,
 ) -> Selection:
+    constraints = {"sell_target_prob": sell_target_prob, "min_marginal_return": min_marginal_return}
+    if max_loss_vnd is not None:
+        constraints["max_loss_vnd"] = max_loss_vnd
+    if max_spend_vnd is not None:
+        constraints["max_spend_vnd"] = max_spend_vnd
+    validate_goal_params(constraints)
+    validate_target_units(target_units, required=goal_kind == "sell_target")
     n = len(outcomes)
     ej = [float(np.mean(o.j)) for o in outcomes]
     es = [float(np.mean(o.sold)) for o in outcomes]
@@ -213,6 +249,19 @@ def select_actions(
     eligible = list(feasible)
     p_target: list[float | None] = [None] * n
     notes: dict[int, str] = {}
+    # The total spend limit applies to every simulated outcome, not just its mean
+    # or one day's budget. Exclude these actions from fallback and references too.
+    for i, outcome in enumerate(outcomes):
+        if max_spend_vnd is not None and not np.all(outcome.spend <= max_spend_vnd):
+            feasible[i] = eligible[i] = False
+            notes[i] = f"Chi quảng cáo trong kỳ mô phỏng vượt giới hạn {max_spend_vnd:,.0f}đ"
+        if (
+            max_loss_vnd is not None
+            and goal_kind != "clear_stock"
+            and (not math.isfinite(ej[i]) or ej[i] < -max_loss_vnd)
+        ):
+            feasible[i] = eligible[i] = False
+            notes[i] = f"Lỗ dự kiến {-ej[i]:,.0f}đ vượt mức chấp nhận {max_loss_vnd:,.0f}đ"
     metric: Literal["objective", "units_sold"] = "objective"
     value = ej
     fallback_cheapest = False
@@ -225,13 +274,18 @@ def select_actions(
             p_target[i] = p
             if p < sell_target_prob:
                 eligible[i] = False
-                notes[i] = f"Xác suất bán đủ {target_units} sp là {p:.0%} < {sell_target_prob:.0%}"
+                notes.setdefault(
+                    i, f"Xác suất bán đủ {target_units} sp là {p:.0%} < {sell_target_prob:.0%}"
+                )
     elif goal_kind == "clear_stock":
         metric, value = "units_sold", es
+        loss_limit = max_loss_vnd if max_loss_vnd is not None else 0.0
         for i in range(n):
-            if ej[i] < -max_loss_vnd:
+            if ej[i] < -loss_limit:
                 eligible[i] = False
-                notes[i] = f"Lỗ dự kiến {-ej[i]:,.0f}đ vượt mức chấp nhận {max_loss_vnd:,.0f}đ"
+                notes.setdefault(
+                    i, f"Lỗ dự kiến {-ej[i]:,.0f}đ vượt mức chấp nhận {loss_limit:,.0f}đ"
+                )
     elif goal_kind == "efficiency":
         fallback_cheapest = True
         for i in range(n):
@@ -266,7 +320,7 @@ def select_actions(
     none = not ranked
     if none and fallback_cheapest:
         cheap = sorted((i for i in range(n) if feasible[i]), key=lambda i: (sp[i], -ej[i]))
-        ranked, none = cheap[:1], False
+        ranked, none = cheap[:1], not bool(cheap)
     runner_meets = True
     if ranked and not none and len(ranked) < 2:
         # runner-up = the best feasible action outside the eligible set (it misses the goal)

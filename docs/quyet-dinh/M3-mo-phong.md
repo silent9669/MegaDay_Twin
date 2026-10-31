@@ -184,6 +184,34 @@ Chạy `run_simulation` trực tiếp trên DB riêng, dựng như `eval/demo_wh
 - Ngày thường không còn "27/31 pause chỉ vì giữ hàng". Còn 16/31 pause, gần hết `undetermined` (chiến dịch nhỏ, chênh < 200k).
 - CD007, CD008, CD033 không chi ads trong horizon, nên mọi hành động trùng hệt nhau. Sau khi bỏ bản sao (lỗi 2), lượt quét ra "recommend continue" không có runner-up. Đã sửa ngay sau lượt quét: không có runner-up vì mọi phương án trùng nhau → `undetermined`, lý do "Các phương án cho kết quả như nhau…" (`test_all_actions_identical_is_undetermined`). Quét không chạy lại sau sửa này.
 
+### Task 1 — nhập mục tiêu buổi sale
+
+- Thêm luồng nhập mô tả → diễn giải thành thông số có thể sửa → xác nhận → lưu
+  mục tiêu đang áp dụng và mô phỏng. Một chiến dịch, thời gian 1–72 giờ tròn,
+  dùng bộ hành động và dữ liệu hiện có; chưa phân bổ ngân sách đa chiến dịch,
+  chưa thay giá/voucher hay tự thực thi quảng cáo.
+- AI chỉ diễn giải mong muốn. Số liệu do simulator trả về; không có AI/key thì
+  quy tắc nhận diện và nhập thủ công vẫn dùng được. Ngày tương đối không được
+  tự suy ra thành lịch chạy. Các yêu cầu không biểu diễn được phải được hiển thị
+  để người dùng sửa hoặc đồng ý loại khỏi lần mô phỏng.
+- Tổng ngân sách `max_spend_vnd` được kiểm tra trên mọi mẫu chi của phương án,
+  áp dụng cả fallback hiệu quả chi; loại phương án vượt ngân sách khỏi best và
+  runner-up. Không biến ngân sách/ngày thành tổng ngân sách một cách ngầm định.
+- `max_loss_vnd` giới hạn E[J] cho mọi loại mục tiêu. Giữ default clear_stock
+  hiện có; đây không phải bảo đảm mọi kết quả đều không lỗ. Clear_stock có thể
+  giữ phương án không đạt giới hạn lỗ làm đối chiếu với `goal_eligible=false`.
+  Không chọn phương án đó làm best. Ẩn zone bar/flip suggestions có thể mâu thuẫn
+  với giới hạn đã xác nhận.
+- J có giá trị tồn cuối kỳ, không gọi là lợi nhuận kế toán. Kết quả cho mở từng
+  chỉ số xem phân vị, trường dữ liệu và nguồn/tham số; không tuyên bố đã truy vết
+  toàn bộ phép tính xuống từng dòng CSV.
+- Gateway kiểm tra capability phiên bản backend và quyền lead trước khi tạo
+  mục tiêu. Mô phỏng lỗi sau lưu vẫn giữ goal ID; retry kiểm tra nội dung rồi
+  tái sử dụng. Sửa mục tiêu hoặc đổi chiến dịch hủy xác nhận và kết quả cũ.
+- Không có backend thì cho soạn mục tiêu nhưng khóa chạy; không dùng fixture
+  để làm kết quả mô phỏng thật. Kết nối và kiểm thử production là bước triển
+  khai riêng. Không thay đổi DB schema hoặc cơ chế gán nhãn sản phẩm.
+
 ### What-if cho sân khấu (số mới)
 
 - **Nên dùng:** "Chỉ tiêu 97 sp": đổi từ "Chỉ chạy khung giờ" sang "Giảm ngân sách 30%". Đạt 81% so với 57%. Tốn **2,33 tr**. Runner-up là "Chạy tiếp", cũng đạt, nên p = 1,00 có nghĩa thật.
