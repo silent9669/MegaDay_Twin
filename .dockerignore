@@ -1,0 +1,16 @@
+**
+!backend/
+!backend/app/
+!backend/app/**
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/README.md
+!backend/Dockerfile
+!mock-data/
+!mock-data/out/
+!mock-data/out/demo/
+!mock-data/out/demo/*.csv
+!mock-data/out/demo/cau_truc_chien_dich.json
+!mock-data/out/demo/chuong_trinh_sale.json
+**/__pycache__/
+**/*.pyc

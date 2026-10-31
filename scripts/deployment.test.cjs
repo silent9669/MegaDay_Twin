@@ -18,7 +18,9 @@ test('a docs merge still deploys web changes pending since the production commit
 });
 
 for (const [name, files, expected] of [
-  ['docs and backend only', [{ filename: 'README.md' }, { filename: 'backend/app/main.py' }], false],
+  ['docs only', [{ filename: 'README.md' }], false],
+  ['Python backend', [{ filename: 'backend/app/main.py' }], true],
+  ['backend workflow', [{ filename: '.github/workflows/deploy-backend.yml' }], true],
   ['already promoted', [], false],
   ['bundled data', [{ filename: 'mock-data/out/demo/orders.csv' }], true],
   ['deployment workflow', [{ filename: '.github/workflows/deploy.yml' }], true],

@@ -1,0 +1,21 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "megaday-decision-backend",
+  "account_id": "1177b93da7312e51a226b6ecffb1e251",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "containers": [{
+    "class_name": "DecisionBackend",
+    "image": "../../backend/Dockerfile",
+    "image_build_context": "../..",
+    "instance_type": "standard-2",
+    "max_instances": 1
+  }],
+  "durable_objects": { "bindings": [{ "name": "PYTHON", "class_name": "DecisionBackend" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DecisionBackend"] }],
+  "r2_buckets": [{ "binding": "STATE", "bucket_name": "megaday-decision-state" }]
+}

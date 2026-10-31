@@ -32,6 +32,7 @@ web/server/repository-sources.json
 web/public/shop-baseline.json
 web/.dev.vars
 web/.wrangler/
+web/decision-backend/.wrangler/
 qa/runs/
 
 # Regenerated Blender intermediate; ship only the optimized GLB.

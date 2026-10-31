@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment node
+import { describe, expect, it, vi } from "vitest";
 import worker from "../worker";
 import { login, passwordHash, session } from "../server/auth";
 import { createHmac, scryptSync } from "node:crypto";
+import { makeSource } from "./studio/sources";
 const base = {
   DB: { prepare: () => ({ first: async () => ({ ok: 1 }) }) },
   ASSETS: { fetch: async () => new Response("repo-owned app") },
@@ -24,6 +26,51 @@ async function authenticated() {
   return { env, cookie: response.headers.get("set-cookie")!.split(";")[0]! };
 }
 describe("repository-owned deployment", () => {
+  it("sends only shop rows to ingestion; event rows enter through controlled replay", async () => {
+    const { env, cookie } = await authenticated();
+    const source = await makeSource("ton_kho_google_sheet.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nSKU-A,Mug,20\nSKU-A,Mug,7", "test");
+    source.replay = { date: "2026-11-11", hours: [-1, 23], lagHours: 0 };
+    const backend = { fetch: vi.fn(async (request: Request) => {
+      const form = await request.formData();
+      const file = form.get("files") as File;
+      expect(await file.text()).toContain("SKU-A,Mug,20");
+      expect(await file.text()).not.toContain("SKU-A,Mug,7");
+      return Response.json({ data: { batches: [] } }, { status: 201 });
+    }) };
+    const response = await worker.fetch(new Request(origin + "/api/data-backend/import", {
+      method: "POST", headers: { Cookie: cookie, Origin: origin },
+    }), { ...env, DECISION_BACKEND: backend,
+      WORKSPACE: { idFromName: name => name, get: () => ({ fetch: async () => Response.json({ data: { schema: "hackathon.sources.v1", files: [source] } }) }) },
+    });
+    expect(response.status).toBe(201);
+    expect(backend.fetch).toHaveBeenCalledOnce();
+  });
+  it("only calls the private Python service after login and derives identity on the server", async () => {
+    const { env, cookie } = await authenticated();
+    const backend = { fetch: vi.fn(async (request: Request) => {
+      expect(request.headers.get("X-User")).toBe("admin");
+      expect(request.headers.get("X-Role")).toBe("lead");
+      expect(request.headers.has("Cookie")).toBe(false);
+      return Response.json({ data: { db: "ok" } });
+    }) };
+    const configured = { ...env, DECISION_BACKEND: backend };
+    const anonymous = await worker.fetch(new Request(origin + "/api/v1/health"), configured);
+    expect(anonymous.status).toBe(401);
+    expect(backend.fetch).not.toHaveBeenCalled();
+    const response = await worker.fetch(new Request(origin + "/api/v1/health", {
+      headers: { Cookie: cookie, "X-User": "spoofed", "X-Role": "operator" },
+    }), configured);
+    expect(response.status).toBe(200);
+    expect(backend.fetch).toHaveBeenCalledTimes(1);
+    const status = await worker.fetch(new Request(origin + "/api/data-backend/status", {
+      headers: { Cookie: cookie },
+    }), configured);
+    expect(await status.json()).toEqual({ configured: true });
+    expect((await worker.fetch(new Request(origin + "/api/v1/live/control", {
+      method: "POST", headers: { Cookie: cookie, Origin: "https://attacker.test" }, body: "{}",
+    }), configured)).status).toBe(403);
+    expect(backend.fetch).toHaveBeenCalledTimes(1);
+  });
   it("permits the zone-injected Cloudflare analytics script without allowing arbitrary scripts", async () => {
     const response = await worker.fetch(new Request(origin + "/login"), base);
     const policy = response.headers.get("content-security-policy")!;

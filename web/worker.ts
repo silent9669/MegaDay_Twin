@@ -12,12 +12,13 @@ import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
 import type { StudioModelEnv } from "./server/model-json";
 import { explainCampaign } from "./server/campaign-explain";
-import { backendFetch } from "./server/backend-fetch";
+import { backendConnection, backendFetch, type BackendService } from "./server/backend-fetch";
 import { plannerContext, runSalePlan, activeSalePlan, applySalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
 import { sourceText } from "./src/studio/source-text";
 import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
+import { sourceLayer } from "./src/studio/replay";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
   PMEnv & StudioModelEnv & {
@@ -33,6 +34,7 @@ export type Env = AccessEnv &
     DATA_BACKEND_URL?: string;
     DATA_BACKEND_USER?: string;
     DATA_BACKEND_ROLE?: string;
+    DECISION_BACKEND?: BackendService;
   };
 async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url),
@@ -75,6 +77,8 @@ async function handle(request: Request, env: Env): Promise<Response> {
     );
   }
   if (path.startsWith("/api/")) {
+    // Only derive identity after the existing session gate. Never forward client role headers.
+    if (env.DECISION_BACKEND) env = { ...env, DATA_BACKEND_USER: account || "workspace", DATA_BACKEND_ROLE: "lead" };
     if (!["GET", "HEAD"].includes(request.method) && !sameOrigin(request))
       return fail(403, "Request not allowed.");
     if (
@@ -161,33 +165,21 @@ async function handle(request: Request, env: Env): Promise<Response> {
       );
     }
     if (path === "/api/data-backend/status")
-      return Response.json({ configured: !!env.DATA_BACKEND_URL });
+      return Response.json({ configured: !!backendConnection(env) });
     if (path.startsWith("/api/v1/") || path === "/api/data-backend/import") {
-      if (
-        !env.DATA_BACKEND_URL ||
-        !env.DATA_BACKEND_USER ||
-        !env.DATA_BACKEND_ROLE
-      )
+      const connection = backendConnection(env);
+      if (!connection)
         return fail(
           503,
           "Python backend is not connected. Source workspace is still saved.",
         );
-      const base = new URL(
-        env.DATA_BACKEND_URL.endsWith("/")
-          ? env.DATA_BACKEND_URL
-          : `${env.DATA_BACKEND_URL}/`,
-      );
-      if (
-        base.protocol !== "https:" &&
-        !["localhost", "127.0.0.1"].includes(base.hostname)
-      )
-        return fail(503, "Backend URL must use HTTPS.");
+      const { base, user, role, service } = connection;
       const headers = new Headers({
-        "X-User": env.DATA_BACKEND_USER,
-        "X-Role": env.DATA_BACKEND_ROLE,
+        "X-User": user,
+        "X-Role": role,
       });
       if (path === "/api/data-backend/import") {
-        if (request.method !== "POST" || env.DATA_BACKEND_ROLE === "viewer")
+        if (request.method !== "POST" || role === "viewer")
           return fail(403, "Import requires an assigned operator.");
         if (!env.WORKSPACE) return fail(503, "Workspace unavailable.");
         const stored = await env.WORKSPACE.get(
@@ -195,7 +187,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
         ).fetch(new Request(new URL("/api/workspace/sources", url)));
         const doc = (await stored.json()) as { data: SourcePack };
         const form = new FormData();
-        const supported = (await withoutDemandLabels(doc.data)).files.filter(f => f.kind !== "general");
+        // The Python replay owns event visibility; never ingest future event rows.
+        const shop = { ...doc.data, files: await sourceLayer(doc.data.files, "shop") };
+        const supported = (await withoutDemandLabels(shop)).files.filter(f => f.kind !== "general");
         if (!supported.length) return fail(422, "Import a supported business table first.");
         for (const f of supported)
           form.append(
@@ -209,7 +203,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
           method: "POST",
           headers,
           body: form,
-        });
+        }, service);
       }
       const relative = path.slice("/api/v1/".length);
       if (relative.includes("..") || !/^[\w/.-]+$/.test(relative))
@@ -223,7 +217,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
         body: ["GET", "HEAD"].includes(request.method)
           ? undefined
           : request.body,
-      });
+      }, service);
     }
     return fail(404, "API route not found.");
   }
