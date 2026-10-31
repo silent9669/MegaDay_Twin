@@ -1,5 +1,5 @@
 .sale-planner {
-  --planner-muted: #4e665c;
+  --planner-muted: var(--city-muted, #4e665c);
   --planner-warning: #735412;
   --planner-warning-bg: #fff8e5;
   --planner-error: #963f31;
@@ -37,10 +37,10 @@
 .sale-planner .planner-primary:hover:not(:disabled) { background: #274f40; }
 .sale-planner :focus-visible { outline: 3px solid var(--city-green, #326752); outline-offset: 4px; }
 .planner-layout { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 24px; align-items: start; max-width: 1440px; margin: auto; }
-.planner-card { border: 1px solid var(--city-line, #dce4dc); border-radius: 14px; padding: clamp(18px, 2vw, 28px); background: white; min-width: 0; }
+.planner-card { border: 1px solid var(--city-line, #dce4dc); border-radius: 14px; padding: clamp(18px, 2vw, 28px); background: var(--city-paper, white); min-width: 0; }
 .sale-planner fieldset { min-width: 0; margin: 0; padding: 0; border: none; }
 .sale-planner label { display: block; font-weight: 550; font-size: 14px; margin: 16px 0 6px; }
-.sale-planner input:not([type="checkbox"]), .sale-planner textarea, .sale-planner select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #9bad9f; border-radius: 7px; padding: 10px 12px; background: white; color: inherit; font: inherit; margin-top: 5px; }
+.sale-planner input:not([type="checkbox"]), .sale-planner textarea, .sale-planner select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #9bad9f; border-radius: 7px; padding: 10px 12px; background: var(--city-paper, white); color: inherit; font: inherit; margin-top: 5px; }
 .sale-planner textarea { resize: vertical; display: block; }
 .sale-planner input::placeholder, .sale-planner textarea::placeholder { color: var(--planner-muted); opacity: 1; }
 .sale-planner .planner-help { display: block; font-size: 12px; color: var(--planner-muted); font-weight: 400; margin-top: 8px; }

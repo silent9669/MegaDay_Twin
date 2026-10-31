@@ -365,6 +365,3 @@
 .hq-goal-context { margin-bottom: 24px; }
 .hq-goal-context > summary { padding: 12px 0; cursor: pointer; font-weight: 600; }
 .hq-panel .planner-layout { grid-template-columns: minmax(0, 1fr); }
-.hq-panel .sale-planner { --planner-muted: var(--city-muted); }
-.hq-panel .planner-card,
-.hq-panel .sale-planner :is(input:not([type="checkbox"]), textarea, select) { background: var(--city-paper); }
