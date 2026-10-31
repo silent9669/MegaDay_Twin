@@ -83,6 +83,20 @@ and existing API fixtures honestly; no live ingestion or causal iROAS is claimed
 
 ## Verification
 
+Product labels has a server-side provider seam, disabled by default. Data Studio
+extracts named candidates from saved orders/inventory/cost sources, keeping
+platform SKUs, internal codes and name-only records separate. It shows provider
+availability, unknown/pending/partial/failed/stale outcomes, reasons and optional
+confidence. Successful imports request labels only after account persistence;
+opening demo data or reloading does not trigger paid provider work.
+
+Label runs are separate server-owned Durable Object records tied to source
+revision and six-source fingerprint. Source changes invalidate prior labels;
+late results cannot overwrite newer inputs. Browser writes to the label archive
+are rejected. Current Python forecast classification remains unchanged: wiring
+the real adapter and applying confirmed canonical-SKU labels to forecasting are
+separate integration tasks. See `web/README.md` for the provider contract.
+
 Data Studio's Diagnostics tab describes source-data checks, not application
 failures. It separates errors, warnings and information, explains intentional
 demo anomalies, and links row-level checks to the corresponding record (including
