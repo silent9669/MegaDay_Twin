@@ -2,6 +2,7 @@
 // Opt-in against a local export; never commit or log source records.
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { unzipSync, zipSync } from "fflate";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { expect, it, vi } from "vitest";
 import { analyzeArchive } from "./studio-import";
@@ -10,11 +11,15 @@ import { inspect, type SourcePack } from "../src/studio/sources";
 import { sourceView } from "../src/studio/source-view";
 import type { LabelResponse } from "../src/studio/product-labels";
 
-it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("imports the live 11.11 archive and persists labels for all stocked products", async () => {
+it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("routes replay archives separately and labels an explicit full-day snapshot", async () => {
   const start = performance.now();
-  const analysis = await analyzeArchive(new Uint8Array(readFileSync(process.env.LIVE_ARCHIVE_PATH!)), {}, false);
+  const original = new Uint8Array(readFileSync(process.env.LIVE_ARCHIVE_PATH!));
+  await expect(analyzeArchive(original, {}, false)).rejects.toThrow("Replay demo");
+  // Labeling regression uses an explicitly constructed full-day snapshot, not the replay input.
+  const snapshot = zipSync(Object.fromEntries(Object.entries(unzipSync(original)).filter(([name]) => name.endsWith(".csv"))));
+  const analysis = await analyzeArchive(snapshot, {}, false);
   expect(analysis.tables.map(table => table.rowCount).sort((a, b) => a - b)).toEqual([1176, 4156, 7176]);
-  expect(analysis.skipped.some(file => file.file.endsWith("_replay.json"))).toBe(true);
+  expect(analysis.skipped).toEqual([]);
   const pack: SourcePack = { schema: "hackathon.sources.v1", files: analysis.tables.map(table => table.source) };
   const feed = sourceView(pack, 1);
   expect(feed.orderRows).toBe(4156);

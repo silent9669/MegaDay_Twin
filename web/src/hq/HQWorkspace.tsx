@@ -432,7 +432,7 @@ export function HQWorkspace({
             )}
           </TabsContent>
           <TabsContent value="goals">
-            <Goals key={activeKey} product={active} />
+            <Goals key={`${activeKey}:${params.get("campaign") ?? ""}`} product={active} campaignId={params.get("campaign") ?? undefined} />
           </TabsContent>
           <TabsContent value="campaigns">
             <Campaigns pack={pack} revision={revision} />

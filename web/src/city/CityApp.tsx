@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import {
   ArrowRight,
   Building2,
+  Bell,
   Check,
   CircleHelp,
   Database,
@@ -42,6 +43,8 @@ import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
+import { CampaignHQ } from "../campaign/CampaignHQ";
+import { useCampaignWatch } from "../campaign/useCampaignWatch";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import type { createCity, District, WorldState } from "./world";
 import "./city.css";
@@ -56,8 +59,9 @@ const DISTRICTS = [
   { id: "ads", name: "Ads Platform", icon: Megaphone },
   { id: "homes", name: "Residential district", icon: Home },
 ] as const;
-export function CityApp({ studio = false }: { studio?: boolean }) {
-  const pageWorkspace = studio;
+export function CityApp({ studio = false, campaignHQ = false }: { studio?: boolean; campaignHQ?: boolean }) {
+  const pageWorkspace = studio || campaignHQ;
+  const campaignWatch = useCampaignWatch();
   const [mobile, setMobile] = useState(
     () => matchMedia("(max-width: 1023px)").matches,
   );
@@ -271,13 +275,17 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         </Link>
         <span className="city-route">
           /{" "}
-          {studio
+          {campaignHQ ? "Campaign CD002" : studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
               : "Commerce city"}
         </span>
         <div className="city-account">
+          <button className="city-appearance" aria-label="Thông báo Milo"
+            onClick={() => window.dispatchEvent(new Event("workspace:updates"))}>
+            <Bell size={16} /><span>{assistant.unread ? assistant.unread : "Milo"}</span>
+          </button>
           <button className="city-appearance" aria-label="Night mode" aria-pressed={appearance === "night"}
             disabled={!settings.document || savingSettings}
             onClick={() => void setSettings({ ...viewSettings, appearance: appearance === "night" ? "morning" : "night" })}>
@@ -373,7 +381,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       </nav>
       {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
-        {studio ? (
+        {campaignHQ ? <CampaignHQ watch={campaignWatch} /> : studio ? (
           <DataStudio />
         ) : (
           <>
@@ -458,7 +466,12 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                   {tour !== null && <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />}
                   <div className="district-workspace-body">
                     {district === "hq" ? (
-                      <HQWorkspace pack={sources.document?.data ?? null} revision={sources.document?.revision ?? 0} />
+                      <>
+                        <div className="workspace-tabs">
+                          <Link to="/campaign-hq">CD002 · Phân tích và đề xuất <ArrowRight aria-hidden size={16} /></Link>
+                        </div>
+                        <HQWorkspace pack={sources.document?.data ?? null} revision={sources.document?.revision ?? 0} />
+                      </>
                     ) : district === "warehouse" ? (
                       <>
                         <ProductLabels
@@ -559,8 +572,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             : "Loading account"}
         </span>
       </footer>
-
-
       <dialog
         ref={settingsDialog}
         className="city-settings"

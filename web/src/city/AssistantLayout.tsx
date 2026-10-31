@@ -49,6 +49,7 @@ export function AssistantLayout() {
         setWorkspaceOpen,
         setLauncherAnchor,
         connected,
+        unread: updates.unread,
       }}
     >
       <Outlet />

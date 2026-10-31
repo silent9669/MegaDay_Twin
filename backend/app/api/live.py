@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request
@@ -48,6 +48,7 @@ class LiveStatus(BaseModel):
     live_dir: str
     last_error: str | None = None
     last_load: dict[str, object] | None = None
+    finished: bool = False
 
 
 def _runtime(request: Request) -> Runtime:
@@ -64,12 +65,29 @@ def _hm(t: datetime | None) -> str | None:
 def live_status(rt: Runtime, as_of: datetime | None) -> LiveStatus:
     w, c = rt.watcher, rt.control.status()
     tick = w.last_tick
+    marks = {}
+    if tick is None:
+        with rt.db.reader() as conn:
+            marks = dict(
+                conn.execute(
+                    "SELECT source_type, max(as_of) FROM ingest_batches "
+                    "WHERE mode = 'live' AND status <> 'failed' GROUP BY source_type"
+                ).fetchall()
+            )
+    orders_mark = (
+        tick.orders_inventory_until if tick else marks.get("orders") or marks.get("inventory")
+    )
+    ads_mark = tick.ads_until if tick else marks.get("ads")
     return LiveStatus(
         enabled=rt.settings.live_enabled,
         watching=w.running,
-        day=tick.day if tick else None,
-        orders_until=_hm(tick.orders_inventory_until) if tick else None,
-        ads_until=_hm(tick.ads_until) if tick else None,
+        day=tick.day
+        if tick
+        else to_local(orders_mark - timedelta(seconds=1)).date()
+        if orders_mark
+        else None,
+        orders_until=_hm(orders_mark),
+        ads_until=_hm(ads_mark),
         last_tick_at=w.last_tick_at,
         replay_running=bool(c["replay_running"]),
         replay_hour=c["replay_hour"],
@@ -81,6 +99,7 @@ def live_status(rt: Runtime, as_of: datetime | None) -> LiveStatus:
         live_dir=str(w.root),
         last_error=w.last_error,
         last_load=w.last_report,
+        finished=bool(c["finished"]),
     )
 
 
@@ -109,16 +128,17 @@ async def live_control(body: LiveControl, request: Request, user: DemoLead) -> E
         raise StateConflict("Chỉ điều khiển phát lại được khi DEMO_MODE=true.")
     rt = _runtime(request)
     try:
-        if body.command == "start":
-            await rt.control.start(body.from_hour, body.interval_seconds)
-        elif body.command == "stop":
-            await rt.control.stop()
-        elif body.command == "reset":
-            await rt.control.reset()
-        else:
-            if body.hour is None:
-                raise ValidationFailed("Lệnh jump cần 'hour' (0–23).")
-            await rt.control.jump(body.hour, wait=body.wait)
+        async with rt.control.command_lock:
+            if body.command == "start":
+                await rt.control.start(body.from_hour, body.interval_seconds)
+            elif body.command == "stop":
+                await rt.control.stop()
+            elif body.command == "reset":
+                await rt.control.reset()
+            else:
+                if body.hour is None:
+                    raise ValidationFailed("Lệnh jump cần 'hour' (0–23).")
+                await rt.control.jump(body.hour, wait=body.wait)
     except FileNotFoundError as e:
         raise StateConflict(str(e)) from e
     with rt.db.reader() as cur:

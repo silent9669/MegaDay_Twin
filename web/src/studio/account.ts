@@ -15,6 +15,7 @@ export async function requestJSON<T>(
   if (!response.ok)
     throw Object.assign(Error(body.error?.message ?? "Request failed."), {
       status: response.status,
+      code: body.error?.code,
     });
   return body as T;
 }

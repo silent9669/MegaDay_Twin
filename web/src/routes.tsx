@@ -19,6 +19,7 @@ export const routes: RouteObject[] = [
  {element:<AssistantLayout/>,children:[
   { path: "/city-demo", element: <CityApp /> },
   { path: "/mock-data", element: <CityApp studio /> },
+  { path: "/campaign-hq", element: <CityApp campaignHQ /> },
   { path: "/sale-planner", element: <HQRoute tab="goals" /> },
   { path: "/sku-assistant", element: <HQRoute tab="goals" model /> },
   {

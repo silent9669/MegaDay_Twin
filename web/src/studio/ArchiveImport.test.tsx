@@ -26,6 +26,26 @@ it("rejects non-ZIP drops", async () => {
   await screen.findByRole("alert");
   expect(requestJSON).not.toHaveBeenCalled();
 });
+it("routes replay ZIPs from Data Studio to staging without loading future tables", async () => {
+  vi.mocked(requestJSON).mockRejectedValueOnce(Object.assign(Error("Replay demo"), { code: "REPLAY_ARCHIVE" }))
+    .mockResolvedValueOnce({ uploaded: true, day: "2026-11-11", adsLagHours: 2 });
+  const onLoad = vi.fn();
+  render(<ArchiveImport sources={[]} blocked={false} onLoad={onLoad} />);
+  const file = new File(["zip"], "live_11_11.zip");
+  fireEvent.change(screen.getByLabelText("Upload ZIP archive"), { target: { files: [file] } });
+  expect(await screen.findByRole("link", { name: /Mở CD002 để chạy replay/ })).toHaveAttribute("href", "/campaign-hq#replay");
+  expect(requestJSON).toHaveBeenLastCalledWith("/api/v1/live/replay-archive", expect.objectContaining({ body: file }));
+  expect(onLoad).not.toHaveBeenCalled();
+});
+it("preserves existing Studio tables when staging replay fails", async () => {
+  vi.mocked(requestJSON).mockRejectedValueOnce(Object.assign(Error("Replay demo"), { code: "REPLAY_ARCHIVE" }))
+    .mockRejectedValueOnce(Error("Dừng replay trước khi thay ZIP."));
+  const onLoad = vi.fn();
+  render(<ArchiveImport sources={[]} blocked={false} onLoad={onLoad} />);
+  fireEvent.change(screen.getByLabelText("Upload ZIP archive"), { target: { files: [new File(["zip"], "live_11_11.zip")] } });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Dừng replay");
+  expect(onLoad).not.toHaveBeenCalled();
+});
 it("reviews current saved tables and preserves general-table identity", async () => {
   const source = await makeSource("one%2Fevents.csv", "event,month\nTet,2", "upload");
   vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: source.name, source: { ...source, name: "one%252Fevents.csv" }, rowCount: 1, method: "general", columns: [], review: [] }], skipped: [], model: "test" });

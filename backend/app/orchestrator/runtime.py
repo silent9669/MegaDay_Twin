@@ -21,14 +21,17 @@ import asyncio
 import threading
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from datetime import datetime
 
 import duckdb
 
 from app.core.config import Settings
 from app.core.events import Event, EventBus
 from app.core.logging import get_logger
+from app.core.timeutil import to_local
+from app.live.archive import archive_path
 from app.live.control import LiveController
-from app.live.replay import replay_source
+from app.live.replay import load_replay, replay_source
 from app.live.watcher import LiveWatcher
 from app.orchestrator import state
 from app.orchestrator.alerts_eval import AlertEvaluator
@@ -83,9 +86,26 @@ class Runtime:
             lock=self.lock,
             on_restart=[self._on_restart],
         )
+        uploaded = archive_path(db.path)
         self.control = LiveController(
-            self.watcher, replay_source(settings.data_dir), settle=self.settle
+            self.watcher,
+            uploaded if uploaded.is_file() else replay_source(settings.data_dir),
+            settle=self.settle,
         )
+        if uploaded.is_file():
+            # Recover from ingested batches, not the stream files: a crash may leave
+            # files for an hour that has not yet been committed to DuckDB.
+            with db.reader() as conn:
+                row = conn.execute(
+                    "SELECT max(as_of) FROM ingest_batches WHERE mode = 'live' "
+                    "AND status <> 'failed' AND source_type IN ('orders', 'inventory')"
+                ).fetchone()
+            if row and row[0]:
+                start = datetime.fromisoformat(load_replay(uploaded)["ngay"] + "T00:00:00+07:00")
+                hours = int((to_local(row[0]) - start).total_seconds() / 3600)
+                if 1 <= hours <= 24:
+                    self.control.hour = hours - 1
+                    self.control.finished = hours == 24
         self.started = False
 
     def _on_restart(self, conn: duckdb.DuckDBPyConnection) -> list[Event]:
