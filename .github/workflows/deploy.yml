@@ -14,8 +14,27 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  changes:
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      deploy: ${{ steps.pending.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test deployment safeguards (no dependencies)
+        run: node --test scripts/deployment.test.cjs
+      - name: Check for changes not yet promoted
+        id: pending
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { needsDeployment } = require('./scripts/deployment.cjs');
+            return await needsDeployment(github, context);
+
+  deploy:
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment:
@@ -26,17 +45,11 @@ jobs:
       checks: read
     steps:
       - uses: actions/checkout@v4
-      - name: Test deployment safeguards (no dependencies)
-        run: node --test scripts/deployment.test.cjs
       - name: Promote and verify Cloudflare deployment
         uses: actions/github-script@v7
         with:
           script: |
-            const { needsDeployment, promote, waitForBuild, verifyProduction } = require('./scripts/deployment.cjs');
-            if (!await needsDeployment(github, context)) {
-              await core.summary.addRaw('No pending web changes; Cloudflare deployment is unchanged.').write();
-              return;
-            }
+            const { promote, waitForBuild, verifyProduction } = require('./scripts/deployment.cjs');
             await promote(github, context);
             const buildUrl = await waitForBuild(github, context);
             await core.summary.addLink('Cloudflare deployment', buildUrl).write();
