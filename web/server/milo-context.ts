@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSelectionSchema } from "../src/planner/demand-contract";
 import { loadContext } from "./sku-assistant";
 import { plannerBackend, type PlannerEnv } from "./sale-planner";
 import { snapshot } from "../src/city/monitor/changes";
@@ -66,7 +67,7 @@ const traceSchema = z.object({
   })).max(500),
   sources: z.object({ batches: z.array(z.object({ batch_id: text, source_type: text, file_name: text,
     file_sha256: text.nullable(), as_of: text.nullable() })).max(200),
-    forecasts: z.array(z.object({ forecast_id: text, sku_id: text, model_id: text, data_as_of: text.nullable() })).max(2000),
+    forecasts: z.array(z.object({ forecast_id: text, sku_id: text, model_id: text, data_as_of: text.nullable(), model_selection: modelSelectionSchema.optional() })).max(2000),
     parameters: z.array(z.object({ key: text, value: z.union([primitive, z.array(primitive).max(100)]), version: primitive,
       scope: text.nullable(), scope_id: text.nullable(), set_by: text.nullable() })).max(2000).optional(),
     iroas: z.object({ source: text, estimate_id: text.nullable(), confidence: text.nullable(),

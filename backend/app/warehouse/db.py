@@ -82,6 +82,14 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         " snapshot JSON NOT NULL, created_at TIMESTAMPTZ NOT NULL,"
         " applied_goal_id VARCHAR, applied_at TIMESTAMPTZ)",
     ),
+    (
+        7,
+        "canonical demand label snapshots",
+        "CREATE TABLE IF NOT EXISTS sku_demand_labels ("
+        " entry_id VARCHAR PRIMARY KEY, sku_id VARCHAR NOT NULL, raw_code VARCHAR NOT NULL,"
+        " inventory_sha256 VARCHAR NOT NULL, assessed_at TIMESTAMPTZ NOT NULL,"
+        " synced_at TIMESTAMPTZ NOT NULL, payload JSON NOT NULL)",
+    ),
 ]
 
 _TABLE_RE = re.compile(r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)", re.IGNORECASE)

@@ -27,6 +27,7 @@ import pandas as pd
 
 from app.core.logging import get_logger
 from app.core.timeutil import utcnow
+from app.economics.parameters import load_param_set
 from app.forecast.backtest import (
     BACKTEST_ORDER,
     BACKTEST_SAMPLES,
@@ -45,6 +46,7 @@ from app.forecast.base import (
 )
 from app.forecast.context import FitContext, build_fit_context
 from app.forecast.data import PanelMatrix, panel_matrix
+from app.forecast.demand import active_labels, forecast_signature
 from app.forecast.drift import DriftAlarm, merge_alarms, scan, scan_product
 from app.forecast.labels import decide_label
 from app.forecast.metrics import ScoreRow
@@ -59,6 +61,7 @@ from app.forecast.registry import (
     register_models,
     write_scores,
 )
+from app.forecast.selection import select_model
 from app.panel.build import load_panel
 
 log = get_logger(__name__)
@@ -124,8 +127,9 @@ def write_demand_groups(conn: duckdb.DuckDBPyConnection, ctx: FitContext) -> int
             continue
         conn.execute(
             "UPDATE skus SET demand_group = ?, demand_group_source = 'auto', demand_group_at = ?"
-            " WHERE sku_id = ? AND coalesce(demand_group_source, '') <> 'user'",
-            [g, now, sku],
+            " WHERE sku_id = ? AND coalesce(demand_group_source, '') <> 'user'"
+            " AND (demand_group IS DISTINCT FROM ? OR demand_group_source IS DISTINCT FROM 'auto')",
+            [g, now, sku, g],
         )
         n += 1
     return n
@@ -196,6 +200,7 @@ class FitAll:
     states: dict[str, FittedState]
     champions: dict[str, ChampionInfo]
     score_rows: list[ScoreRow] = field(default_factory=list)
+    selections: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def _champion(
@@ -205,9 +210,7 @@ def _champion(
     context = infer_context(ctx, i, cal)
     info = champion_for(rows, ctx.groups[i], context, BACKTEST_ORDER)
     if drift:
-        info = ChampionInfo(
-            get_model(NOWCAST).model_id, info.scope, info.group_scored, info.from_backtest
-        )
+        info = ChampionInfo(get_model(NOWCAST).model_id, None, info.group_scored, False)
     return info, context
 
 
@@ -234,13 +237,32 @@ def fit_all(
     wanted = list(sku_ids) if sku_ids is not None else list(ctx.sku_ids)
     states: dict[str, FittedState] = {}
     champs: dict[str, ChampionInfo] = {}
+    selections: dict[str, dict[str, Any]] = {}
+    labels = active_labels(conn, ctx.origin_dt)
+    current_labels = active_labels(conn)
+    policy = load_param_set(conn)
     for sku in wanted:
         i = ctx.idx(sku)
-        info, _ = _champion(ctx, i, rows, horizon_hours, sku in drift)
+        info, _ = _champion(ctx, i, rows, horizon_hours, False)
+        info, selections[sku] = select_model(
+            ctx,
+            i,
+            info,
+            labels.get(sku),
+            drift=sku in drift,
+            min_history=policy.num("forecast_min_history_days"),
+            sparse_adi=policy.num("forecast_sparse_adi"),
+        )
+        selections[sku]["forecast_origin"] = ctx.origin_dt.isoformat()
+        if sku in current_labels and sku not in labels:
+            selections[sku]["reasons"].append(
+                "Nhãn hiện tại được tạo sau mốc dự báo; "
+                "không dùng thông tin tương lai cho lần tính này."
+            )
         model = get_model(info.model_id)
         states[sku] = model.fit(None, sku, ctx.origin_dt, ctx)
         champs[sku] = info
-    return FitAll(ctx=ctx, states=states, champions=champs, score_rows=rows)
+    return FitAll(ctx=ctx, states=states, champions=champs, score_rows=rows, selections=selections)
 
 
 def _scope(info: ChampionInfo, group: str, context: str) -> ValidatedScope:
@@ -269,6 +291,7 @@ def input_hash(res: ForecastResult, price_plan: dict[datetime, int] | None) -> s
         "origin": res.origin.isoformat(),
         "h": len(res.hours),
         "panel": res.panel_version,
+        "selection_signature": res.selection_signature,
         "price": sorted((k.isoformat(), v) for k, v in (price_plan or {}).items()),
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:32]
@@ -329,6 +352,7 @@ def forecast_skus(
     hours = ctx.horizon_calendar(horizon_hours).hours
     jobs: list[tuple[BaseForecastModel, FittedState, ForecastRequest]] = []
     plans: dict[str, dict[datetime, int] | None] = {}
+    signature = forecast_signature(conn, ctx.origin_dt)
     for sku, state in fa.states.items():
         plan = price_plan_for(conn, sku, list(hours)) if use_price_plan else None
         plans[sku] = plan
@@ -352,7 +376,12 @@ def forecast_skus(
             update={
                 "validated_scope": _scope(info, state.demand_group, res.context),
                 "confidence": dec.label,
-                "reasons": list(res.reasons) + dec.reasons,
+                "reasons": list(res.reasons)
+                + dec.reasons
+                + fa.selections.get(sku, {}).get("reasons", []),
+                "primary_label": fa.selections.get(sku, {}).get("primary_label"),
+                "model_selection": fa.selections.get(sku, {}),
+                "selection_signature": signature,
             }
         )
         if persist:

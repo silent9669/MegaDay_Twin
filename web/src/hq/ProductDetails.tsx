@@ -1,4 +1,5 @@
 import { config } from "../lib/config";
+import { DemandDetails } from "../planner/DemandDetails";
 import { useMemo } from "react";
 import { useSku } from "../api/queries";
 import { inspect, normalize, type SourcePack } from "../studio/sources";
@@ -197,6 +198,7 @@ function ModelDetails({ sku }: { sku: string }) {
           </div>
         ))}
       </dl>
+      <DemandDetails demand={item.demand} />
       <h4>Incoming inventory</h4>
       {item.incoming?.length ? (
         <ul>

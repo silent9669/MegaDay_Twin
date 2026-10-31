@@ -25,6 +25,7 @@ from app.api.snapshot import (
 from app.core.errors import NotFound, ValidationFailed
 from app.core.timeutil import floor_hour, iso_local, to_utc, utcnow
 from app.forecast.base import DEMAND_GROUPS
+from app.forecast.demand import demand_summary
 from app.forecast.service import set_demand_group
 from app.warehouse.repo import fetch_all
 
@@ -80,6 +81,7 @@ class SkuSummary(BaseModel):
 
 
 class SkuDetail(SkuSummary):
+    demand: dict[str, Any] = Field(default_factory=dict)
     incoming: list[dict[str, Any]]
     price_list_vnd: int | None
     price_effective_vnd: int | None
@@ -196,6 +198,7 @@ def get_sku(sku: str, conn: Conn, _user: Viewer) -> Envelope[SkuDetail]:
     row, ck = _one(conn, sku)
     base = _summary(row, campaign_status(conn, ck.as_of)).model_dump()
     extra = detail(conn, row, ck)
+    extra["demand"] = demand_summary(conn, sku)
     extra["demand_group_info"] = extra.pop("demand_group")
     src = extra.pop("source")
     data = SkuDetail(**base, **extra, as_of=ck.as_of, source=SourceRef(**src))

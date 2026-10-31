@@ -49,10 +49,14 @@ def build_trace(conn: duckdb.DuckDBPyConnection, run: SimRun, input_hash: str) -
     )
     forecasts = fetch_all(
         conn,
-        "SELECT forecast_id, sku_id, model_id, origin, data_as_of, panel_version"
+        "SELECT forecast_id, sku_id, model_id, origin, data_as_of, panel_version, payload"
         " FROM forecasts WHERE list_contains(?, forecast_id) ORDER BY forecast_id",
         [inp.forecast_ids],
     )
+    for forecast in forecasts:
+        payload = forecast.pop("payload")
+        saved = json.loads(payload) if isinstance(payload, str) else payload
+        forecast["model_selection"] = saved.get("model_selection", {})
     params = []
     for name in list(inp.params.versions):
         key, _, sku = name.partition("@")

@@ -97,6 +97,9 @@ class ForecastResult(BaseModel):
     context: Context = "normal"
     history_days: int = 0
     phase: str | None = None  # trend phase: tăng | đỉnh | nguội
+    primary_label: str | None = None
+    model_selection: dict[str, Any] = Field(default_factory=dict)
+    selection_signature: str | None = None
 
 
 @dataclass

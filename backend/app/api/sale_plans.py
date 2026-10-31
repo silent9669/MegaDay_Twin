@@ -282,6 +282,8 @@ def input_fingerprint(conn: duckdb.DuckDBPyConnection) -> str:
     tables = (
         "ingest_batches",
         "skus",
+        "sku_aliases",
+        "sku_demand_labels",
         "bundle_components",
         "orders",
         "order_lines",

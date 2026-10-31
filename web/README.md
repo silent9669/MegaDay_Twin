@@ -234,7 +234,11 @@ with no confidence cutoff. When evidence is weak, the model may infer likely use
 from product attributes and must identify the result as an estimate. It never
 claims invented sales history or trend evidence. Older saved `null` results remain
 readable; prompt version `demand-v3` marks them stale for reclassification. The Vietnamese prompt lives
-in `server/demand-prompt.ts`; these labels do not change forecast groups or ads.
+in `server/demand-prompt.ts`. Saved labels synchronize to canonical backend SKUs through
+`/api/product-labels/sync` (backend migration 7). Forecasting retains new/sparse history
+as separate attributes, uses labels as model-selection priors, and reports its actual
+model choice. Labels never execute advertising changes. See
+[shared label and model policy](../docs/quyet-dinh/M6-nhan-va-chon-mo-hinh.md).
 
 - `GET /api/product-labels`: inventory candidates, configuration, latest run, stale flag.
 - `POST /api/product-labels`: `{ sourceRevision, context: { market, asOf,

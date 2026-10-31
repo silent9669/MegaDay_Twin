@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DemandSummary } from './demand-contract';
 import type { GoalInterpretResponse } from "./goal-contract";
 
 // Canonical backend identifiers may contain Vietnamese letters and spaces, but no URL separators.
@@ -15,6 +16,7 @@ export type AssistantSkuList = {
 };
 export type AssistantContext = {
   sku: {
+    demand?: DemandSummary;
     sku: string; name: string; variant: string; stockAvailable: number | null;
     soldTodayUnits: number | null; priceEffectiveVnd: number | null;
     contributionPerUnitVnd: number | null; demandGroup: string | null;

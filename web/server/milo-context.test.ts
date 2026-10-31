@@ -14,7 +14,9 @@ const trace = {
     stockout_penalty: dist, units_sold: dist, focus_units_sold: dist },
     reconciliation: { sum_components_mean: 100, objective_mean: 100, residual_vnd: 0 }, private_extra: "omit" }],
   sources: { batches: [{ batch_id: "B1", source_type: "orders", file_name: "orders.csv", file_sha256: "sha-1", as_of: null }],
-    forecasts: [{ forecast_id: "F1", sku_id: "SKU1", model_id: "ewma", data_as_of: null }] }, limitations: ["Not a guarantee."],
+    forecasts: [{ forecast_id: "F1", sku_id: "SKU1", model_id: "ewma", data_as_of: null,
+      model_selection: { model_id: "ewma", primary_label: "Seasonal", forecast_origin: "2026-11-11T08:00:00+07:00",
+        reasons: ["The season is not identified; use the baseline model."] } }] }, limitations: ["Not a guarantee."],
 };
 function scenario(overrides = {}) { return { scenario_id: "SC1", input_hash: "hash-1", request: { campaign_id: "CD1" },
   calculation_trace: trace, blocked: false, ...overrides }; }
@@ -72,6 +74,7 @@ describe("Milo authoritative business context", () => {
     const result = await buildMiloContext({ scenarioId: "SC1" }, env);
     expect(result.scenario?.trace.actions[0]?.metrics.objective).toEqual(dist);
     expect(result.scenario?.trace.input_hash).toBe("hash-1");
+    expect(result.scenario?.trace.sources.forecasts[0]?.model_selection).toEqual(trace.sources.forecasts[0]?.model_selection);
     expect(result.scenario?.trace.goal.params).toEqual({ max_spend_vnd: 5000000, max_loss_vnd: 0 });
     expect(JSON.stringify(result)).not.toContain("private_extra");
   });
