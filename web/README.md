@@ -106,12 +106,13 @@ is required to build or validate a dry run. FastAPI/DuckDB remains a separate
 service; absent `DATA_BACKEND_URL`, existing operations use clearly labeled
 fixtures and Milo does not execute campaigns or stock mutations.
 
-GitHub Actions builds and stores the checked Worker artifact. Only the latest
-`main` commit deploys, after backend, web and mock-data checks pass. The production
-smoke test opens the real login in Chromium, verifies signed-out access protection
-and checks D1 via `/healthz`. Repository Actions secrets remain
-`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`; the token must permit Worker,
-Durable Object and custom-domain deployment in this account.
+GitHub Actions runs the backend, web and mock-data checks and exposes the required
+`ci` status for `main`. After that gate passes on a push to `main`, a promotion job
+copies the exact commit to the automation-only `cloudflare-production` branch.
+Cloudflare Workers Builds watches that branch and automatically pulls, builds and
+deploys `web/`. GitHub Actions does not hold Cloudflare deployment credentials.
+The Cloudflare Build configuration uses `npm run build:cloudflare` followed by
+`npm run deploy:cloudflare`.
 
 Rollback: redeploy a known-good `megadaytwin` version and keep the
 `megadaytwin.dangphuc.me` custom domain attached to it. The old Workers,

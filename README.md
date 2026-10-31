@@ -173,8 +173,9 @@ cd backend; uv run python -m eval.rehearsal --base-url http://localhost:8000   #
 
 Bản demo Cloudflare: <https://megadaytwin.dangphuc.me>. Deploy dùng `cf` CLI,
 Worker `megadaytwin` và D1 `megadaytwin-db`; hiện frontend dùng dữ liệu mẫu,
-backend Python/DuckDB chưa deploy. Mỗi push vào `main` tự deploy sau khi mọi
-kiểm tra CI thành công. Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
+backend Python/DuckDB chưa deploy. Nhánh `main` được bảo vệ bởi check `ci`; sau khi merge một thay đổi đã qua CI,
+workflow tự đẩy đúng commit sang nhánh `cloudflare-production`. Cloudflare Workers
+Builds tự kéo nhánh đó, build và deploy. Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
 
 
 Kiểm tra trước khi push (giống hệt CI):
