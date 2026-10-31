@@ -1188,3 +1188,30 @@
     font-size: 10px;
   }
 }
+
+
+.archive-import {
+  flex-shrink: 0;
+  padding: 18px 20px;
+  border: 1px solid #d9e2ce;
+  border-radius: 10px;
+  background: #fbfcf6;
+  display: grid;
+  gap: 12px;
+}
+.archive-import > header, .archive-table > label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.archive-import > header { justify-content: space-between; }
+.archive-import h2 { font-size: 17px; font-weight: 600; }
+.archive-table { border-top: 1px solid #d9e2ce; padding-top: 12px; min-width: 0; }
+.archive-table > label { cursor: pointer; overflow-wrap: anywhere; }
+.archive-import details { margin-top: 8px; min-width: 0; }
+.archive-import summary { cursor: pointer; padding: 4px 0; }
+.archive-import p, .archive-import li { overflow-wrap: anywhere; }
+.archive-preview { overflow: auto; max-height: 220px; }
+.archive-preview table { border-collapse: collapse; font-size: 12px; }
+.archive-preview th, .archive-preview td { padding: 8px; text-align: left; border-bottom: 1px solid #d9e2ce; white-space: nowrap; }

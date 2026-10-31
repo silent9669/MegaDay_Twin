@@ -27,7 +27,7 @@ import {
 } from "./sources";
 import { SandboxControl } from "./SandboxControl";
 import { SourceDiagnostics } from "./SourceDiagnostics";
-import { ProductLabels } from "./ProductLabels";
+import { ArchiveImport } from "./ArchiveImport";
 import "./studio.css";
 function download(name: string, text: string) {
   const url = URL.createObjectURL(
@@ -73,8 +73,6 @@ export function DataStudio() {
   const input = useRef<HTMLInputElement>(null),
     folder = useRef<HTMLInputElement>(null),
     edit = useRef<HTMLDialogElement>(null);
-  const pendingImportLabels = useRef(false);
-  const [autoLabelRevision, setAutoLabelRevision] = useState<number | null>(null);
   const latest = useRef({ draft, base, dirty });
   useEffect(() => {
     latest.current = { draft, base, dirty };
@@ -123,10 +121,6 @@ export function DataStudio() {
       if (latest.current.draft === pending.draft) {
         setDirty(false);
         setDraft(null);
-        if (pendingImportLabels.current) {
-          pendingImportLabels.current = false;
-          setAutoLabelRevision(saved.revision);
-        }
       }
       setSaveError("");
     } catch (e) {
@@ -192,7 +186,6 @@ export function DataStudio() {
         throw Error(
           "Duplicate source type in this upload. Choose one file per source.",
         );
-      pendingImportLabels.current = true;
       change({
         schema: "hackathon.sources.v1",
         files: files.map((f) => imported.find((v) => v.kind === f.kind) ?? f),
@@ -220,7 +213,6 @@ export function DataStudio() {
         "/api/repository-sources",
       );
       const pack = await validatePack(result.pack);
-      pendingImportLabels.current = false;
       change(pack);
       setMessage(result.notice);
     } catch (e) {
@@ -301,8 +293,6 @@ export function DataStudio() {
           {demoCount === files.length
             ? `All ${files.length} sources are repository demo data.`
             : `${demoCount} demo sources · ${files.length - demoCount} uploaded or edited sources.`}
-          {" "}Import replaces matching sources; the total source count is not an upload receipt.
-          {" "}The complete set is 4 CSV files and 2 JSON files. See each source's Format tab.
         </p>
       )}
       <input
@@ -346,7 +336,6 @@ export function DataStudio() {
           <button onClick={exportPack}>Export draft</button>
           <button
             onClick={() => {
-              pendingImportLabels.current = false;
               setDraft(null);
               setDirty(false);
               setSaveError("");
@@ -356,11 +345,13 @@ export function DataStudio() {
           </button>
         </div>
       )}
-      <ProductLabels
-        sourceRevision={cloud.document?.revision ?? 0}
-        autoRunRevision={autoLabelRevision}
-        blocked={dirty || saving || conflict || busy || !!saveError}
-      />
+      <ArchiveImport blocked={dirty || saving || conflict || busy || !files.length || !!saveError}
+        onLoad={incoming => {
+          change({ schema: "hackathon.sources.v1", files: files.map(f => incoming.find(v => v.kind === f.kind) ?? f) });
+          setSelected(incoming[0]!.kind);
+          setPage(0); setQuery(""); setFocusRow(null); setTab("records");
+          setMessage(`${incoming.length} tables loaded. Saving to workspace…`);
+        }} />
       <SandboxControl />
       <section className="studio-body" aria-label="Source files">
         <aside className="source-list">
