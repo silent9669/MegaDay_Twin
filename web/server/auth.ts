@@ -1,5 +1,6 @@
 export type AccessEnv = {
   ADMIN_PASSWORD_HASH?: string;
+  JUDGES_PASSWORD_HASH?: string;
   SESSION_SECRET?: string;
   LOGIN_LIMITER?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
@@ -47,20 +48,23 @@ export function fail(status: number, message: string, code = "REQUEST_FAILED") {
 export function sameOrigin(request: Request) {
   return request.headers.get("origin") === new URL(request.url).origin;
 }
-export async function session(request: Request, env: AccessEnv) {
-  if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) return false;
+export async function sessionAccount(request: Request, env: AccessEnv) {
+  if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) return null;
   const token = request.headers
     .get("cookie")
     ?.split(";")
     .map((v) => v.trim())
     .find((v) => v.startsWith(`${COOKIE}=`))
     ?.slice(COOKIE.length + 1);
-  if (!token || token.length > 300) return false;
+  if (!token || token.length > 300) return null;
   const [user, exp, nonce, signature, extra] = token.split(".");
   const expiry = Number(exp),
     now = Math.floor(Date.now() / 1000);
+  const configured =
+    (user === "admin" && !!env.ADMIN_PASSWORD_HASH) ||
+    (user === "judges" && !!env.JUDGES_PASSWORD_HASH);
   if (
-    user !== "admin" ||
+    !configured ||
     !nonce ||
     !signature ||
     extra ||
@@ -68,17 +72,21 @@ export async function session(request: Request, env: AccessEnv) {
     expiry <= now ||
     expiry > now + 43200
   )
-    return false;
+    return null;
   try {
-    return await crypto.subtle.verify(
+    const valid = await crypto.subtle.verify(
       "HMAC",
       await key(env.SESSION_SECRET),
       decode(signature),
       bytes(`${user}.${exp}.${nonce}`),
     );
+    return valid ? user : null;
   } catch {
-    return false;
+    return null;
   }
+}
+export async function session(request: Request, env: AccessEnv) {
+  return !!(await sessionAccount(request, env));
 }
 export async function passwordHash(
   password: string,
@@ -146,12 +154,15 @@ export async function login(request: Request, env: AccessEnv) {
       body.password.length > 256
     )
       return fail(400, "Enter your username and password.");
-    if (
-      body.username !== "admin" ||
-      !(await matchesPassword(body.password, env.ADMIN_PASSWORD_HASH))
-    )
+    const encoded =
+      body.username === "admin"
+        ? env.ADMIN_PASSWORD_HASH
+        : body.username === "judges"
+          ? env.JUDGES_PASSWORD_HASH
+          : undefined;
+    if (!encoded || !(await matchesPassword(body.password, encoded)))
       return fail(401, "Username or password is incorrect.");
-    const payload = `admin.${Math.floor(Date.now() / 1000) + 43200}.${encode(crypto.getRandomValues(new Uint8Array(16)))}`;
+    const payload = `${body.username}.${Math.floor(Date.now() / 1000) + 43200}.${encode(crypto.getRandomValues(new Uint8Array(16)))}`;
     const token = `${payload}.${encode(await crypto.subtle.sign("HMAC", await key(env.SESSION_SECRET), bytes(payload)))}`;
     return Response.json(
       { ok: true },

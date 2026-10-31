@@ -38,7 +38,7 @@ unknown, negative stock is flagged and notes never become instructions.
 
 ## Account persistence and sync
 
-One shared admin workspace is stored in a SQLite-backed Cloudflare Durable Object
+The `admin` and `judges` logins use one shared demo workspace stored in a SQLite-backed Cloudflare Durable Object
 owned by Worker `megadaytwin`. Sources, settings and sandbox clock are independent
 revisioned documents. Writes require a signed HttpOnly session and same-origin
 request, validate input server-side and use compare-and-swap revisions. A stale

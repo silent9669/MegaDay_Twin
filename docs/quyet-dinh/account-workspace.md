@@ -6,7 +6,7 @@ reads sanitized repository sources and clearly labeled fixtures until that
 backend is configured; Milo is advisory and cannot execute business actions.
 
 Use one SQLite Durable Object per authenticated account. The current access
-model has one shared admin account. Sources, settings, playback clock and chat
+model has `admin` and `judges` logins sharing one demo workspace. Sources, settings, playback clock and chat
 history are independently revisioned documents. Same-origin authenticated writes
 use compare-and-swap; WebSocket notifications cause other devices to refetch.
 Chat messages save before generation, and assistant replies save server-side.

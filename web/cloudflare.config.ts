@@ -22,6 +22,7 @@ export default defineConfig({
         exportName: "AccountWorkspace",
       }),
       ADMIN_PASSWORD_HASH: bindings.secret(),
+      JUDGES_PASSWORD_HASH: bindings.secret(),
       SESSION_SECRET: bindings.secret(),
       OPENAI_API_KEY: bindings.secret(),
       LOGIN_LIMITER: bindings.rateLimit({

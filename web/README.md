@@ -98,8 +98,9 @@ changes through authenticated WebSockets. See
 verification. Sessions use the `megaday_session` cookie; scrypt and PBKDF2
 password hashes are supported. The fresh deployment requires a new login.
 
-Required Worker secrets are `ADMIN_PASSWORD_HASH`, `SESSION_SECRET` and
-`OPENAI_API_KEY`. They are configured on the new Worker and survive ordinary
+Required Worker secrets are `ADMIN_PASSWORD_HASH`, `JUDGES_PASSWORD_HASH`,
+`SESSION_SECRET` and `OPENAI_API_KEY`. The `admin` and `judges` logins share the
+demo workspace. These secrets are configured on the Worker and survive ordinary
 deployments. Do not copy empty local values over production secrets. No secret
 is required to build or validate a dry run. FastAPI/DuckDB remains a separate
 service; absent `DATA_BACKEND_URL`, existing operations use clearly labeled
