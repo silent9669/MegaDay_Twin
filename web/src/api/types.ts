@@ -5,6 +5,7 @@
 // docs/quyet-dinh/M3-api.md §2 so the UI can switch on them safely.
 import type { components } from './schema';
 import type { CalculationTrace } from '../planner/calculation-trace';
+import type { DemandSummary } from '../planner/demand-contract';
 
 type S = components['schemas'];
 
@@ -40,7 +41,7 @@ export type SkuListItem = Omit<S['SkuSummary'], SkuNarrowed> & {
   compute_state: ComputeState | null;
   deviation: Deviation | null;
 };
-export type SkuDetail = Omit<S['SkuDetail'], SkuNarrowed> & Pick<SkuListItem, SkuNarrowed>;
+export type SkuDetail = Omit<S['SkuDetail'], SkuNarrowed> & Pick<SkuListItem, SkuNarrowed> & { demand?: DemandSummary };
 
 /**
  * Fields the backend fills from Pydantic defaults (M3-mo-phong Q14, 05 §7/§9) are optional

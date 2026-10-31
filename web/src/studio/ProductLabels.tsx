@@ -7,6 +7,20 @@ import { DEMAND_LABELS, labelContextSchema, type DemandLabel, type LabelResponse
 
 const PAGE_SIZE = 8;
 export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode }: { sourceRevision: number; blocked: boolean; inventory?: StockRow[]; selectedCode?: string }) {
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSyncMessage(""), 0);
+    return () => clearTimeout(timer);
+  }, [sourceRevision]);
+  async function sync(method: "GET" | "POST" = "POST") {
+    setSyncing(true);
+    try {
+      const result = await requestJSON<{ message: string }>("/api/product-labels/sync", { method });
+      setSyncMessage(result.message);
+    } catch (error) { setSyncMessage(error instanceof Error ? error.message : "Label synchronization is unavailable."); }
+    finally { setSyncing(false); }
+  }
   const [data, setData] = useState<LabelResponse | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +74,7 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
         body: JSON.stringify({ sourceRevision, context: parsed.data }),
       });
       window.dispatchEvent(new CustomEvent("workspace:changed", { detail: "sources" }));
+      await sync();
     } catch (e) { setError(e instanceof Error ? e.message : "Labeling failed."); }
     finally { posting.current = false; setSubmitting(false); void reload(); }
   }
@@ -80,6 +95,7 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
         body: JSON.stringify({ sourceRevision, productId: JSON.stringify(["inventory", "internal_code", code]), group }) });
       window.dispatchEvent(new CustomEvent("workspace:changed", { detail: "sources" }));
       await reload();
+      await sync();
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save label."); }
     finally { posting.current = false; setChanging(""); }
   }
@@ -91,9 +107,14 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
         <Button variant="outline" disabled={blocked || !current || !data?.configured || running || !products.length} onClick={() => void run()}>
           {running ? "Labeling…" : "Label data"}
         </Button>
+        <Button variant="outline" disabled={blocked || running || syncing || stale || !data?.run?.results.length} onClick={() => void sync()}>
+          {syncing ? "Synchronizing…" : "Sync labels to forecasting"}
+        </Button>
       </div>
     </header>
     {!data && !error && <p role="status">Loading product labels…</p>}
+    <p>Demand type: Trendy, Seasonal or Normal. New and sparse sales describe data history, not a different demand label.</p>
+    <p role="status">{stale || blocked ? "Source data changed; labels must be reviewed and synchronized again." : syncMessage || "Use Sync labels to forecasting after sending source data to the backend. Unresolved SKU mappings are held for review."}</p>
     {data && !data.configured && <p role="status">Decision model is not connected.</p>}
     {stale && <p role="status">Labels need updating for these sources or assessment details.</p>}
     {blocked && <p role="status">Save source changes before labeling.</p>}

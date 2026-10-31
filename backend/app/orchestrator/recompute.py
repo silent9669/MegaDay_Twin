@@ -49,6 +49,7 @@ from app.core.events import (
     GoalChanged,
     ParameterChanged,
     RecommendationChanged,
+    RecomputeRequested,
     StageDone,
 )
 from app.core.logging import get_logger
@@ -154,6 +155,7 @@ class Orchestrator:
         self.bus.subscribe(DataUpdated, self.on_data_updated)
         self.bus.subscribe(GoalChanged, self.on_scope_changed)
         self.bus.subscribe(ParameterChanged, self.on_scope_changed)
+        self.bus.subscribe(RecomputeRequested, self.on_recompute_requested)
 
     def start(self) -> None:
         self._wake = asyncio.Event()
@@ -185,6 +187,11 @@ class Orchestrator:
         with self._cursor() as cur:
             skus = skus_in_scope(cur, event.scope, event.ids)
         self.request(skus, reason=f"{event.type}:{event.scope}")
+
+    async def on_recompute_requested(self, event: Event) -> None:
+        assert isinstance(event, RecomputeRequested)
+        if event.sku_ids:
+            self.request(event.sku_ids, reason=event.reason)
 
     def request(self, sku_ids: Iterable[str] | None, reason: str = "") -> None:
         """Queue SKUs (``None`` = all) for the worker; marks them ``queued`` right away."""

@@ -438,7 +438,6 @@ export async function withoutDemandLabels(pack: SourcePack): Promise<SourcePack>
   return { ...pack, files: await Promise.all(pack.files.map(async source => {
     if (source.kind !== "inventory") return source;
     const parsed = inspect(source.name, sourceText(source));
-    if (!parsed.columns.includes(DEMAND_COLUMN)) return source;
     const columns = parsed.columns.filter(c => c !== DEMAND_COLUMN);
     const text = Papa.unparse({ fields: columns, data: parsed.rows });
     return { ...source, encoding: undefined, ...encodeSource(text), hash: await hashText(text) };

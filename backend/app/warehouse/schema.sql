@@ -22,6 +22,17 @@ CREATE TABLE IF NOT EXISTS schema_version (               -- [DEV] migration boo
   note        VARCHAR
 );
 
+-- Primary demand labels are independent of the historical forecasting profile.
+CREATE TABLE IF NOT EXISTS sku_demand_labels (
+  entry_id VARCHAR PRIMARY KEY,
+  sku_id VARCHAR NOT NULL,
+  raw_code VARCHAR NOT NULL,
+  inventory_sha256 VARCHAR NOT NULL,
+  assessed_at TIMESTAMPTZ NOT NULL,
+  synced_at TIMESTAMPTZ NOT NULL,
+  payload JSON NOT NULL
+);
+
 -- ============================================================ 02 · data layer
 CREATE TABLE IF NOT EXISTS ingest_batches (
   batch_id        VARCHAR PRIMARY KEY,           -- ULID

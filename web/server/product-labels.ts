@@ -9,9 +9,9 @@ import type { SourcePack } from "../src/studio/sources";
 import { LABEL_LEASE_MS, LABEL_TIMEOUT_MS, type ProductLabelProvider } from "./product-label-provider";
 
 type Storage = { fetch(request: Request): Promise<Response> };
-type Snapshot = { hour?: number; sources: Doc<SourcePack>; run: LabelRun | null };
+type Snapshot = { hour?: number; sources: Pick<Doc<SourcePack>, "revision" | "data">; run: LabelRun | null };
 
-async function snapshotInput(snapshot: Snapshot, includeEvidence = false) {
+export async function snapshotInput(snapshot: Snapshot, includeEvidence = false) {
   const pack = snapshot.sources.data;
   const needed = { ...pack, files: pack.files.filter(file => file.kind === "inventory" || (includeEvidence && file.kind === "orders")) };
   const input = await buildLabelInput(visibleSources(needed, snapshot.hour ?? 24)!, snapshot.sources.revision, includeEvidence);
@@ -42,7 +42,8 @@ export async function productLabels(
   }
   const response = (run: LabelRun | null): Response => {
     const stale = !!run && (!run.context || run.sourceRevision !== input.sourceRevision ||
-      run.sourceFingerprint !== input.sourceFingerprint || (!!provider && run.provider !== provider.id));
+      run.sourceFingerprint !== input.sourceFingerprint ||
+      (!!provider && run.provider !== provider.id && !run.results.every(result => result.manual)));
     const expired = run?.status === "running" && Date.parse(run.startedAt) + LABEL_LEASE_MS <= Date.now();
     const body: LabelResponse = {
       ...input, configured: !!provider, provider: provider?.id ?? null, stale,

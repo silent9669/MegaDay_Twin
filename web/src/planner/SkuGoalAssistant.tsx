@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { AssistantContext } from './assistant-contract';
 import { openMiloForSku } from '../city/milo-contract';
+import { DemandDetails } from './DemandDetails';
 import './assistant.css';
 
 async function request<T>(path: string, signal: AbortSignal, body?: unknown): Promise<T> {
@@ -41,6 +42,7 @@ export function SkuGoalAssistant({ sku }: { sku: string }) {
         ['Contribution per unit', context.sku.contributionPerUnitVnd, true, 'contribution_per_unit_vnd'],
       ] as const).map(([label, value, money, field]) => <details key={field}><summary><span>{label}</span><strong>{number(value, money)}</strong></summary><p>Field <code>{field}</code> in backend SKU data. {context.source?.label ?? 'Source name not provided.'}</p><p>Source ID: {context.source?.id ?? 'Not provided'} · as of {date(context.source?.data_as_of ?? context.dataAsOf)}.</p>{field === 'contribution_per_unit_vnd' && <p>Backend contribution excludes shared ad spend. Detailed calculations are saved with simulation traces.</p>}</details>)}</div>
       <div className="sku-campaign-scope"><strong>Campaign scope</strong>{context.campaigns.length ? <ul>{context.campaigns.map((campaign) => <li key={campaign.id}>{campaign.name} ({campaign.id}) · SKU: {campaign.skus.join(', ')}</li>)}</ul> : <p>No linked campaigns. You can discuss goals; link a campaign before simulating.</p>}<p>Sales and clearance quantities can target this SKU. Budget, expected loss and economic value J always apply to the whole campaign, not to this SKU alone.</p></div>
+      <DemandDetails demand={context.sku.demand} />
       {!!context.notices.length && <ul className="planner-notices">{context.notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
     </section>
     <section className="planner-card sku-chat"><h2>Milo</h2><p>{context.opening}</p><button type="button" className="planner-primary" onClick={() => openMiloForSku(sku)}>Discuss with Milo <ArrowRight aria-hidden size={16} /></button><p className="planner-help">Milo keeps conversations per SKU. Review and confirm goals before simulation.</p></section>

@@ -9,6 +9,7 @@ import {
 } from "./server/auth";
 import { workspaceQuotaFailure } from "./server/workspace-errors";
 import { repositorySources } from "./server/repository";
+import { syncDemandLabels } from "./server/label-sync";
 import { modelList, type PMEnv } from "./server/pm";
 import type { StudioModelEnv } from "./server/model-json";
 import { explainCampaign } from "./server/campaign-explain";
@@ -111,6 +112,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
       if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
       return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
         new Request(new URL("/internal/studio/import" + url.search, url), request));
+    }
+    if (path === "/api/product-labels/sync") {
+      if (!env.WORKSPACE) return fail(503, "Workspace unavailable.");
+      return syncDemandLabels(request, env, env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")));
     }
     if (path === "/api/product-labels") {
       if (request.method === "POST" && env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "labels:admin" })).success)

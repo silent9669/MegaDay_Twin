@@ -11,6 +11,7 @@ from app.api import alerts as alerts_api
 from app.api import (
     campaign_analysis,
     campaigns,
+    demand_labels,
     economics,
     health,
     ingest,
@@ -34,6 +35,7 @@ api_router.include_router(campaigns.router)
 api_router.include_router(economics.router)
 api_router.include_router(scenarios.router)
 api_router.include_router(sale_plans.router)
+api_router.include_router(demand_labels.router)
 api_router.include_router(ingest.router)
 api_router.include_router(ai_api.router)
 api_router.include_router(decisions_api.router)

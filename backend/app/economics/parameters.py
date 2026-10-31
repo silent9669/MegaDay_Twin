@@ -66,6 +66,12 @@ INF = math.inf
 CATALOGUE: dict[str, ParamDef] = {
     d.key: d
     for d in (
+        _p(key="forecast_min_history_days", label_vi="Số ngày tối thiểu để xét hình dạng nhu cầu",
+           unit="ngày", default=14.0, min=14.0, max=90.0, scopes={"shop"},
+           editable_by={"lead"}, source_hint="system"),
+        _p(key="forecast_sparse_adi", label_vi="Ngưỡng khoảng cách ngày bán cho mô hình bán thưa",
+           unit="ngày", default=1.32, min=1.0, max=7.0, scopes={"shop"},
+           editable_by={"lead"}, source_hint="system"),
         _p(key="platform_fee_rate", label_vi="Phí sàn", unit="tỷ lệ", default=0.12, min=0.0,
            max=0.3, scopes={"shop"}, editable_by={"lead"}, source_hint="seller"),
         # V = NET value of one leftover unit vs its cost (05 §3/§4): what it brings back after

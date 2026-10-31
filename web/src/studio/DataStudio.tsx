@@ -294,7 +294,12 @@ export function DataStudio() {
         method: "POST",
       });
       download("backend-import-report.json", JSON.stringify(result, null, 2));
-      setMessage("Backend import finished. Downloaded the ingestion report.");
+      try {
+        const sync = await requestJSON<{ message: string }>("/api/product-labels/sync", { method: "POST" });
+        setMessage(`Backend import finished. ${sync.message}`);
+      } catch (error) {
+        setMessage(`Backend import finished; label synchronization needs attention: ${error instanceof Error ? error.message : "retry from Warehouse"}`);
+      }
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Backend import unavailable.",
