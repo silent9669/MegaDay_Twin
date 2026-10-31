@@ -34,13 +34,15 @@ it.skipIf(!process.env.LIVE_ARCHIVE_PATH)("imports the live 11.11 archive and pe
     const savedAt = performance.now();
     const model = vi.fn<typeof fetch>(async (_url, init) => {
       const batch = JSON.parse(JSON.parse(init!.body as string).input).untrusted_evidence;
-      return Response.json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ labels: batch.products.map((p: { id: string }) => ({ productId: p.id, group: null, reason: "Need dated demand evidence", confidence: 0 })) }) }] }] });
+      return Response.json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ labels: batch.products.map((p: { id: string }) => ({ productId: p.id, group: "Normal", reason: "Estimate from product use; needs demand evidence", confidence: 0.2 })) }) }] }] });
     });
     vi.stubGlobal("fetch", model);
     const result = await workspace.fetch(new Request("https://test/internal/product-labels", { method: "POST", body: JSON.stringify({ sourceRevision: 1, context: { market: "Vietnam", asOf: "2026-11-12", evidence: [] } }) }));
     expect(result.status).toBe(200);
     const body = await result.json() as LabelResponse;
     expect(body.run?.results).toHaveLength(262);
+    expect(body.run?.status).toBe("completed");
+    expect(body.run?.results.every(result => result.group !== null)).toBe(true);
     expect(model).toHaveBeenCalledTimes(6);
     const stored = await (await workspace.fetch(new Request("https://test/api/workspace/sources"))).json() as { data: SourcePack };
     const inventory = stored.data.files.find(file => file.kind === "inventory")!;

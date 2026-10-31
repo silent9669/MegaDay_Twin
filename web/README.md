@@ -213,8 +213,11 @@ products with positive latest stock only. The toolbar contains search by name/co
 and **Label data**. New runs default to Vietnam and today; retries retain their
 saved assessment context. The API continues to accept dated product evidence. Each model batch gets
 only evidence for its products. No web search is performed; metadata and manual
-evidence do not imply measured demand. Labels are `Trendy`, `Seasonal`, `Normal`,
-or `null` with an explanation of missing evidence. The Vietnamese prompt lives
+evidence do not imply measured demand. New model runs always choose the best-fit `Trendy`, `Seasonal` or `Normal` label,
+with no confidence cutoff. When evidence is weak, the model may infer likely use
+from product attributes and must identify the result as an estimate. It never
+claims invented sales history or trend evidence. Older saved `null` results remain
+readable; prompt version `demand-v3` marks them stale for reclassification. The Vietnamese prompt lives
 in `server/demand-prompt.ts`; these labels do not change forecast groups or ads.
 
 - `GET /api/product-labels`: inventory candidates, configuration, latest run, stale flag.
