@@ -108,6 +108,8 @@ class StockResult:
     contribution: FloatArr  # [A, S] Σ m·sold (singles + combos)
     first_lost_t: IntArr  # [J, A, S] first hour with unserved demand (T = never)
     combo_first_lost_t: IntArr  # [C, A, S]
+    contribution_single: FloatArr  # [J, A, S], actual hourly margin times sales
+    contribution_combo: FloatArr  # [C, A, S]
 
 
 def simulate_stock(
@@ -127,6 +129,8 @@ def simulate_stock(
     csold_tot = np.zeros((n_c, n_a, n_s))
     clost_tot = np.zeros((n_c, n_a, n_s))
     contrib = np.zeros((n_a, n_s))
+    contrib_single = np.zeros((n_j, n_a, n_s))
+    contrib_combo = np.zeros((n_c, n_a, n_s))
     first = np.full((n_j, n_a, n_s), n_t, dtype=np.int64)
     cfirst = np.full((n_c, n_a, n_s), n_t, dtype=np.int64)
     q = setup.combo_qty
@@ -143,6 +147,7 @@ def simulate_stock(
         sold_tot += sold
         lost_tot += lost
         contrib += np.einsum("j,jas->as", m[:, t], sold)
+        contrib_single += m[:, t, None, None] * sold
         np.minimum(first, np.where(lost > 0, t, n_t), out=first)
         for c in range(n_c):
             comp = np.flatnonzero(q[c] > 0)
@@ -160,6 +165,7 @@ def simulate_stock(
             csold_tot[c] += sc
             clost_tot[c] += lc
             contrib += m_combo[c, t] * sc
+            contrib_combo[c] += m_combo[c, t] * sc
             np.minimum(cfirst[c], np.where(lc > 0, t, n_t), out=cfirst[c])
         if setup.flash[t]:
             reserve = np.maximum(reserve - used, 0.0)
@@ -172,4 +178,6 @@ def simulate_stock(
         contribution=contrib,
         first_lost_t=first,
         combo_first_lost_t=cfirst,
+        contribution_single=contrib_single,
+        contribution_combo=contrib_combo,
     )

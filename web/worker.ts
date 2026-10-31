@@ -14,6 +14,9 @@ import { studioImport } from "./server/studio-import";
 import type { StudioModelEnv } from "./server/model-json";
 import { productLabels } from "./server/product-labels";
 import { getProductLabelProvider } from "./server/product-label-provider";
+import { plannerContext, runSalePlan } from "./server/sale-planner";
+import { interpretGoal } from "./server/goal-interpret";
+import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
 import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
@@ -104,6 +107,24 @@ async function handle(request: Request, env: Env): Promise<Response> {
         env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
         getProductLabelProvider(env));
     }
+    if (path === "/api/sale-planner/context" && request.method === "GET")
+      return plannerContext(env);
+    if (path === "/api/sale-planner/interpret" && request.method === "POST") {
+      if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
+        return fail(429, "Vui lòng thử lại sau ít phút.");
+      return interpretGoal(request, env);
+    }
+    if (path === "/api/sale-planner/run" && request.method === "POST")
+      return runSalePlan(request, env);
+    if (path === "/api/sale-assistant/skus" && request.method === "GET")
+      return assistantSkus(request, env);
+    if (path === "/api/sale-assistant/context" && request.method === "GET")
+      return assistantContext(request, env);
+    if (path === "/api/sale-assistant/turn" && request.method === "POST") {
+      if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
+        return fail(429, "Vui lòng thử lại sau ít phút.");
+      return assistantTurn(request, env);
+    }
     if (path === "/api/repository-sources" && request.method === "GET") {
       const result = await repositorySources();
       return Response.json(result);
@@ -121,26 +142,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
         !(await env.PM_LIMITER.limit({ key: "admin" })).success
       )
         return fail(429, "PM is busy. Try again in a minute.");
-      let context: unknown = { sources: "unavailable" };
-      if (env.WORKSPACE) {
-        const response = await env.WORKSPACE.get(
-          env.WORKSPACE.idFromName("admin"),
-        ).fetch(new Request(new URL("/api/workspace/sources", url)));
-        const document = (await response.json()) as {
-          revision: number;
-          data: SourcePack;
-        };
-        context = {
-          revision: document.revision,
-          sources: document.data.files.map((f) => ({
-            type: f.kind,
-            name: f.name,
-            hash: f.hash,
-            origin: f.origin,
-          })),
-          decisionToolsConnected: !!env.DATA_BACKEND_URL,
-        };
-      }
+      const context = { decisionToolsConnected: !!env.DATA_BACKEND_URL };
       if (!env.WORKSPACE)
         return fail(503, "Account storage is not configured.");
       return savedChat(

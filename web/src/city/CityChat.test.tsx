@@ -1,10 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CityChat } from "./CityChat";
 import type { ChatArchive, Doc } from "../studio/workspace-types";
+import { openMilo, openMiloForSku, type MiloReplyPlan } from "./milo-contract";
 
 let document: Doc<ChatArchive>;
 let failSave = false;
+let replyPlan: MiloReplyPlan | null = null;
+let waitForReply: (() => Promise<void>) | undefined;
 beforeEach(() => {
   vi.stubGlobal('matchMedia', vi.fn(query => ({matches:false, media:query, addEventListener:vi.fn(),removeEventListener:vi.fn()})));
   document = {
@@ -13,6 +16,8 @@ beforeEach(() => {
     data: { preferredModel: "gpt-4.1", sessions: [] },
   };
   failSave = false;
+  replyPlan = null;
+  waitForReply = undefined;
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
     value: vi.fn(),
@@ -43,6 +48,7 @@ beforeEach(() => {
         return Response.json(document);
       }
       if (path === "/api/pm/chat") {
+        await waitForReply?.();
         const body = JSON.parse(String(init?.body));
         const session = document.data.sessions.find(
           (s) => s.id === body.sessionId,
@@ -53,8 +59,9 @@ beforeEach(() => {
           content: "Review the **source timestamps**.",
         });
         document.revision++;
-        return Response.json({ reply: "Review the **source timestamps**." });
+        return Response.json({ reply: "Review the **source timestamps**.", plan: replyPlan });
       }
+      if (path === "/api/sale-planner/context") return Response.json({ backendConfigured: true, canCreateGoals: true, referenceTime: '2026-11-11T00:00:00Z', dataAsOf: '2026-11-11T00:00:00Z', notice: null, campaigns: [{ id: 'C1', name: 'Sale test' }] });
       throw Error(`Unexpected path ${path}`);
     }),
   );
@@ -73,6 +80,63 @@ async function open() {
   );
 }
 describe("account chat", () => {
+  it("keeps SKU identifiers with the saved conversation and reviews before any simulation", async () => {
+    replyPlan = { context: { sku: { sku: 'SKU-A', name: 'Product A', variant: '', stockAvailable: 200, soldTodayUnits: 20, priceEffectiveVnd: 50000, contributionPerUnitVnd: 10000, demandGroup: 'normal' }, campaigns: [{ id: 'C1', name: 'Sale test', skus: ['SKU-A'] }], dataAsOf: '2026-11-11T00:00:00Z', source: null, canPlan: true, notices: [], opening: 'Your goal?' }, interpretation: { method: 'ai', notices: [], draft: { text: 'Sell 100 units', kind: 'sell_target', targetUnits: 100, maxSpendVnd: 2000000, maxLossVnd: null, start: '2026-11-11T01:00:00Z', deadline: '2026-11-11T05:00:00Z', sellTargetProbability: null, minMarginalReturn: null, unresolved: [] } } };
+    render(<CityChat />); await open();
+    act(() => openMiloForSku('SKU-A'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Sell 100 units' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra mục tiêu' }));
+    expect(document.data.sessions[0]!.context).toEqual({ screen: 'hq', sku: 'SKU-A' });
+    const call = vi.mocked(fetch).mock.calls.find(([path]) => path === '/api/pm/chat')!;
+    expect(JSON.parse(String(call[1]?.body)).context).toEqual({ screen: 'hq', sku: 'SKU-A' });
+    await waitFor(() => expect(screen.getByLabelText('Chiến dịch')).toHaveValue('C1'));
+    expect(screen.getByLabelText('Số sản phẩm mục tiêu')).toHaveValue(100);
+    expect(screen.getByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng' })).toBeDisabled();
+    expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/run'))).toBe(false);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Actually 150' } });
+    expect(screen.queryByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng' })).not.toBeInTheDocument();
+    let finish!: () => void;
+    waitForReply = () => new Promise((resolve) => { finish = resolve; });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([path]) => path === '/api/pm/chat')).toHaveLength(2));
+    act(() => openMiloForSku('SKU-B'));
+    act(() => openMiloForSku('SKU-A'));
+    expect(screen.queryByRole('button', { name: 'Kiểm tra mục tiêu' })).not.toBeInTheDocument();
+    await act(async () => { finish(); });
+    expect(screen.queryByRole('button', { name: 'Kiểm tra mục tiêu' })).not.toBeInTheDocument();
+  });
+  it('opens a separate result context even when the SKU matches an existing goal chat', async () => {
+    render(<CityChat />); await open();
+    act(() => openMiloForSku('SKU-A'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Plan this sale' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    await screen.findByText('source timestamps');
+    act(() => openMilo({ screen: 'sale-planner', sku: 'SKU-A', campaignId: 'C1', scenarioId: 'scn-1' }));
+    expect(screen.queryByText('source timestamps')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Explain the calculation' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    await screen.findByText('source timestamps');
+    expect(document.data.sessions).toHaveLength(2);
+    expect(document.data.sessions[0]!.context).toMatchObject({ sku: 'SKU-A', campaignId: 'C1', scenarioId: 'scn-1' });
+  });
+  it("ignores late replies and drafts after switching to another SKU", async () => {
+    let release!: () => void;
+    waitForReply = () => new Promise((resolve) => { release = resolve; });
+    render(<CityChat />); await open();
+    act(() => openMiloForSku('SKU-A'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Sell 100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([path]) => path === '/api/pm/chat')).toBe(true));
+    const pending = vi.mocked(fetch).mock.calls.find(([path]) => path === '/api/pm/chat')![1]!.signal!;
+    act(() => openMiloForSku('SKU-B'));
+    expect(pending.aborted).toBe(true);
+    await act(async () => { release(); });
+    expect(screen.getByText('SKU-B', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText('source timestamps')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Kiểm tra mục tiêu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Message Milo' })).toHaveValue('');
+  });
   it("replaces delete with history and persists a model preference", async () => {
     render(<CityChat />);
     await open();

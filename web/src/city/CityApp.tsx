@@ -21,6 +21,7 @@ import {
   Radio,
   RotateCcw,
   Settings2,
+  Target,
   Warehouse,
   X,
 } from "lucide-react";
@@ -39,6 +40,8 @@ import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
+import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
+import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
 import { ShiftOverviewPage } from "../pages/ShiftOverviewPage";
 import { CompareIndexPage } from "../pages/compare/ComparePage";
 import { CityChat } from "./CityChat";
@@ -57,7 +60,8 @@ const DISTRICTS = [
   { id: "ads", name: "Ads Platform", icon: Megaphone },
   { id: "homes", name: "Residential district", icon: Home },
 ] as const;
-export function CityApp({ studio = false }: { studio?: boolean }) {
+export function CityApp({ studio = false, planner = false, skuAssistant = false }: { studio?: boolean; planner?: boolean; skuAssistant?: boolean }) {
+  const pageWorkspace = studio || planner || skuAssistant;
   const [mobile, setMobile] = useState(
     () => matchMedia("(max-width: 899px)").matches,
   );
@@ -136,7 +140,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   const enterRef = useRef(enter);
   enterRef.current = enter;
   useEffect(() => {
-    if (studio || !host.current) return;
+    if (pageWorkspace || !host.current) return;
     let active = true;
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     reduced.current = media.matches;
@@ -178,7 +182,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       worldRef.current?.dispose();
       worldRef.current = null;
     };
-  }, [studio]);
+  }, [pageWorkspace]);
   useEffect(() => {
     worldRef.current?.update({
       ...latest.current,
@@ -226,7 +230,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     enter(TOUR[index]?.place ?? null);
   }
   useEffect(() => {
-    if (!ready || studio) return;
+    if (!ready || pageWorkspace) return;
     const initial = setTimeout(() => {
       try {
         if (!localStorage.getItem(TOUR_KEY)) setTour(0);
@@ -235,7 +239,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       }
     }, 100);
     return () => clearTimeout(initial);
-  }, [ready, studio]);
+  }, [ready, pageWorkspace]);
   const selectedStock = params.get('stock');
   useEffect(() => {
     if (!workspace || district !== 'warehouse' || chatOpen || !selectedStock) return;
@@ -249,7 +253,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   };
   return (
     <div
-      className={`city-app ${studio ? "city-studio" : ""} ${chatOpen ? "milo-open" : ""}`}
+      className={`city-app ${pageWorkspace ? "city-studio" : ""} ${chatOpen ? "milo-open" : ""}`}
       data-compact={compact}
     >
       <a className="city-skip" href="#city-main">
@@ -268,7 +272,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         </Link>
         <span className="city-route">
           /{" "}
-          {studio
+          {skuAssistant ? "Trợ lý theo SKU" : planner ? "Mục tiêu buổi sale" : studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
@@ -292,7 +296,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             to="/city-demo"
             title="View city"
             aria-label="View city"
-            aria-current={!studio && !district ? "page" : undefined}
+            aria-current={!pageWorkspace && !district ? "page" : undefined}
             onClick={() => enter(null)}
           >
             <Layers3 />
@@ -304,9 +308,9 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               key={id}
               title={name}
               aria-label={name}
-              aria-current={!studio && district === id ? "location" : undefined}
+              aria-current={!pageWorkspace && district === id ? "location" : undefined}
               onClick={() => {
-                if (studio) navigate(`/city-demo?district=${id}`);
+                if (pageWorkspace) navigate(`/city-demo?district=${id}`);
                 else enter(id);
               }}
             >
@@ -316,6 +320,14 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
           ))}
         </div>
         <div className="city-nav-tools">
+          <Link to="/sku-assistant" title="Trợ lý theo SKU" aria-label="Trợ lý theo SKU" aria-current={skuAssistant ? "page" : undefined}>
+            <MessageCircle />
+            <span>Trợ lý theo SKU</span>
+          </Link>
+          <Link to="/sale-planner" title="Mục tiêu buổi sale" aria-label="Mục tiêu buổi sale" aria-current={planner ? "page" : undefined}>
+            <Target />
+            <span>Mục tiêu buổi sale</span>
+          </Link>
           <Link
             to="/mock-data"
             title="Data Studio"
@@ -339,7 +351,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             title="Replay tutorial"
             aria-label="Replay tutorial"
             onClick={() => {
-              if (studio) navigate("/city-demo?tour=replay");
+              if (pageWorkspace) navigate("/city-demo?tour=replay");
               else tourStep(0);
             }}
           >
@@ -370,7 +382,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       </nav>
       {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
-        {studio ? (
+        {skuAssistant ? <SkuGoalAssistant /> : planner ? <SaleGoalPlanner /> : studio ? (
           <DataStudio />
         ) : (
           <>
@@ -504,6 +516,8 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                         >
                           Comparisons
                         </button>
+                        <Link to="/sale-planner">Mục tiêu buổi sale <ArrowRight aria-hidden size={16} /></Link>
+                        <Link to="/sku-assistant">Trao đổi mục tiêu với Milo <ArrowRight aria-hidden size={16} /></Link>
                       </div>
                     )}
                     <button
@@ -636,7 +650,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         )}
       </main>
       <footer className="city-footer">
-        <span>Sandbox data · Motion illustrates observations</span>
+        <span>{planner || skuAssistant ? "Mục tiêu được xác nhận bởi người dùng · Mô phỏng từ backend" : "Sandbox data · Motion illustrates observations"}</span>
         <span>
           {sources.document
             ? `Source revision ${sources.document.revision}`
@@ -644,6 +658,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         </span>
       </footer>
       <CityChat
+        context={{ screen: skuAssistant ? "sku-assistant" : planner ? "sale-planner" : studio ? "data-studio" : district ?? "city" }}
         launcherAnchor={chatAnchor}
         updates={updates}
         onOpenChange={setChatOpen}

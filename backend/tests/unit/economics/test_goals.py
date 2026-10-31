@@ -9,7 +9,14 @@ import numpy as np
 import pytest
 
 from app.core.errors import NotFound, ValidationFailed
-from app.economics.goals import Outcome, active_goal, create_goal, get_goal, select_actions
+from app.economics.goals import (
+    Outcome,
+    active_goal,
+    create_goal,
+    get_goal,
+    select_actions,
+    validate_goal_params,
+)
 from app.warehouse.db import migrate
 
 S = 2000
@@ -126,3 +133,74 @@ def test_sell_target_runner_up_from_goal_meeting_actions() -> None:
     assert one.ranked[1] == 1  # best (by E[J]) among the actions missing the goal
     prof = select_actions("profit", outs)
     assert prof.runner_up_meets_goal
+
+
+@pytest.mark.parametrize("kind", ["profit", "sell_target", "clear_stock", "efficiency"])
+def test_zero_total_spend_limit_excludes_paid_actions(kind: str) -> None:
+    outs = [_o("paid", 100_000, 100, 1), _o("free", 10_000, 100, 0)]
+    sel = select_actions(
+        kind, outs, target_units=1 if kind == "sell_target" else None, max_spend_vnd=0
+    )  # type: ignore[arg-type]
+    assert sel.ranked == [1]
+    assert sel.eligible == [False, True]
+    assert "giới hạn 0đ" in sel.notes[0]
+
+
+def test_spend_limit_applies_to_each_sample_not_average() -> None:
+    outs = [
+        Outcome("variable", True, np.array([100.0, 100.0]), np.ones(2), np.array([0.0, 200.0])),
+        Outcome("within", True, np.array([10.0, 10.0]), np.ones(2), np.array([100.0, 100.0])),
+    ]
+    sel = select_actions("profit", outs, max_spend_vnd=100)
+    assert sel.ranked == [1] and not sel.eligible[0]
+
+
+@pytest.mark.parametrize("kind", ["profit", "sell_target", "efficiency"])
+def test_explicit_loss_limit_applies_to_all_goal_kinds(kind: str) -> None:
+    outs = [_o("losing", -100, 100, 0, sd=0), _o("within", 50, 100, 20, sd=0)]
+    sel = select_actions(
+        kind, outs, target_units=1 if kind == "sell_target" else None, max_loss_vnd=0
+    )  # type: ignore[arg-type]
+    assert sel.ranked == [1] and not sel.eligible[0]
+
+
+def test_efficiency_never_falls_back_outside_hard_constraints() -> None:
+    outs = [_o("expensive", 100, 100, 200, sd=0), _o("cheap_loss", -100, 100, 0, sd=0)]
+    sel = select_actions("efficiency", outs, max_loss_vnd=0, max_spend_vnd=100)
+    assert sel.none_meets_goal and not sel.ranked
+    assert sel.eligible == [False, False]
+
+
+def test_clear_stock_default_still_rejects_expected_loss() -> None:
+    sel = select_actions("clear_stock", [_o("loss", -100, 100, 0, sd=0)])
+    assert sel.none_meets_goal
+    # Profit without an explicit loss constraint preserves the existing behavior.
+    assert select_actions("profit", [_o("loss", -100, 100, 0, sd=0)]).ranked == [0]
+
+
+@pytest.mark.parametrize(
+    "key", ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"]
+)
+@pytest.mark.parametrize("value", [-1, True, "100", None, float("nan"), float("inf"), 10**400])
+def test_goal_constraints_reject_nonfinite_or_coerced_values(key: str, value: object) -> None:
+    with pytest.raises(ValidationFailed):
+        validate_goal_params({key: value})
+
+
+@pytest.mark.parametrize("probability", [0, 1.01])
+def test_goal_probability_must_be_between_zero_and_one(probability: float) -> None:
+    with pytest.raises(ValidationFailed):
+        validate_goal_params({"sell_target_prob": probability})
+
+
+@pytest.mark.parametrize("target", [0, -1, True, 1.5, "3"])
+def test_target_is_a_positive_integer_without_coercion(target: object) -> None:
+    with duckdb.connect() as conn, pytest.raises(ValidationFailed):
+        create_goal(
+            conn,
+            scope_id="CD002",
+            kind="sell_target",
+            target_units=target,  # type: ignore[arg-type]
+            deadline=datetime(2026, 11, 11, 17, tzinfo=UTC),
+            confirmed_by="lead",
+        )

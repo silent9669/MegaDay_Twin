@@ -378,6 +378,12 @@ CREATE TABLE IF NOT EXISTS scenario_results (
   PRIMARY KEY (scenario_id, action)
 );
 
+CREATE TABLE IF NOT EXISTS scenario_calculation_traces (
+  scenario_id VARCHAR PRIMARY KEY,
+  trace       JSON NOT NULL,
+  results     JSON NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS recommendations (
   recommendation_id VARCHAR PRIMARY KEY,
   scenario_id   VARCHAR NOT NULL REFERENCES scenarios(scenario_id),

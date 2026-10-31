@@ -127,6 +127,7 @@ class ScenarioRun(BaseModel):
     timings_ms: dict[str, float] = Field(default_factory=dict)
     requested_by: str | None = None
     created_at: LocalDatetime | None = None
+    calculation_trace: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------- mapping
@@ -370,6 +371,18 @@ def load_run(conn: duckdb.DuckDBPyConnection, scenario_id: str) -> ScenarioRun:
         )
     order = {"continue": 0, "pause": 1, "reduce_budget": 2, "schedule_hours": 3}
     results.sort(key=lambda x: (order.get(x.action.kind, 9), x.key))
+    snapshot = fetch_one(
+        conn,
+        "SELECT trace, results FROM scenario_calculation_traces WHERE scenario_id = ?",
+        [scenario_id],
+    )
+    trace = parse_json(snapshot["trace"]) if snapshot else None
+    if snapshot:
+        # Preserve all actual goal eligibility, p_target and focused quantities on readback.
+        results = [
+            result_out(ScenarioResult.model_validate(r))
+            for r in parse_json(snapshot["results"]) or []
+        ]
     rr = fetch_one(conn, _REC_SQL + " WHERE r.scenario_id = ?", [scenario_id])
     rec = (
         rec_out(conn, rec_from_row(rr, rr["inputs_ref"]), what_if=bool(rr["what_if"]))
@@ -401,6 +414,7 @@ def load_run(conn: duckdb.DuckDBPyConnection, scenario_id: str) -> ScenarioRun:
         input_hash=s["input_hash"],
         requested_by=s["requested_by"],
         created_at=s["created_at"],
+        calculation_trace=trace,
     )
 
 
@@ -525,6 +539,7 @@ def run_scenario(
         cache_hit=out.cache_hit,
         input_hash=out.input_hash,
         blocked=out.blocked,
+        calculation_trace=out.calculation_trace,
         timings_ms={**out.timings_ms, "api_total": (time.perf_counter() - t0) * 1e3},
         requested_by="user",
         created_at=srow[2] if srow else utcnow(),

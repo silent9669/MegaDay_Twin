@@ -34,6 +34,7 @@ from app.simulator.engine import Perturb, SimRun
 from app.simulator.inputs import SimInputs, load_inputs
 from app.simulator.policies import default_actions, peak_windows, windows_from_hours
 from app.simulator.schemas import ActionSpec, IroasPosterior, SimOutput, SimRequest
+from app.simulator.trace import build_trace
 
 
 def default_action_list(inp: SimInputs) -> list[ActionSpec]:
@@ -164,6 +165,7 @@ def run_simulation(
         recommendation=rec,
         input_hash=key,
         what_if=what_if,
+        calculation_trace=build_trace(conn, run, key),
         timings_ms={
             "load": (t_load - t0) * 1e3,
             "simulate": (t_sim - t_load) * 1e3,
@@ -172,17 +174,23 @@ def run_simulation(
     )
     rec.scenario_id = out.scenario_id
     if persist:
-        ev = recommend.persist(
-            conn,
-            out,
-            inp,
-            overrides=dict(req.param_overrides),
-            samples=req.samples,
-            seed=req.seed,
-            requested_by=requested_by,
-            request_json=request_as_run(req, inp).model_dump_json(),
-            what_if=what_if,
-        )
+        conn.execute("BEGIN TRANSACTION")
+        try:
+            ev = recommend.persist(
+                conn,
+                out,
+                inp,
+                overrides=dict(req.param_overrides),
+                samples=req.samples,
+                seed=req.seed,
+                requested_by=requested_by,
+                request_json=request_as_run(req, inp).model_dump_json(),
+                what_if=what_if,
+            )
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
         if ev is not None and events is not None:
             events.append(ev)
     out.timings_ms["total"] = (time.perf_counter() - t0) * 1e3

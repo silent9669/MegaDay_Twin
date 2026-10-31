@@ -35,7 +35,7 @@ from app.core.timeutil import (
     to_local,
 )
 from app.economics.contribution import ContributionTable, load_contributions
-from app.economics.goals import Goal
+from app.economics.goals import Goal, validate_focus_sku
 from app.economics.parameters import ParamSet
 from app.forecast.base import ForecastResult
 from app.simulator.constraints import UNLIMITED
@@ -344,6 +344,7 @@ def load_inputs(
     forecasts: Mapping[str, ForecastResult] | None = None,
     iroas: IroasPosterior | IroasEstimate | None = None,
 ) -> SimInputs:
+    validate_focus_sku(conn, "campaign", campaign_id, goal.params)
     camp = conn.execute(
         "SELECT name, daily_budget FROM campaigns WHERE campaign_id = ?", [campaign_id]
     ).fetchone()
