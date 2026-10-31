@@ -7,6 +7,7 @@ import {
   sessionExpiry,
   type AccessEnv,
 } from "./server/auth";
+import { workspaceQuotaFailure } from "./server/workspace-errors";
 import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
 import type { StudioModelEnv } from "./server/model-json";
@@ -223,8 +224,8 @@ export default {
     let response: Response;
     try {
       response = await handle(request, env);
-    } catch {
-      response = fail(
+    } catch (error) {
+      response = workspaceQuotaFailure(error) ?? fail(
         503,
         "Service temporarily unavailable. Your saved workspace is retained.",
       );

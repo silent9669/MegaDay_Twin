@@ -194,6 +194,11 @@ AccountWorkspace Durable Object. Extraction, parsing, model calls and persistenc
 run there, avoiding the gateway CPU limit that caused HTTP 503 responses for
 the 11.11 archive. The object receives the same `OPENAI_API_KEY` binding as Milo;
 no second key or public internal route is introduced.
+Initialized workspaces can read existing documents without schema writes when
+Cloudflare's free-tier row-write quota is exhausted. Saves report
+`WORKSPACE_WRITE_QUOTA` and retain the last committed data until writes are allowed
+again. Table saves update only changed records and remove only deleted records,
+reducing row writes during repeated labeling and edits.
 
 `POST /api/studio/import` accepts raw ZIP bytes and returns `{ tables, skipped,
 model }`. It does not save anything. Limits: 20 MiB upload and extracted data,

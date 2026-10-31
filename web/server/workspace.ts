@@ -24,6 +24,7 @@ import { productLabels } from "./product-labels";
 import { studioImport } from "./studio-import";
 import type { StudioModelEnv } from "./model-json";
 import { fail } from "./auth";
+import { workspaceQuotaFailure } from "./workspace-errors";
 import repositoryPack from "./repository-sources.json";
 function isUntouchedDemo(source: Source) {
   if (!source.commit) return false;
@@ -40,14 +41,16 @@ export class AccountWorkspace {
   private ctx: DurableObjectState;
   constructor(ctx: DurableObjectState, private env: StudioModelEnv & PlannerEnv = {}) {
     this.ctx = ctx;
-    ctx.storage.sql.exec(
+    const existing = new Set(ctx.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'").toArray().map(table => table.name));
+    // No-op CREATE statements also fail when Cloudflare's write quota is exhausted.
+    if (!existing.has("documents")) ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS documents (name TEXT PRIMARY KEY, revision INTEGER NOT NULL, updated_at TEXT NOT NULL)",
     );
-    ctx.storage.sql.exec(
+    if (!existing.has("chunks")) ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS chunks (name TEXT, position INTEGER, content TEXT NOT NULL, PRIMARY KEY(name, position))",
     );
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_tables (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, columns_json TEXT NOT NULL, source_revision INTEGER NOT NULL)");
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_rows (table_id TEXT NOT NULL, position INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY(table_id, position))");
+    if (!existing.has("studio_tables")) ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_tables (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, columns_json TEXT NOT NULL, source_revision INTEGER NOT NULL)");
+    if (!existing.has("studio_rows")) ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_rows (table_id TEXT NOT NULL, position INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY(table_id, position))");
     // One-time cleanup of exact, untouched repository defaults. Uploaded/edited tables survive.
     if (!this.read("empty-studio-v1")) this.ctx.storage.transactionSync(() => {
       const sources = this.read("sources");
@@ -132,9 +135,15 @@ export class AccountWorkspace {
       const id = sourceKey(source);
       if (catalog.some(table => table.id === id) && previous?.files.some(old => sourceKey(old) === id && old.hash === source.hash)) continue;
       const parsed = inspect(source.name, source.text);
-      this.ctx.storage.sql.exec("DELETE FROM studio_rows WHERE table_id = ?", id);
+      const previousRows = new Map(this.ctx.storage.sql.exec<{ position: number; record_json: string }>("SELECT position, record_json FROM studio_rows WHERE table_id = ?", id).toArray().map(row => [row.position, row.record_json]));
+      if ([...previousRows.keys()].some(position => position >= parsed.rows.length))
+        this.ctx.storage.sql.exec("DELETE FROM studio_rows WHERE table_id = ? AND position >= ?", id, parsed.rows.length);
       this.ctx.storage.sql.exec("INSERT INTO studio_tables VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, columns_json=excluded.columns_json, source_revision=excluded.source_revision", id, source.name, source.kind, JSON.stringify(parsed.columns), revision);
-      parsed.rows.forEach((row, index) => this.ctx.storage.sql.exec("INSERT INTO studio_rows VALUES (?, ?, ?)", id, index, JSON.stringify(row)));
+      parsed.rows.forEach((row, index) => {
+        const record = JSON.stringify(row);
+        if (previousRows.get(index) === record) return;
+        this.ctx.storage.sql.exec("INSERT INTO studio_rows VALUES (?, ?, ?) ON CONFLICT(table_id, position) DO UPDATE SET record_json = excluded.record_json", id, index, record);
+      });
     }
   }
   private notify(name: string, revision: number) {
@@ -300,6 +309,8 @@ export class AccountWorkspace {
       this.notify(name, saved.revision);
       return Response.json(saved, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
+      const quotaFailure = workspaceQuotaFailure(error);
+      if (quotaFailure) return quotaFailure;
       return fail(
         422,
         error instanceof Error && error.name !== "ZodError"
