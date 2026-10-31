@@ -67,8 +67,8 @@ export async function plannerContext(env: PlannerEnv): Promise<Response> {
       let cursor: string | null = null;
       for (let page = 0; page < 20; page++) {
         const result = await api(`campaigns?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-        const campaigns = z.array(z.object({ campaign_id: z.string(), name: z.string() })).parse(result.data);
-        context.campaigns.push(...campaigns.map((campaign) => ({ id: campaign.campaign_id, name: campaign.name })));
+        const campaigns = z.array(z.object({ campaign_id: z.string(), name: z.string(), skus: z.array(z.string()).optional() })).parse(result.data);
+        context.campaigns.push(...campaigns.map((campaign) => ({ id: campaign.campaign_id, name: campaign.name, ...(campaign.skus ? { skus: campaign.skus } : {}) })));
         context.dataAsOf = (result.meta as { data_as_of?: string | null } | undefined)?.data_as_of ?? context.dataAsOf;
         cursor = typeof result.next_cursor === "string" ? result.next_cursor : null;
         if (!cursor) break;

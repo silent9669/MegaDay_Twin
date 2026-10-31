@@ -8,7 +8,7 @@ export type PlannerContext = {
   canApply?: boolean;
   referenceTime: string;
   dataAsOf: string | null;
-  campaigns: { id: string; name: string }[];
+  campaigns: { id: string; name: string; skus?: string[] }[];
   notice: string | null;
 };
 export type GoalRevision = { goal_id: string; version: number };

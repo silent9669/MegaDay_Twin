@@ -6,40 +6,12 @@ import { config } from "../lib/config";
 import type { StockRow } from "../studio/source-view";
 import type { SourcePack } from "../studio/sources";
 import type { TrackedProduct } from "./types";
+import { useProductIdentity } from "./useProductIdentity";
 import { modelSuggestion, workspaceSuggestion } from "./worksheet-suggestions";
 
-type InventoryAlias = { raw_code: string; alias: string; status: string; selected: string | null };
-type AliasPage = { data: { items: InventoryAlias[] }; next_cursor?: string | null };
-export function linkedSku(aliases: InventoryAlias[], sku: string, name: string) {
-  const matches = aliases.filter(row => row.raw_code === sku && row.alias === name);
-  if (!matches.length || matches.some(row => !row.selected || !["auto_accepted", "confirmed"].includes(row.status))) return undefined;
-  const codes = new Set(matches.map(row => row.selected!));
-  return codes.size === 1 ? [...codes][0] : undefined;
-}
-export function useInventorySku(sku: string, stock: StockRow | undefined, revision: number, enabled: boolean) {
-  return useQuery({
-    queryKey: ["hq-inventory-links", revision],
-    enabled: enabled && !!stock && !config.useFixtures,
-    staleTime: 60_000,
-    retry: false,
-    queryFn: async ({ signal }) => {
-      const rows: InventoryAlias[] = [];
-      let cursor: string | null | undefined;
-      do {
-        const params = new URLSearchParams({ status: "all", source_type: "inventory", limit: "500" });
-        if (cursor) params.set("cursor", cursor);
-        const page = await api.get<AliasPage>(`/ingest/sku-queue?${params}`, signal);
-        rows.push(...page.data.items);
-        cursor = page.next_cursor;
-      } while (cursor);
-      return rows;
-    },
-    select: rows => linkedSku(rows, sku, stock?.name ?? ""),
-  });
-}
 export function useProductEvidence(product: TrackedProduct, pack: SourcePack | null, stock?: StockRow, revision = 0) {
-  const link = useInventorySku(product.sku, stock, revision, product.mode === "workspace");
-  const canonicalSku = product.mode === "model" ? product.sku : link.data;
+  const identity = useProductIdentity(product);
+  const canonicalSku = identity.sku;
   const model = useSku(canonicalSku);
   const campaignId = model.data?.data.campaign?.id;
   const fee = useQuery({
@@ -63,7 +35,7 @@ export function useProductEvidence(product: TrackedProduct, pack: SourcePack | n
     delete backend.stock;
     return { ...backend, ...workspaceSuggestion(pack, product.sku, stock) };
   }, [product, pack, stock, model.data, canonicalSku, fee.data]);
-  return { evidence, canonicalSku, campaignId, loading: link.isFetching || model.isFetching || fee.isFetching,
-    error: link.isError || (!!canonicalSku && model.isError) || fee.isError,
-    retry: () => { void link.refetch(); if (canonicalSku) { void model.refetch(); void fee.refetch(); } } };
+  return { evidence, canonicalSku, campaignId, loading: identity.loading || model.isFetching || fee.isFetching,
+    error: !!identity.error || (!!canonicalSku && model.isError) || fee.isError,
+    retry: () => { identity.retry(); if (canonicalSku) { void model.refetch(); void fee.refetch(); } } };
 }

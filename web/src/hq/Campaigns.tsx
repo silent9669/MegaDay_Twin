@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { type SourcePack } from "../studio/sources";
 import { analyzeWithAI } from "../city/analysis-context";
 import { useHQSelection } from "./selection";
+import { useProductIdentity } from "./useProductIdentity";
+import { Link } from "react-router";
 export function Campaigns({
   pack,
   revision,
@@ -15,6 +17,7 @@ export function Campaigns({
     sku = selection?.product?.sku;
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState("product");
+  const identity = useProductIdentity(selection?.product ?? null);
   const campaigns = useMemo(
     () =>
       pack?.files
@@ -30,7 +33,7 @@ export function Campaigns({
   );
   const rows = campaigns.filter(
     ({ row }) =>
-      (!sku || scope === "all" || (Array.isArray(row.sku) && row.sku.includes(sku))) &&
+      (!sku || scope === "all" || (Array.isArray(row.sku) && (row.sku.includes(sku) || (identity.sku && row.sku.includes(identity.sku))))) &&
       JSON.stringify(row).toLowerCase().includes(search.toLowerCase()),
   );
   return (
@@ -49,7 +52,7 @@ export function Campaigns({
       {!rows.length ? (
         <p className="hq-empty">
           {search ? "No campaigns match your search." : sku && scope === "product"
-            ? "No campaign source explicitly links this product."
+            ? identity.loading ? "Checking the product's backend SKU…" : identity.error || "No campaign source explicitly links this product."
             : "Import campaign structure in Data Studio to view campaigns."}
         </p>
       ) : (
@@ -94,7 +97,7 @@ export function Campaigns({
                         {
                           sku: String(code),
                           name: String(code),
-                          mode: "workspace",
+                          mode: "model",
                         },
                         "details",
                       )
@@ -105,6 +108,7 @@ export function Campaigns({
                 ))}
             </div>
             <footer>
+              <Link to={`/city-demo?district=hq&hq=goals&campaign=${encodeURIComponent(String(row.ma_chien_dich ?? row.id ?? ""))}`}>Plan this campaign</Link>
               <span>
                 {file} · record {record}
               </span>

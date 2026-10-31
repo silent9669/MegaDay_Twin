@@ -9,7 +9,7 @@ import type { StockRow } from "../studio/source-view";
 import { analyzeWithAI } from "../city/analysis-context";
 import { ErrorState, SkeletonRows } from "../components/states";
 import type { TrackedProduct, Worksheet } from "./types";
-import { useInventorySku } from "./product-evidence";
+import { useProductIdentity } from "./useProductIdentity";
 import { ProductEconomics } from "./ProductEconomics";
 const codeColumns = new Set([
   "ma noi bo",
@@ -55,10 +55,10 @@ export function ProductDetails({
   revision: number;
   worksheet?: Worksheet;
 }) {
-  const linked = useInventorySku(product.sku, stock, revision, product.mode === "workspace");
+  const linked = useProductIdentity(product);
   const records = useMemo(
-    () => matchingRecords(pack, [product.sku, ...(linked.data ? [linked.data] : [])]),
-    [pack, product.sku, linked.data],
+    () => matchingRecords(pack, [product.sku, ...(linked.sku ? [linked.sku] : [])]),
+    [pack, product.sku, linked.sku],
   );
   const economics = <ProductEconomics product={product} pack={pack} stock={stock} worksheet={worksheet} revision={revision} />;
   if (product.mode === "model") return <>{economics}<ModelDetails sku={product.sku} /></>;
@@ -77,7 +77,7 @@ export function ProductDetails({
                 revision,
                 data: JSON.stringify({
                   stock,
-                  canonicalSku: linked.data,
+                  canonicalSku: linked.sku,
                   sourceTables: records.map((f) => ({
                     name: f.name,
                     matchingRows: f.rows.length,

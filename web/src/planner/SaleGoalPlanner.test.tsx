@@ -65,6 +65,15 @@ const confirm = () => screen.getByRole("checkbox", { name: /I confirm these para
 const run = () => screen.getByRole("button", { name: "Preview simulation" });
 
 describe("sale goal review and real simulation", () => {
+  it("limits product goals to linked campaigns and selects the only match", async () => {
+    currentContext.campaigns = [
+      { id: "campaign-real", name: "Linked campaign", skus: ["NOICHIEN2L"] },
+      { id: "campaign-other", name: "Unrelated campaign", skus: ["OTHER"] },
+    ];
+    render(<MemoryRouter><SaleGoalPlanner focusSku="NOICHIEN2L" /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByLabelText("Campaign")).toHaveValue("campaign-real"));
+    expect(screen.queryByRole("option", { name: "Unrelated campaign" })).not.toBeInTheDocument();
+  });
   it("allows interpretation without a backend and never substitutes fixture results", async () => {
     currentContext = { ...context, backendConfigured: false, canCreateGoals: false, campaigns: [] };
     await review();

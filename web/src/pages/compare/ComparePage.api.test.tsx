@@ -10,6 +10,8 @@ import type { CampaignDetail, Recommendation, ScenarioResult, ScenarioRun, SimRe
 import { config } from '../../lib/config';
 import { ComparePage,CompareIndexPage } from './ComparePage';
 import { ShiftOverviewPage } from '../ShiftOverviewPage';
+import { HQSelection } from '../../hq/selection';
+import { NeedsRecommendation } from './CompareSetup';
 const routes=[{path:'/',element:<ShiftOverviewPage/>},{path:'/compare',element:<CompareIndexPage/>},{path:'/campaign/:id/compare',element:<ComparePage/>},{path:'/sku/:sku/compare',element:<ComparePage/>}];
 
 const META = {
@@ -202,6 +204,30 @@ afterAll(() => {
 });
 
 describe('Compare · real API', () => {
+  it('shows campaign loading errors instead of an empty recommendation state', async () => {
+    stub({ recs: [] });
+    const get = api.get;
+    const original = vi.mocked(get).getMockImplementation()!;
+    vi.mocked(get).mockImplementation((path, ...args) => path.startsWith('/campaigns/')
+      ? Promise.reject(new ApiError(503, 'BACKEND_UNAVAILABLE', 'Campaign temporarily unavailable'))
+      : original(path, ...args));
+    renderAt('/campaign/CD002/compare');
+    expect(await screen.findByText('Campaign temporarily unavailable')).toBeInTheDocument();
+  });
+
+  it('HQ directs missing goals through preview/apply without writing an active goal', async () => {
+    const { posts } = stub({ lead: true });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createMemoryRouter([{ path: '/', element:
+      <HQSelection.Provider value={{ product: null, open: vi.fn(), tab: vi.fn(), log: vi.fn() }}>
+        <NeedsRecommendation campaign={{ ...CAMPAIGN, goal: null }} dataAsOf={META.data_as_of} />
+      </HQSelection.Provider> }]);
+    render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+    expect(await screen.findByRole('link', { name: 'Review a goal and preview before applying' }))
+      .toHaveAttribute('href', '/city-demo?district=hq&hq=goals&campaign=CD002');
+    expect(screen.queryByRole('form', { name: 'Set goal' })).not.toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
   it('loads campaign, active recommendation and scenario; explains the missing zone bar', async () => {
     const { gets } = stub({});
     renderAt('/campaign/CD002/compare');
@@ -276,13 +302,16 @@ describe('Compare · real API', () => {
           ? { data: { goal_id: 'goal-NEW', scope: 'campaign', scope_id: 'CD006', kind: 'profit', label: 'x', deadline: 'x', target_units: null, params: {}, confirmed_by: 'u-lead-1', created_at: 'x', active: true, version: 1 } }
           : undefined,
     });
-    const router = renderAt('/campaign/CD006/compare');
+    const router = renderAt('/campaign/CD006/compare?district=hq&hq=comparisons');
     const form = await screen.findByRole('form', { name: 'Set goal' });
     await userEvent.click(within(form).getByRole('button', { name: 'Save goal and simulate' }));
     await waitFor(() => expect(posts.map((p) => p.path)).toEqual(['/goals', '/scenarios/run']));
     expect(posts[0]?.body).toMatchObject({ scope: 'campaign', scope_id: 'CD006', kind: 'profit', deadline: '2026-11-12T00:00:00+07:00' });
     expect(posts[1]?.body).toMatchObject({ campaign_id: 'CD006', goal_id: 'goal-NEW', samples: 1000 });
-    await waitFor(() => expect(router.state.location.search).toBe('?rec=rec-REAL'));
+    await waitFor(() => expect(new URLSearchParams(router.state.location.search).get('rec')).toBe('rec-REAL'));
+    expect(new URLSearchParams(router.state.location.search).get('campaign')).toBe('CD006');
+    expect(new URLSearchParams(router.state.location.search).get('district')).toBe('hq');
+    expect(new URLSearchParams(router.state.location.search).get('hq')).toBe('comparisons');
   });
 
   it('goal but blocked by missing cost: lists what is missing', async () => {
