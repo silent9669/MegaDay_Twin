@@ -90,7 +90,7 @@ Cây thư mục chi tiết tới từng file nằm ở [01 · Kiến trúc và c
 | Công cụ | Phiên bản | Dùng cho |
 |---|---|---|
 | Git | bất kỳ | |
-| Node.js | ≥ 18 (team đang dùng v24) | `mock-data`, `web` |
+| Node.js | ≥ 22.13 (khuyến nghị v24 LTS) | `mock-data`, `web` |
 | Python | 3.11 | `backend` |
 | [uv](https://docs.astral.sh/uv/) | mới nhất | quản lý môi trường Python |
 | OpenAI API key | | lớp AI (app vẫn chạy đủ khi tắt AI) |
@@ -175,18 +175,18 @@ cd backend; uv run python -m eval.rehearsal --base-url http://localhost:8000   #
 
 Bản demo Cloudflare: <https://megadaytwin.dangphuc.me>. Deploy dùng `cf` CLI,
 Worker `megadaytwin` và D1 `megadaytwin-db`; hiện frontend dùng dữ liệu mẫu,
-backend Python/DuckDB chưa deploy. Nhánh `main` được bảo vệ bởi check `ci`; sau khi merge một thay đổi đã qua CI,
+backend Python/DuckDB chưa deploy. Kiểm tra local trước khi merge; sau khi push thay đổi web lên `main`,
 workflow tự đẩy đúng commit sang nhánh `cloudflare-production`. Cloudflare Workers
 Builds tự kéo nhánh đó, build và deploy. Job `deploy` chờ kết quả Cloudflare và kiểm tra
 health/access trên website trước khi đánh dấu môi trường `production` thành công.
 Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
 
 
-Kiểm tra trước khi push (giống hệt CI):
+Kiểm tra local trước khi push (CI đầy đủ chỉ chạy thủ công):
 
 ```bash
-cd backend && uv run python tasks.py check     # ruff + mypy + pytest
-cd web && npm run lint && npm run typecheck && npm test && npm run build
+node scripts/check.mjs              # backend + web + kiểm bộ sinh dữ liệu
+node scripts/check.mjs web          # kiểm riêng web, build Cloudflare và dry run
 ```
 
 ### Biến môi trường
@@ -248,26 +248,29 @@ Team làm **tuần tự từng mốc** (M0 → M1 → … → M5). Bên trong m�
 | Nhánh | **Mỗi mốc một nhánh**: `feat/M1-du-lieu`, `feat/M2-du-bao`… Sửa lỗi gấp: `fix/<mô-tả>` |
 | Commit | Dòng đầu ≤ 72 ký tự, có mã task, ví dụ `ING-03: chuyển giờ báo cáo ads từ UTC` |
 | Pull request | **Mỗi mốc một PR** vào `main`, điền đủ mẫu PR. Chỉ mở khi đạt tiêu chí mốc ở file 12 |
-| CI | Job cổng `ci` phải xanh. Job này tự chạy phần bị đụng: backend, web, kiểm bộ sinh dữ liệu |
-| `main` | Chỉ nhận code qua PR có `ci` xanh; cấm push thẳng và force push |
+| Kiểm tra | Chạy `node scripts/check.mjs` trước khi merge; ghi kết quả trong PR. Full CI chạy thủ công khi cần |
+| `main` | Chỉ nhận code qua PR đã kiểm tra local; cấm push thẳng và force push |
 | Quyết định | Vấn đề plan chưa nói rõ thì tự chốt theo tinh thần plan, ghi vào `docs/quyet-dinh/`. Đổi hợp đồng (schema, API, kiểu) thì sửa `docs/dev-plan/` trong cùng PR |
-| Definition of Done | Code + test + `ci` xanh + đã chạy với dữ liệu `demo` + đạt tiêu chí mốc |
+| Definition of Done | Code + test + kiểm tra local đạt + đã chạy với dữ liệu `demo` + đạt tiêu chí mốc |
 
 Mã task (`INF`, `ING`, `PNL`, `FC`, `ADS`, `ECO`, `SIM`, `ORC`, `AI`, `API`, `WEB`, `GOV`, `LIVE`, `EVAL`, `DEMO` + số) lấy từ bảng task trong file 12.
 
 ## CI
 
-Một workflow duy nhất, [.github/workflows/ci.yml](.github/workflows/ci.yml), chạy trên mọi PR và mọi lần push vào `main`:
+[ci.yml](.github/workflows/ci.yml) chỉ chạy thủ công (**Run workflow**), dùng cùng
+lệnh kiểm tra local. [deploy.yml](.github/workflows/deploy.yml) tự deploy khi push
+lên `main` khi có web, bundled data hoặc deployment scripts chưa được promote,
+không chạy lại full CI/build.
+Cloudflare Workers Builds thực hiện build production.
 
-| Job | Chạy khi PR đụng | Kiểm tra |
-|---|---|---|
-| `backend` | `backend/`, `mock-data/` | ruff, ruff format, mypy, pytest (gồm test chống rò `ground_truth`) |
-| `web` | `web/` | eslint, tsc, vitest, build |
-| `mock-data` | `mock-data/` | Sinh lại cỡ `nho` và `demo`, phải khớp y hệt bản đã commit |
-| `ci` | luôn chạy | Cổng: đỏ nếu job nào lỗi. Đây là check bắt buộc của nhánh `main` |
-| `deploy` | push web/data lên `main`, hoặc chạy tay trên `main`, sau khi `ci` xanh | Chờ Cloudflare deploy đúng commit, kiểm health và access, cập nhật trạng thái `production` |
+| Workflow | Kiểm tra |
+|---|---|
+| `ci` (thủ công) | backend: ruff, mypy, pytest; web: lint, tests, typechecked Cloudflare build, dry run; mock-data: kiểm file và nội dung bộ sinh |
+| `deploy` (tự động hoặc thủ công trên `main`) | Regression tests không cần dependency, promote commit hiện tại, chờ Cloudflare thành công, kiểm health/access |
 
-Repo public nên GitHub chạy CI miễn phí. GitHub cũng quét và chặn ngay lúc push nếu ai lỡ commit API key.
+Khi áp dụng, bỏ required status `ci` trong bảo vệ nhánh `main` để PR không chờ
+một workflow chỉ chạy thủ công. Giữ các thiết lập bảo vệ khác. Kiểm tra local
+là trách nhiệm trước khi merge; full CI vẫn có sẵn để kiểm tra độc lập khi cần.
 
 ## Nguyên tắc bắt buộc
 

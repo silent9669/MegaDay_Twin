@@ -3,5 +3,4 @@
 dev:          ; node scripts/dev.mjs
 dev-fixtures: ; node scripts/dev.mjs --fixtures
 check:
-	cd backend && uv run python tasks.py check
-	cd web && npm run lint && npm run typecheck && npm test && npm run build
+	node scripts/check.mjs

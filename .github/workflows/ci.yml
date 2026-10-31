@@ -1,52 +1,18 @@
 name: ci
 
-# Một workflow duy nhất. PR và push chỉ kiểm tra phần thay đổi; chạy tay kiểm tra tất cả.
-# Job cổng `ci` luôn chạy và là check DUY NHẤT cần bắt buộc trong bảo vệ nhánh main:
-# job bị bỏ qua (skipped) được coi là qua, job lỗi hoặc bị hủy thì cổng đỏ.
-
+# Full validation is opt-in; run the same checks locally before merging.
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: manual-ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      web: ${{ steps.filter.outputs.web }}
-      mock_data: ${{ steps.filter.outputs.mock_data }}
-    steps:
-      - uses: actions/checkout@v4
-        if: github.event_name != 'pull_request'
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'backend/**'
-              - 'mock-data/**'
-              - '.github/workflows/ci.yml'
-            web:
-              - 'web/**'
-              - 'mock-data/out/**'
-              - '.github/workflows/ci.yml'
-            mock_data:
-              - 'mock-data/**'
-              - '.github/workflows/ci.yml'
-
   backend:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -73,8 +39,6 @@ jobs:
         run: uv run pytest
 
   web:
-    needs: changes
-    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -88,21 +52,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefer-offline --no-audit --no-fund
-      - run: npm run prepare:sources
-      - run: npm run lint
-      - run: npm test
-      - name: Typecheck and build Cloudflare Worker (demo fixtures)
-        # Sources were already prepared above for lint/tests; avoid the prebuild hook twice.
-        run: npm --ignore-scripts run build:cloudflare
+      - name: Local web validation (tests, lint, typecheck, build, dry run)
+        run: npm run check
         env:
           CF_SEND_TELEMETRY: "false"
-      - name: Validate deployment without credentials
-        run: npm run deploy:cloudflare -- --dry-run
-        env:
-          CF_SEND_TELEMETRY: "false"
+
   mock-data:
-    needs: changes
-    if: needs.changes.outputs.mock_data == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -110,95 +65,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Sinh lại cỡ nho và demo
-        working-directory: mock-data
-        run: |
-          node generate.js --size nho
-          node generate.js --size demo
-      - name: Dữ liệu đã commit phải khớp bộ sinh (bỏ qua thời điểm tạo trong manifest)
-        run: |
-          git diff --stat --exit-code -- mock-data/out \
-            ':(exclude)mock-data/out/*/ground_truth/manifest.json' \
-            || { echo "::error::mock-data/out lệch với bộ sinh. Chạy lại generate.js cho nho và demo rồi commit."; exit 1; }
-
-  ci:
-    if: always()
-    needs: [changes, backend, web, mock-data]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cổng CI
-        run: |
-          echo "changes=${{ needs.changes.result }} backend=${{ needs.backend.result }} web=${{ needs.web.result }} mock-data=${{ needs['mock-data'].result }}"
-          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
-            echo "::error::Có job lỗi hoặc bị hủy."
-            exit 1
-          fi
-
-  deploy:
-    needs: [changes, ci]
-    # A skipped backend/mock-data job must not skip deployment after a green gate.
-    if: >-
-      !cancelled() && needs.ci.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    environment:
-      name: production
-      url: https://megadaytwin.dangphuc.me
-    permissions:
-      contents: write
-      checks: read
-    steps:
-      - name: Promote and wait for the actual Cloudflare deployment
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = context.repo;
-            const { data: main } = await github.rest.repos.getBranch({ ...repo, branch: 'main' });
-            if (main.commit.sha !== context.sha) {
-              throw new Error('A newer main commit exists; refusing to deploy this older commit.');
-            }
-            await github.rest.git.updateRef({
-              ...repo, ref: 'heads/cloudflare-production', sha: context.sha, force: false,
-            });
-            const deadline = Date.now() + 10 * 60 * 1000;
-            while (Date.now() < deadline) {
-              const checks = await github.paginate(github.rest.checks.listForRef, {
-                ...repo, ref: context.sha, check_name: 'Workers Builds: megadaytwin', per_page: 100,
-              });
-              const check = checks
-                .filter((run) => run.app?.slug === 'cloudflare-workers-and-pages')
-                .sort((a, b) => b.id - a.id)[0];
-              if (check?.status === 'completed') {
-                if (check.conclusion !== 'success') {
-                  throw new Error(`Cloudflare deployment ${check.conclusion}: ${check.details_url}`);
-                }
-                await core.summary.addLink('Cloudflare deployment', check.details_url).write();
-                return;
-              }
-              core.info(`Waiting for Cloudflare build of ${context.sha}...`);
-              await new Promise((resolve) => setTimeout(resolve, 10000));
-            }
-            throw new Error('Timed out waiting for Cloudflare deployment; production success is unconfirmed.');
-      - name: Verify live D1 health and access gate
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const base = 'https://megadaytwin.dangphuc.me';
-            const request = (path) => fetch(`${base}${path}`, {
-              redirect: 'manual', signal: AbortSignal.timeout(15000),
-            });
-            const health = await request('/healthz');
-            const body = await health.json();
-            if (health.status !== 200 || body.status !== 'ok' || body.db !== 'ok') {
-              throw new Error('Production D1 health check failed.');
-            }
-            const login = await request('/login');
-            const privateChat = await request('/api/workspace/chats');
-            const city = await request('/city-demo');
-            if (login.status !== 200 || privateChat.status !== 401 || city.status !== 307) {
-              throw new Error('Production login/access gate check failed.');
-            }
-            await core.summary.addRaw('Production health and access gate passed.').write();
+      - name: Verify generated fixtures without modifying the checkout
+        run: node scripts/check-mock-data.mjs

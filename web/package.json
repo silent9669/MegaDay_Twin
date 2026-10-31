@@ -13,6 +13,7 @@
     "deploy:cloudflare": "cf deploy --prebuilt --mode cloudflare",
     "preview": "vite preview",
     "test": "vitest run",
+    "check": "node --test ../scripts/deployment.test.cjs && npm run prepare:sources && npm run lint && npm test && npm --ignore-scripts run build:cloudflare && npm run deploy:cloudflare -- --dry-run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",

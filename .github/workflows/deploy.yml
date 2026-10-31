@@ -1,0 +1,44 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Keep production updates serialized; a new push must not cancel an active deploy.
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment:
+      name: production
+      url: https://megadaytwin.dangphuc.me
+    permissions:
+      contents: write
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test deployment safeguards (no dependencies)
+        run: node --test scripts/deployment.test.cjs
+      - name: Promote and verify Cloudflare deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { needsDeployment, promote, waitForBuild, verifyProduction } = require('./scripts/deployment.cjs');
+            if (!await needsDeployment(github, context)) {
+              await core.summary.addRaw('No pending web changes; Cloudflare deployment is unchanged.').write();
+              return;
+            }
+            await promote(github, context);
+            const buildUrl = await waitForBuild(github, context);
+            await core.summary.addLink('Cloudflare deployment', buildUrl).write();
+            await verifyProduction();
+            await core.summary.addRaw('Production health and access gate passed.').write();

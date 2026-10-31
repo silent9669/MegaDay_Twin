@@ -4,7 +4,7 @@
 
 ## Đã kiểm tra
 
-- [ ] CI xanh (job `ci`)
+- [ ] Đã chạy `node scripts/check.mjs` (hoặc ghi rõ phần đã kiểm tra và kết quả)
 - [ ] Đã chạy với dữ liệu `mock-data/out/demo` (không chỉ `nho`)
 - [ ] Nếu có chấm điểm: dán kết quả từ `backend/eval/` (ghép SKU %, lỗi bắt được, sai số...)
 - [ ] Ảnh chụp màn hình nếu đổi giao diện
