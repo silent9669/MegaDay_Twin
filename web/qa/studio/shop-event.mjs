@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5187';
 assert.ok(['127.0.0.1', 'localhost'].includes(new URL(base).hostname));
-assert.ok(process.env.SHOP_PACK_PATH && process.env.LIVE_ARCHIVE_PATH);
+assert.ok(process.env.LIVE_ARCHIVE_PATH);
 const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
@@ -24,21 +24,24 @@ try {
   await page.getByText('No tables yet.', { exact: true }).waitFor();
   let started = Date.now();
   const saved = page.waitForResponse(response => response.url().endsWith('/api/workspace/sources') && response.request().method() === 'PUT');
-  await page.locator('input[type=file][accept=".csv,.json"]').setInputFiles(process.env.SHOP_PACK_PATH);
+  await page.getByRole('button', { name: 'Import shop folder', exact: true }).click();
   assert.equal((await saved).status(), 200);
   await page.getByRole('button', { name: /Orders.*117,687/ }).waitFor();
   await page.getByText('Saved to account', { exact: true }).waitFor();
   console.log(JSON.stringify({ baselineImportMs: Date.now() - started }));
   const baseline = await (await context.request.get(base + '/api/workspace/sources')).json();
   assert.equal(baseline.data.files.length, 6);
+  assert.ok(baseline.data.files.every(file => !file.replay));
   await page.goto(base + '/city-demo?district=warehouse');
   await page.getByLabel('Search products').waitFor();
   await page.getByLabel('Filter demand labels').waitFor();
   await page.locator('.product-demand-label').first().waitFor();
-  await page.locator('.product-demand-label').first().selectOption('Trendy');
-  await page.waitForResponse(response => response.url().endsWith('/api/product-labels') && response.request().method() === 'PATCH' && response.status() === 200);
+  const nextLabel = await page.locator('.product-demand-label').first().inputValue() === 'Trendy' ? 'Normal' : 'Trendy';
+  const relabeled = page.waitForResponse(response => response.url().endsWith('/api/product-labels') && response.request().method() === 'PATCH' && response.status() === 200);
+  await page.locator('.product-demand-label').first().selectOption(nextLabel);
+  await relabeled;
   await page.reload();
-  await page.getByLabel('Filter demand labels').selectOption('Trendy');
+  await page.getByLabel('Filter demand labels').selectOption(nextLabel);
   await page.locator('.warehouse-table tbody tr').first().waitFor();
   console.log(JSON.stringify({ manualLabelPersisted: true }));
   await page.goto(base + '/mock-data');
@@ -55,6 +58,15 @@ try {
     await page.setViewportSize({ width, height: 1000 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Studio width ${width}`);
   }
+  await page.getByRole('button', { name: 'Import shop folder', exact: true }).click();
+  await page.getByText('6 shop tables loaded.', { exact: true }).waitFor();
+  await page.reload();
+  await page.getByRole('button', { name: /Orders.*117,687/ }).waitFor();
+  const restored = await (await context.request.get(base + '/api/workspace/sources')).json();
+  assert.equal(restored.data.files.length, 6);
+  assert.ok(restored.data.files.every(file => !file.replay));
+  assert.equal((await (await context.request.get(base + '/api/workspace/sandbox')).json()).data.startedAt, undefined);
+  console.log(JSON.stringify({ baselineRestored: true, playbackStopped: true }));
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ responsive: true, pageErrors: errors.length }));
 } finally { await browser.close(); }

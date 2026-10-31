@@ -59,6 +59,20 @@ const req = (name: string, data?: unknown, revision = 1) =>
   );
 afterEach(() => vi.unstubAllGlobals());
 describe("persistent account documents", () => {
+  it("stops event playback atomically when baseline tables replace the replay", async () => {
+    const { workspace, reconstruct, database } = setup();
+    const file = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "upload");
+    const event = { ...file, replay: { date: "2026-11-11", hours: [0], lagHours: 0 } };
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [event] }, 0))).status).toBe(200);
+    expect(await (await workspace.fetch(req("sandbox"))).json()).toMatchObject({ data: { startedAt: expect.any(String) } });
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [file] }, 0))).status).toBe(409);
+    expect(await (await workspace.fetch(req("sandbox"))).json()).toMatchObject({ data: { startedAt: expect.any(String) } });
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [file] }, 1))).status).toBe(200);
+    const restored = reconstruct();
+    expect((await (await restored.fetch(req("sandbox"))).json()).data).toEqual({ hour: 1, event: "observe" });
+    expect((await (await restored.fetch(req("sources"))).json()).data.files).toEqual([JSON.parse(JSON.stringify(file))]);
+    database.close();
+  });
   it("reads saved sources without writes and preserves data after a rejected save", async () => {
     const { workspace, database, reconstruct, blockWrites } = setup();
     const file = await makeSource("saved.csv", "item,value\nA,1", "upload");
