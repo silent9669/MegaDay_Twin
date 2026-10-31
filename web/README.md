@@ -75,6 +75,17 @@ Trước khi push: `npm run check` (deployment regression tests, eslint, vitest,
 
 ## Cloudflare
 
+Full-shop replay saves use a bounded 120-second Worker/Durable Object CPU limit;
+the default 30 seconds reset production saves after ZIP extraction. Replay
+validation reuses its CSV inspection. Milo streams saved CSV records instead of
+retaining all parsed tables between model calls. Verify large sanitized packs with
+`SHOP_PACK_PATH=/path/to/pack.json node --max-old-space-size=96 --expose-gc --import tsx qa/studio/milo-memory.mjs`.
+
+HQ Comparisons loads SKU-linked source facts through **Load best suggestion**.
+Missing or conflicting inputs remain blank; demand and new advertising spend
+remain scenario assumptions. **How this is calculated** shows source records,
+substituted equations, option differences and the break-even sales threshold.
+
 Website: <https://megadaytwin.dangphuc.me>. This repository deploys Worker
 `megadaytwin` with D1 `megadaytwin-db` through binding `DB`.
 
