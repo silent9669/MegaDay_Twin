@@ -139,6 +139,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
       - name: Promote the passed commit for Cloudflare Workers Builds
-        run: git push origin HEAD:refs/heads/cloudflare-production
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/cloudflare-production" \
+            -f sha="$GITHUB_SHA" -F force=false
