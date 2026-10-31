@@ -26,6 +26,8 @@ import {
   type Worksheet,
 } from "./types";
 import { ScenarioWorksheet } from "./ScenarioWorksheet";
+import type { ModelComparison } from "./model-comparison";
+import { useInventorySku } from "./product-evidence";
 import { ProductDetails } from "./ProductDetails";
 import { analyzeWithAI } from "../city/analysis-context";
 import "./hq.css";
@@ -83,6 +85,7 @@ export function HQWorkspace({
   const [worksheetDrafts, setWorksheetDrafts] = useState<
     Record<string, Worksheet>
   >({});
+  const [comparisonDrafts, setComparisonDrafts] = useState<Record<string, ModelComparison | null>>({});
   const inventory = useMemo(() => sourceView(pack, 24).stock, [pack]);
   const active =
     data.tracked.find((p) => productKey(p) === data.active) ?? null;
@@ -212,6 +215,8 @@ export function HQWorkspace({
     Math.max(0, Math.ceil(products.length / 25) - 1),
   );
   const selectedStock = inventory.find((p) => p.code === active?.sku);
+  const linked = useInventorySku(active?.sku ?? "", selectedStock, revision, active?.mode === "workspace" && tab === "comparisons");
+  const comparisonSku = active?.mode === "model" ? active.sku : linked.data;
   const activity = data.activity.filter(event => event.product === activeKey && `${event.action} ${event.detail}`.toLowerCase().includes(activitySearch.toLowerCase()));
   const saveWorksheet = (worksheet: Worksheet) =>
     void save(
@@ -481,6 +486,8 @@ export function HQWorkspace({
                         pack={pack}
                         stock={selectedStock}
                         revision={revision}
+                        model={comparisonDrafts[activeKey] ?? null}
+                        onModelChange={value => setComparisonDrafts(previous => ({ ...previous, [activeKey]: value }))}
                         saved={
                           worksheetDrafts[activeKey] ??
                           data.worksheets[activeKey]
@@ -499,7 +506,8 @@ export function HQWorkspace({
                           <summary>
                             Decision model · actions, reasons & evidence
                           </summary>
-                          <ComparePage key={activeKey} sku={active.sku} />
+                          {comparisonSku ? <ComparePage key={activeKey} sku={comparisonSku} />
+                            : <p role="status">{linked.isFetching ? "Loading product mapping…" : "No accepted backend SKU mapping for this product."}</p>}
                         </details>
                       ) : (
                         <p className="hq-provenance">

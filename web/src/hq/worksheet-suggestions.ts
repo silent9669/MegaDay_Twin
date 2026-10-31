@@ -66,3 +66,13 @@ export function suggestedWorksheet(evidence: WorksheetEvidence): Worksheet {
   for (const [key, fact] of Object.entries(evidence)) value[key as keyof Worksheet] = fact.value;
   return value;
 }
+
+/** Fill missing facts without replacing saved assumptions or fields explicitly cleared in this session. */
+export function autofillWorksheet(saved: Worksheet, evidence: WorksheetEvidence, cleared: Partial<Record<keyof Worksheet, boolean>> = {}): Worksheet {
+  const value = { ...saved };
+  for (const [key, fact] of Object.entries(evidence)) {
+    const field = key as keyof Worksheet;
+    if (value[field] === null && !cleared[field]) value[field] = fact.value;
+  }
+  return value;
+}

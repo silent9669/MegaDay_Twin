@@ -9,6 +9,7 @@ import type { StockRow } from "../studio/source-view";
 import { analyzeWithAI } from "../city/analysis-context";
 import { ErrorState, SkeletonRows } from "../components/states";
 import type { TrackedProduct, Worksheet } from "./types";
+import { useInventorySku } from "./product-evidence";
 import { ProductEconomics } from "./ProductEconomics";
 const codeColumns = new Set([
   "ma noi bo",
@@ -20,7 +21,7 @@ const codeColumns = new Set([
   "seller sku",
   "merchant sku",
 ]);
-function matchingRecords(pack: SourcePack | null, sku: string) {
+function matchingRecords(pack: SourcePack | null, skus: string[]) {
   return (pack?.files ?? [])
     .map((file) => {
       const parsed = readSource(file),
@@ -28,8 +29,8 @@ function matchingRecords(pack: SourcePack | null, sku: string) {
       const rows = parsed.rows.filter((row) =>
         columns.some((c) =>
           Array.isArray(row[c])
-            ? row[c].some((value) => String(value).trim() === sku)
-            : String(row[c] ?? "").trim() === sku,
+            ? row[c].some((value) => skus.includes(String(value).trim()))
+            : skus.includes(String(row[c] ?? "").trim()),
         ),
       );
       return {
@@ -54,11 +55,12 @@ export function ProductDetails({
   revision: number;
   worksheet?: Worksheet;
 }) {
+  const linked = useInventorySku(product.sku, stock, revision, product.mode === "workspace");
   const records = useMemo(
-    () => matchingRecords(pack, product.sku),
-    [pack, product.sku],
+    () => matchingRecords(pack, [product.sku, ...(linked.data ? [linked.data] : [])]),
+    [pack, product.sku, linked.data],
   );
-  const economics = <ProductEconomics product={product} pack={pack} stock={stock} worksheet={worksheet} />;
+  const economics = <ProductEconomics product={product} pack={pack} stock={stock} worksheet={worksheet} revision={revision} />;
   if (product.mode === "model") return <>{economics}<ModelDetails sku={product.sku} /></>;
   return (
     <section className="hq-details">
@@ -75,11 +77,12 @@ export function ProductDetails({
                 revision,
                 data: JSON.stringify({
                   stock,
+                  canonicalSku: linked.data,
                   sourceTables: records.map((f) => ({
                     name: f.name,
                     matchingRows: f.rows.length,
                   })),
-                  join: "Exact SKU column matches only; unlinked product names are not joined.",
+                  join: "Exact SKU column matches, including accepted backend inventory aliases; unlinked names are not joined.",
                 }),
               },
               "Review this product in English. Use the workspace tools to inspect its source records, summarize inventory and costs with citations, identify missing inputs and explain what can and cannot be inferred. No invented SKU joins.",

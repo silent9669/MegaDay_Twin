@@ -1,5 +1,7 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import {
-  render,
+  render as testingRender,
   screen,
   fireEvent,
   waitFor,
@@ -92,7 +94,7 @@ it("tracks two products, keeps one active, and isolates unsaved worksheet drafts
     }),
   );
   await screen.findByRole("heading", { name: "Product B", level: 2 });
-  expect(screen.getByLabelText("Available units")).toHaveValue(null);
+  expect(screen.getByLabelText("Available units")).toHaveValue(20);
   expect(saved.data.tracked).toHaveLength(2);
   fireEvent.click(screen.getByRole("button", { name: "Select A" }));
   await waitFor(() =>
@@ -147,3 +149,5 @@ it("switches between the active product's campaigns and all campaigns", async ()
   fireEvent.change(screen.getByLabelText("Search campaigns"),{target:{value:"missing"}});
   expect(screen.getByText("No campaigns match your search.")).toBeVisible();
 });
+
+function render(ui: ReactElement) { return testingRender(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>{ui}</QueryClientProvider>); }

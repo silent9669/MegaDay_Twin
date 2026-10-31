@@ -24,7 +24,7 @@ export function WorksheetCalculation({ value: w, evidence, fields }: {
         </dd>
       </div>)}
     </dl>
-    <p>Only exact SKU matches are used. Conflicting values and name-only costs need review in Data Studio. Source records may be imported or demo data; they are not live forecasts.</p>
+    <p>Product facts use exact source matches or accepted backend SKU mappings. Each input shows its source; demand and spend remain assumptions.</p>
     {results && margin !== null && fee !== null ? <>
       <h4>Per-unit calculation</h4>
       <p>Platform fee = {n(w.price!)} × {n(w.feePercent!)}% = {n(fee)} VND.</p>

@@ -1,4 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import { render as testingRender, screen } from "@testing-library/react";
 import { ProductEconomics } from "./ProductEconomics";
 import { blankWorksheet } from "./types";
 vi.mock("../api/queries", () => ({ useSku: () => ({ data: undefined }) }));
@@ -16,3 +18,5 @@ it("uses SKU-linked facts and keeps unknown fees and contribution empty", () => 
   expect(screen.getByRole("row", { name: /Platform fee/ })).toHaveTextContent("Missing input");
   expect(screen.getByRole("row", { name: /Contribution before ads/ })).toHaveTextContent("—");
 });
+
+function render(ui: ReactElement) { return testingRender(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>{ui}</QueryClientProvider>); }
