@@ -11,10 +11,12 @@ import { defaultSettings } from "./workspace-types";
 function setup() {
   const database = new DatabaseSync(":memory:");
   const sent: string[] = [];
+  let writesBlocked = false;
   const state = {
     storage: {
       sql: {
         exec: (query: string, ...bindings: (string | number)[]) => {
+          if (writesBlocked && !query.startsWith("SELECT")) throw Error("Exceeded allowed rows written in Durable Objects free tier.");
           const result = database.prepare(query);
           if (query.startsWith("SELECT"))
             return { toArray: () => result.all(...bindings) };
@@ -42,6 +44,7 @@ function setup() {
     ],
   };
   return {
+    blockWrites: () => { writesBlocked = true; },
     reconstruct: () =>
       new AccountWorkspace(state as unknown as DurableObjectState),
     workspace: new AccountWorkspace(state as unknown as DurableObjectState),
@@ -56,6 +59,34 @@ const req = (name: string, data?: unknown, revision = 1) =>
   );
 afterEach(() => vi.unstubAllGlobals());
 describe("persistent account documents", () => {
+  it("reads saved sources after reconstruction when the write quota is exhausted", async () => {
+    const { workspace, database, reconstruct, blockWrites } = setup();
+    const file = await makeSource("saved.csv", "item,value\nA,1", "upload");
+    const saved = await (await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [file] }, 0))).json();
+    blockWrites();
+    const restored = reconstruct();
+    expect(await (await restored.fetch(req("sources"))).json()).toEqual(saved);
+    const rejected = await restored.fetch(req("sources", { schema: "hackathon.sources.v1", files: [] }, 1));
+    expect(rejected.status).toBe(503);
+    expect(await rejected.json()).toMatchObject({ error: { code: "WORKSPACE_WRITE_QUOTA" } });
+    expect(await (await restored.fetch(req("sources"))).json()).toEqual(saved);
+    database.close();
+  });
+  it("preserves unchanged rows when editing and shortening a table", async () => {
+    const { workspace, database } = setup();
+    const save = async (text: string, revision: number) => workspace.fetch(req("sources", {
+      schema: "hackathon.sources.v1", files: [await makeSource("saved.csv", text, "upload")],
+    }, revision));
+    expect((await save("item,value\nA,1\nB,2\nC,3", 0)).status).toBe(200);
+    for (const operation of ["DELETE", "UPDATE"])
+      database.exec(`CREATE TRIGGER protect_${operation} BEFORE ${operation} ON studio_rows WHEN OLD.position = 0 BEGIN SELECT RAISE(ABORT, 'unchanged row rewritten'); END`);
+    expect((await save("item,value\nA,1\nB,4\nC,3", 1)).status).toBe(200);
+    expect((await save("item,value\nA,1\nB,4", 2)).status).toBe(200);
+    expect(database.prepare("SELECT record_json FROM studio_rows ORDER BY position").all().map(row => JSON.parse(row.record_json as string))).toEqual([{ item: "A", value: "1" }, { item: "B", value: "4" }]);
+    expect((await save("item,value\nA,1\nB,4\nD,5", 3)).status).toBe(200);
+    expect(database.prepare("SELECT * FROM studio_rows").all()).toHaveLength(3);
+    database.close();
+  });
   it("clears untouched legacy demo tables once while retaining uploads", async () => {
     const { workspace, database, reconstruct } = setup();
     const upload = await makeSource("custom.csv", "item,value\nKeep,1", "upload");
