@@ -75,11 +75,23 @@ it("does not describe unresolved repairs as no changes needed", async () => {
 it("saves AI cell patches directly through the existing table save flow", async () => {
   const source = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cupp,2", "upload");
   const fixed = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "upload");
-  vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: source.name, source: fixed, rowCount: 1, method: "recognized", columns: [], repairs: ["AI corrected row 1, Tên hàng: Typo"], remainingIssues: [], review: [] }], skipped: [], model: "test" });
+  vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: source.name, source: fixed, rowCount: 1, method: "recognized", columns: [], repairs: ["AI corrected row 1, Tên hàng: Typo"], remainingIssues: [], review: ["Product name contained a typo."] }], skipped: [], model: "test" });
   const onLoad = vi.fn(async () => {});
   render(<ArchiveImport sources={[source]} blocked={false} onLoad={onLoad} />);
   fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
   await waitFor(() => expect(onLoad).toHaveBeenCalledWith([fixed], true));
   expect(screen.getByRole("status")).toHaveTextContent("AI fixes saved");
   expect(screen.getByText(/AI corrected row 1/)).toBeInTheDocument();
+  expect(screen.getByRole("status")).not.toHaveTextContent("needs input");
+  expect(screen.getByText("AI notes: Product name contained a typo.")).toBeInTheDocument();
+});
+
+it("keeps unresolved model observations visible without claiming repairs were made", async () => {
+  const source = await makeSource("notes.csv", "name,value\nCup,1", "upload");
+  vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: source.name, source, rowCount: 1, method: "general", columns: [], repairs: [], remainingIssues: [], review: ["Confirm what value measures."] }], skipped: [], model: "test" });
+  const onLoad = vi.fn(async () => {});
+  render(<ArchiveImport sources={[source]} blocked={false} onLoad={onLoad} />);
+  fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Review AI notes"));
+  expect(onLoad).not.toHaveBeenCalled();
 });
