@@ -83,6 +83,22 @@ and existing API fixtures honestly; no live ingestion or causal iROAS is claimed
 
 ## Verification
 
+Data Studio's Diagnostics tab describes source-data checks, not application
+failures. It separates errors, warnings and information, explains intentional
+demo anomalies, and links row-level checks to the corresponding record (including
+pagination). CSV positions include the header; JSON positions start at record 1.
+Advertising timestamps with explicit timezone offsets do not trigger the missing
+timezone warning. These checks preserve original values and do not certify
+forecast or profit accuracy.
+
+For the focused browser regression check, run `npm run prepare:sources`, start
+Vite on port 5186, then run `node qa/studio/check.mjs` from `web/`.
+`STUDIO_QA_URL` overrides the target URL and `STUDIO_QA_CHANNEL=msedge` selects
+an installed Edge browser. This check uses mocked account responses and a real
+browser; it covers upload, retained invalid values, record navigation, filtering
+and 320/390/768/1440px layouts. Results and screenshots are written to the ignored
+repository directory `qa/runs/studio/`. It does not verify production persistence.
+
 Run frontend lint, typecheck, unit tests and both builds. Browser checks cover
 desktop/mobile compact navigation, six-source bootstrap/import/export/diagnostics,
 two-session realtime updates, optimistic conflicts, reload persistence, chat
