@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { fileURLToPath, URL } from 'node:url';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
@@ -9,6 +10,7 @@ export default defineConfig(({ mode }) => {
   const proxyTarget = env.VITE_PROXY_TARGET || 'http://localhost:8000';
 
   return {
+    resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     plugins: [react(), tailwindcss(), ...(mode === 'cloudflare' ? cloudflare() : [])],
     define: mode === 'cloudflare' ? { 'import.meta.env.VITE_USE_FIXTURES': '"true"' } : {},
     server: {

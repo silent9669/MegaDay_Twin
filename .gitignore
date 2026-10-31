@@ -32,3 +32,7 @@ web/server/repository-sources.json
 web/.dev.vars
 web/.wrangler/
 qa/runs/
+
+# Regenerated Blender intermediate; ship only the optimized GLB.
+tools/assets/*.raw.glb
+tools/assets/*.blend1

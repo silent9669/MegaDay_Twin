@@ -241,7 +241,7 @@ export default {
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     headers.set(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss: https://cloudflareinsights.com; font-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: ws: wss: https://cloudflareinsights.com; font-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     );
     if (!new URL(request.url).pathname.startsWith("/assets/"))
       headers.set("Cache-Control", "no-store");

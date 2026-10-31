@@ -142,3 +142,9 @@ real SQLite storage and WebSocket updates. Only model discovery/generation are
 simulated. It covers history after reload, model preferences, Markdown, stale
 writes, auth/CSRF, and containment at 320/390/768/1440px. Results and screenshots
 are under `web/qa/chat/`. Live OpenAI and hosted deployment are verified separately during release; local browser checks use a simulated model service.
+
+## Saigon city and in-app updates
+
+The header and login share the existing M favicon. The login uses original District 1 vector artwork. The expanded city contains a separate Bitexco landmark, Saigon River vessels, Ben Thanh Market, the Post Office, shophouses and cafés, and a modest signed MegaDay Twin office. Ad buildings retain their platform logos and colors.
+
+Milo has Chat and Updates tabs, PixelLab sprite states, and static reduced-motion imagery. Changes remain in this open app session (latest 100), with an unread badge and quiet important-change toast. Source imports, source checks, stock zero/unknown/recovery, observed counts, and the simulation clock are monitored without automatic model calls. Rewinds reset comparison; reconnects report aggregate differences. Explain attaches context for a user-sent request and preserves an existing draft. See [validation](saigon-validation.md) and [decisions](../quyet-dinh/saigon-city-milo.md).

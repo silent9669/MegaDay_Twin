@@ -5,6 +5,8 @@ import type {
   ChatSession,
   Doc,
 } from "../src/studio/workspace-types";
+import { resolveChange } from "./workspace-change";
+import { changeReferenceSchema } from "../src/city/monitor/changes";
 type Storage = { fetch(request: Request): Promise<Response> };
 
 // Read the conversation from authenticated account storage, never from client-supplied history.
@@ -15,8 +17,8 @@ export async function savedChat(
   storage: Storage,
 ) {
   const raw = await request.text();
-  if (raw.length > 1000) return fail(413, "Request too large.");
-  let body: { sessionId?: string; lastMessageId?: string };
+  if (raw.length > 3000) return fail(413, "Request too large.");
+  let body: { sessionId?: string; lastMessageId?: string; changeReference?: unknown };
   try {
     body = JSON.parse(raw);
   } catch {
@@ -28,6 +30,12 @@ export async function savedChat(
     typeof body.lastMessageId !== "string"
   )
     return fail(422, "Choose a saved conversation.");
+  let change;
+  if (body.changeReference !== undefined) {
+    const parsed = changeReferenceSchema.safeParse(body.changeReference);
+    if (!parsed.success) return fail(422, "Invalid workspace change.");
+    change = await resolveChange(parsed.data, storage, request.url);
+  }
   const url = new URL("/api/workspace/chats", request.url);
   async function load() {
     const response = await storage.fetch(new Request(url));
@@ -59,7 +67,7 @@ export async function savedChat(
       }),
     }),
     env,
-    context,
+    change ? { workspace: context, change } : context,
   );
   if (!response.ok) return response;
   const result = (await response.json()) as { reply: string; model: string };

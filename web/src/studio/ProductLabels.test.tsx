@@ -12,6 +12,21 @@ const response: LabelResponse = {
 };
 beforeEach(() => request.mockReset());
 describe("warehouse demand labels", () => {
+  it("reveals and highlights a Milo source selection after searching and paging", async () => {
+    request.mockResolvedValue(response);
+    const inventory = Array.from({ length: 10 }, (_, index) => ({ code: `SKU-${index}`, name: `Product ${index}`, stock: index, asOf: "2026-10-31" }));
+    const view = render(<ProductLabels sourceRevision={1} blocked={false} inventory={inventory} selectedCode="SKU-9" />);
+    await waitFor(() => expect(screen.getByLabelText("Search products")).toHaveValue("SKU-9"));
+    expect(screen.getByText("SKU-9").closest("tr")).toHaveClass("stock-highlight");
+    fireEvent.change(screen.getByLabelText("Search products"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+    view.rerender(<ProductLabels sourceRevision={1} blocked={false} inventory={inventory} selectedCode="SKU-1" />);
+    await waitFor(() => expect(screen.getByLabelText("Search products")).toHaveValue("SKU-1"));
+    expect(screen.getByText("SKU-1").closest("tr")).toHaveClass("stock-highlight");
+    expect(screen.getByText("1 / 1")).toBeInTheDocument();
+    expect(request.mock.calls.every(([, options]) => options?.method !== "POST")).toBe(true);
+  });
   it("requires an explicit button click and sends assessment context", async () => {
     request.mockResolvedValue(response);
     render(<ProductLabels sourceRevision={1} blocked={false} />);

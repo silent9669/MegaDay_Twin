@@ -5,13 +5,18 @@ import { requestJSON } from "./account";
 import { DEMAND_LABELS, labelContextSchema, type LabelContext, type LabelResponse } from "./product-labels";
 
 const PAGE_SIZE = 8;
-export function ProductLabels({ sourceRevision, blocked, inventory }: { sourceRevision: number; blocked: boolean; inventory?: StockRow[] }) {
+export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode }: { sourceRevision: number; blocked: boolean; inventory?: StockRow[]; selectedCode?: string }) {
   const [data, setData] = useState<LabelResponse | null>(null);
   const [context, setContext] = useState<LabelContext>({ market: "Vietnam", asOf: new Date().toISOString().slice(0, 10), evidence: [] });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(selectedCode ?? "");
   const [page, setPage] = useState(0);
+  useEffect(() => {
+    if (!selectedCode) return;
+    const timer = setTimeout(() => { setSearch(selectedCode); setPage(0); }, 0);
+    return () => clearTimeout(timer);
+  }, [selectedCode]);
   const [evidence, setEvidence] = useState({ productCode: "", observedAt: "", source: "", observation: "" });
   const edited = useRef(false);
   const sequence = useRef(0);
@@ -112,7 +117,7 @@ export function ProductLabels({ sourceRevision, blocked, inventory }: { sourceRe
       <tbody>{filtered.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE).map(row => {
         const product = products.find(p => p.reference === row.code);
         const label = product ? results.get(product.id) : undefined;
-        return <tr key={row.code}><td><strong>{row.name}</strong><br /><code>{row.code}</code></td>
+        return <tr key={row.code} className={row.code === selectedCode ? "stock-highlight" : undefined}><td><strong>{row.name}</strong><br /><code>{row.code}</code></td>
           <td>{row.stock === null ? "Unknown" : row.stock.toLocaleString()}</td>
           {hasDemand && <td><strong className="product-demand-label">{!stale && !blocked && !running && data?.run?.status !== "failed" ? label?.group ? DEMAND_LABELS[label.group] : row.demand || "Unclassified" : "Unclassified"}</strong>
             {label && <p>{label.reason}</p>}</td>}<td>{row.asOf || "—"}</td></tr>;

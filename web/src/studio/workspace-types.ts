@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const settingsSchema = z.object({
+  appearance: z.enum(["morning", "night"]).default("morning"),
   signals: z.boolean(),
   motion: z.boolean(),
   quality: z.enum(["balanced", "high"]),
@@ -15,6 +16,7 @@ export const sandboxSchema = z.object({
 export type ViewSettings = z.infer<typeof settingsSchema>;
 export type Sandbox = z.infer<typeof sandboxSchema>;
 export const defaultSettings: ViewSettings = {
+  appearance: "morning",
   signals: true,
   motion: true,
   quality: "balanced",

@@ -54,6 +54,15 @@
 }
 
 @theme inline {
+  --color-background: var(--background, var(--surface));
+  --color-foreground: var(--foreground, var(--fg));
+  --color-popover: var(--popover, var(--surface));
+  --color-popover-foreground: var(--popover-foreground, var(--fg));
+  --color-primary: var(--primary, var(--accent));
+  --color-primary-foreground: var(--primary-foreground, var(--accent-fg));
+  --color-muted-foreground: var(--muted-foreground, var(--muted));
+  --color-ring: var(--ring, var(--focus));
+  --color-input: var(--input, var(--border));
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);

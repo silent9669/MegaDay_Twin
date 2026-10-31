@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { requestJSON } from "../studio/account";
 import "./city.css";
+import { Brand } from "./Brand";
 export function Login() {
   const [username, setUsername] = useState(""),
     [password, setPassword] = useState(""),
@@ -37,8 +38,7 @@ export function Login() {
       <section className="login-form-area">
         <form aria-label="Sign in" aria-busy={busy} onSubmit={(e) => void submit(e)}>
           <div className="login-brand">
-            <img src="/icon.svg?v=2" width="36" height="36" alt="" />
-            <span>MegaDay Twin</span>
+            <Brand />
           </div>
           <h1>Sign in</h1>
           <label htmlFor="username">Username</label>

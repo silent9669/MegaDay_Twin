@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowUp,
+  ArrowRight,
+  Bell,
   Maximize2,
   Minimize2,
   History,
@@ -15,8 +23,43 @@ import { requestJSON } from "../studio/account";
 import { useChatArchive } from "./useChatArchive";
 import { ChatHistory } from "./ChatHistory";
 import type { ChatMessage, ChatSession } from "../studio/workspace-types";
+import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
+import { MiloAvatar } from "./MiloAvatar";
+import { Updates } from "./monitor/Updates";
+import type { WorkspaceUpdates } from "./monitor/useWorkspaceMonitor";
+import type { ChangeReference } from "./monitor/changes";
 const EMPTY_MESSAGES: ChatMessage[] = [];
-export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | null }) {
+export function CityChat({
+  launcherAnchor,
+  updates,
+  onOpenChange,
+  open: controlledOpen,
+}: {
+  launcherAnchor?: HTMLElement | null;
+  updates?: WorkspaceUpdates;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+}) {
+  const [mobile, setMobile] = useState(
+    () => window.matchMedia("(max-width: 899px)").matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 899px)");
+    const update = () => setMobile(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  const [tab, setTab] = useState("chat");
+  const [changeReference, setChangeReference] = useState<
+    ChangeReference | undefined
+  >();
+
   const archive = useChatArchive();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
@@ -29,7 +72,7 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     optimistic && !messages.some((m) => m.id === optimistic.id)
       ? [...messages, optimistic]
       : messages;
-  const [open, setOpen] = useState(false),
+  const [localOpen, setLocalOpen] = useState(false),
     [expanded, setExpanded] = useState(false),
     [draft, setDraft] = useState(""),
     [pending, setPending] = useState(false),
@@ -40,9 +83,26 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     scroll = useRef<HTMLDivElement>(null),
     controller = useRef<AbortController | null>(null),
     trigger = useRef<HTMLButtonElement>(null);
-  const drafts = useRef(new Map<string, string>());
+  const open = controlledOpen ?? localOpen;
+  const setOpen = useCallback(
+    (value: boolean) => {
+      setLocalOpen(value);
+      onOpenChange?.(value);
+    },
+    [onOpenChange],
+  );
+  const markRead = updates?.markRead;
   useEffect(() => {
-    const show = () => setOpen(true);
+    if (open && tab === "updates") markRead?.();
+  }, [open, tab, markRead]);
+  const drafts = useRef(new Map<string, string>());
+  const references = useRef(new Map<string, ChangeReference | undefined>());
+  useEffect(() => {
+    const show = (event: Event) => {
+      setOpen(true);
+      if (event.type === "workspace:updates") setTab("updates");
+    };
+    window.addEventListener("workspace:updates", show);
     window.addEventListener("workspace:chat", show);
     const key = (e: KeyboardEvent) => {
       if (
@@ -50,9 +110,9 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
         ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")
       ) {
         e.preventDefault();
-        setOpen((v) => !v);
+        setOpen(!open);
       }
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && open) {
         setOpen(false);
         trigger.current?.focus();
       }
@@ -61,9 +121,10 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     return () => {
       window.removeEventListener("keydown", key);
       window.removeEventListener("workspace:chat", show);
-      controller.current?.abort();
+      window.removeEventListener("workspace:updates", show);
     };
-  }, []);
+  }, [open, setOpen]);
+  useEffect(() => () => controller.current?.abort(), []);
   const preferredModel = archive.document?.data.preferredModel;
   useEffect(() => {
     if (!open) return;
@@ -130,8 +191,10 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
         body: JSON.stringify({
           sessionId: session.id,
           lastMessageId: message.id,
+          changeReference,
         }),
       });
+      setChangeReference(undefined);
       await archive.reload();
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError"))
@@ -178,6 +241,7 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
         body: JSON.stringify({
           sessionId: conversation.id,
           lastMessageId: conversation.messages.at(-1)!.id,
+          changeReference,
         }),
       });
     } catch (e) {
@@ -189,6 +253,8 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     }
   }
   function newChat() {
+    references.current.set(sessionId ?? "new", changeReference);
+    setChangeReference(references.current.get("new"));
     drafts.current.set(sessionId ?? "new", draft);
     setSessionId(null);
     setDraft(drafts.current.get("new") ?? "");
@@ -197,40 +263,58 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     setTimeout(() => input.current?.focus(), 0);
   }
 
+  const speaking = !open && !!updates?.toast;
+  const avatarState = pending ? "thinking" : speaking ? "notification" : "greeting";
   const launcher = (
-      <button
-        ref={trigger}
-        className="pm-launcher"
-        aria-label="Open PM assistant"
-        aria-expanded={open}
-        aria-controls="city-pm-chat"
-        onClick={() => setOpen(!open)}
-      >
-        <span className="pm-avatar" aria-hidden="true">
-          <img src="/pm.svg" alt="" />
-        </span>
+    <div className="pm-companion" data-speaking={speaking}>
+      <button ref={trigger} className="pm-launcher" aria-label="Open PM assistant"
+        aria-expanded={open} aria-controls="city-pm-chat" onClick={() => setOpen(!open)}>
+        <span className="pm-avatar" aria-hidden="true"><img src="/assets/milo/avatar.png" alt="" /></span>
+        {!!updates?.unread && <span className="pm-unread" aria-label={`${updates.unread} unread updates`}>{updates.unread}</span>}
         <span className="pm-preview" aria-hidden="true">
-          <img src="/pm.svg" alt="" />
-          <span className="pm-caption">Ask your PM</span>
+          <MiloAvatar key={speaking ? updates?.toast?.id : avatarState} state={avatarState} />
         </span>
       </button>
+      {speaking && updates?.toast && (
+        <aside className="milo-dialogue" aria-label="Workspace update">
+          <button className="milo-dialogue-close" aria-label="Dismiss update" onClick={updates.dismissToast}><X size={15} /></button>
+          <strong>{updates.toast.title}</strong>
+          <p>{updates.toast.detail}</p>
+          <button className="milo-review" onClick={() => { setTab("updates"); setOpen(true); updates.dismissToast(); }}>Review update <ArrowRight size={14} /></button>
+        </aside>
+      )}
+    </div>
   );
 
   return (
     <div className="city-pm">
       {launcherAnchor ? createPortal(launcher, launcherAnchor) : launcher}
-      {open && (
-        <section
+      <Sheet open={open} onOpenChange={setOpen} modal={mobile}>
+        <SheetContent
           id="city-pm-chat"
-          className={`city-chat ${expanded ? "chat-expanded" : ""}`}
-          role="dialog"
-          aria-modal="false"
+          className={`city-chat city-sheet ${expanded ? "chat-expanded" : ""}`}
+          showCloseButton={false}
+          overlay={mobile}
+          finalFocus={trigger}
+          initialFocus={tab === "chat" ? input : undefined}
           aria-labelledby="chat-title"
         >
           <header>
             <div className="chat-identity">
-              <img src="/pm.svg" alt="" />
-              <h2 id="chat-title">Milo</h2>
+              <MiloAvatar
+                state={
+                  pending
+                    ? "thinking"
+                    : error
+                      ? "error"
+                      : updates?.unread
+                        ? "notification"
+                        : open
+                          ? "greeting"
+                          : "idle"
+                }
+              />
+              <SheetTitle id="chat-title">Milo</SheetTitle>
             </div>
             <button
               className="city-icon"
@@ -268,198 +352,257 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
               <X />
             </button>
           </header>
-          {history ? (
-            <ChatHistory
-              sessions={archive.document?.data.sessions ?? []}
-              activeId={sessionId}
-              busy={pending}
-              onBack={() => {
-                setHistory(false);
-                setTimeout(() => input.current?.focus(), 0);
-              }}
-              onSelect={(id) => {
-                drafts.current.set(sessionId ?? "new", draft);
-                setSessionId(id);
-                setDraft(drafts.current.get(id) ?? "");
-                setError("");
-                setHistory(false);
-                const saved = archive.document?.data.sessions.find(
-                  (s) => s.id === id,
-                );
-                if (saved && models.includes(saved.model))
-                  setModel(saved.model);
-                setTimeout(() => input.current?.focus(), 0);
-              }}
-            />
-          ) : (
-            <>
-              {conversation && (
-                <div className="chat-session-title">{conversation.title}</div>
+          <Tabs
+            className="milo-body"
+            value={tab}
+            onValueChange={(value) => {
+              setTab(String(value));
+            }}
+          >
+            {updates && (
+              <TabsList className="milo-tabs" aria-label="Milo views">
+                <TabsTrigger value="chat">Chat</TabsTrigger>
+                <TabsTrigger value="updates">
+                  <Bell size={15} /> Updates{" "}
+                  {updates.unread > 0 && <span>{updates.unread}</span>}
+                </TabsTrigger>
+              </TabsList>
+            )}
+            <TabsContent value="updates" className="milo-content">
+              {updates && (
+                <Updates
+                  updates={updates}
+                  onNavigate={() => setOpen(false)}
+                  onExplain={(notice) => {
+                    setChangeReference(notice.reference);
+                    setDraft(
+                      (previous) =>
+                        previous.trim() ||
+                        `Explain this workspace change: ${notice.title}. ${notice.detail}`,
+                    );
+                    setTab("chat");
+                    setHistory(false);
+                    setTimeout(() => input.current?.focus(), 0);
+                  }}
+                />
               )}
-              <div
-                className="chat-messages"
-                ref={scroll}
-                role="log"
-                aria-label="PM conversation"
-                aria-live="polite"
-              >
-                {!visibleMessages.length ? (
-                  <div className="chat-welcome">
-                    <h3>What are we working on?</h3>
-                    <div>
-                      {[
-                        "Review source readiness",
-                        "Explain the stock checks",
-                        "Help plan the next step",
-                      ].map((prompt) => (
-                        <button
-                          key={prompt}
-                          onClick={() => {
-                            setDraft(prompt);
-                            input.current?.focus();
-                          }}
-                        >
-                          {prompt}
-                          <ArrowUp size={14} />
-                        </button>
-                      ))}
+            </TabsContent>
+            <TabsContent value="chat" className="milo-content">
+              {history ? (
+                <ChatHistory
+                  sessions={archive.document?.data.sessions ?? []}
+                  activeId={sessionId}
+                  busy={pending}
+                  onBack={() => {
+                    setHistory(false);
+                    setTimeout(() => input.current?.focus(), 0);
+                  }}
+                  onSelect={(id) => {
+                    drafts.current.set(sessionId ?? "new", draft);
+                    references.current.set(sessionId ?? "new", changeReference);
+                    setChangeReference(references.current.get(id));
+                    setSessionId(id);
+                    setDraft(drafts.current.get(id) ?? "");
+                    setError("");
+                    setHistory(false);
+                    const saved = archive.document?.data.sessions.find(
+                      (s) => s.id === id,
+                    );
+                    if (saved && models.includes(saved.model))
+                      setModel(saved.model);
+                    setTimeout(() => input.current?.focus(), 0);
+                  }}
+                />
+              ) : (
+                <>
+                  {conversation && (
+                    <div className="chat-session-title">
+                      {conversation.title}
                     </div>
-                  </div>
-                ) : (
-                  visibleMessages.map((message) => (
-                    <article
-                      className={`chat-message chat-${message.role}`}
-                      key={message.id}
-                    >
-                      <span className="chat-role">
-                        {message.role === "user" ? "You" : "Milo"}
-                      </span>
-                      <div className="chat-markdown">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          skipHtml
-                          components={{
-                            a: ({ children, href }) =>
-                              href &&
-                              /^(https?:\/\/|\/)/.test(href) &&
-                              !href.startsWith("//") ? (
-                                <a
-                                  href={href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {children}
-                                </a>
-                              ) : (
-                                <span>{children}</span>
-                              ),
-                            img: ({ alt }) => <span>{alt ?? "Image"}</span>,
-                            table: ({ children }) => (
-                              <div className="chat-table">
-                                <table>{children}</table>
-                              </div>
-                            ),
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-                    </article>
-                  ))
-                )}
-                {pending && (
-                  <div className="chat-thinking" role="status">
-                    Reviewing the workspace<span>…</span>
-                  </div>
-                )}
-              </div>
-              {(error ||
-                archive.error ||
-                (!pending &&
-                  conversation?.messages.at(-1)?.role === "user")) && (
-                <div className="chat-error" role="alert">
-                  {error || archive.error || "No reply saved yet."}
-                  {!pending &&
-                    conversation?.messages.at(-1)?.role === "user" && (
-                      <button type="button" onClick={() => void retryReply()}>
-                        Retry reply
-                      </button>
-                    )}
-                </div>
-              )}
-              <form className="chat-form" onSubmit={(e) => void send(e)}>
-                <div className="chat-composer">
-                  <textarea
-                    aria-label="Message Milo"
-                    placeholder="Message Milo…"
-                    ref={input}
-                    value={draft}
-                    maxLength={4000}
-                    disabled={pending}
-                    rows={2}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        !e.shiftKey &&
-                        !e.nativeEvent.isComposing
-                      ) {
-                        e.preventDefault();
-                        void send(e);
-                      }
-                    }}
-                  />
-                  {pending ? (
-                    <button
-                      type="button"
-                      className="chat-send"
-                      aria-label="Stop reply"
-                      onClick={() => controller.current?.abort()}
-                    >
-                      <Square size={15} />
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      className="chat-send"
-                      aria-label="Send message"
-                      disabled={!draft.trim() || !model || !archive.document}
-                    >
-                      <ArrowUp size={18} />
-                    </button>
                   )}
-                </div>
-                <footer>
-                  <label>
-                    <span className="sr-only">OpenAI model</span>
-                    <select
-                      aria-label="OpenAI model"
-                      value={model}
-                      disabled={pending || !models.length}
-                      onChange={(e) => void chooseModel(e.target.value)}
-                    >
-                      {models.length ? (
-                        models.map((m) => <option key={m}>{m}</option>)
+                  <div
+                    className="chat-messages"
+                    ref={scroll}
+                    role="log"
+                    aria-label="PM conversation"
+                    aria-live="polite"
+                  >
+                    {!visibleMessages.length ? (
+                      <div className="chat-welcome">
+                        <h3>What are we working on?</h3>
+                        <div>
+                          {[
+                            "Review source readiness",
+                            "Explain the stock checks",
+                            "Help plan the next step",
+                          ].map((prompt) => (
+                            <button
+                              key={prompt}
+                              onClick={() => {
+                                setDraft(prompt);
+                                input.current?.focus();
+                              }}
+                            >
+                              {prompt}
+                              <ArrowUp size={14} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      visibleMessages.map((message) => (
+                        <article
+                          className={`chat-message chat-${message.role}`}
+                          key={message.id}
+                        >
+                          <span className="chat-role">
+                            {message.role === "user" ? "You" : "Milo"}
+                          </span>
+                          <div className="chat-markdown">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              skipHtml
+                              components={{
+                                a: ({ children, href }) =>
+                                  href &&
+                                  /^(https?:\/\/|\/)/.test(href) &&
+                                  !href.startsWith("//") ? (
+                                    <a
+                                      href={href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      {children}
+                                    </a>
+                                  ) : (
+                                    <span>{children}</span>
+                                  ),
+                                img: ({ alt }) => <span>{alt ?? "Image"}</span>,
+                                table: ({ children }) => (
+                                  <div className="chat-table">
+                                    <table>{children}</table>
+                                  </div>
+                                ),
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        </article>
+                      ))
+                    )}
+                    {pending && (
+                      <div className="chat-thinking" role="status">
+                        Reviewing the workspace<span>…</span>
+                      </div>
+                    )}
+                  </div>
+                  {(error ||
+                    archive.error ||
+                    (!pending &&
+                      conversation?.messages.at(-1)?.role === "user")) && (
+                    <div className="chat-error" role="alert">
+                      {error || archive.error || "No reply saved yet."}
+                      {!pending &&
+                        conversation?.messages.at(-1)?.role === "user" && (
+                          <button
+                            type="button"
+                            onClick={() => void retryReply()}
+                          >
+                            Retry reply
+                          </button>
+                        )}
+                    </div>
+                  )}
+                  {changeReference && (
+                    <div className="change-attached">
+                      Workspace change attached
+                      <button
+                        type="button"
+                        aria-label="Remove change context"
+                        onClick={() => setChangeReference(undefined)}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                  <form className="chat-form" onSubmit={(e) => void send(e)}>
+                    <div className="chat-composer">
+                      <textarea
+                        aria-label="Message Milo"
+                        placeholder="Message Milo…"
+                        ref={input}
+                        value={draft}
+                        maxLength={4000}
+                        disabled={pending}
+                        rows={2}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (
+                            e.key === "Enter" &&
+                            !e.shiftKey &&
+                            !e.nativeEvent.isComposing
+                          ) {
+                            e.preventDefault();
+                            void send(e);
+                          }
+                        }}
+                      />
+                      {pending ? (
+                        <button
+                          type="button"
+                          className="chat-send"
+                          aria-label="Stop reply"
+                          onClick={() => controller.current?.abort()}
+                        >
+                          <Square size={15} />
+                        </button>
                       ) : (
-                        <option>OpenAI unavailable</option>
+                        <button
+                          type="submit"
+                          className="chat-send"
+                          aria-label="Send message"
+                          disabled={
+                            !draft.trim() || !model || !archive.document
+                          }
+                        >
+                          <ArrowUp size={18} />
+                        </button>
                       )}
-                    </select>
-                  </label>
-                  <span className="chat-save-status" role="status">
-                    {pending
-                      ? "Working…"
-                      : error || archive.error
-                        ? "Needs attention"
-                        : archive.document
-                          ? "Saved to account"
-                          : "Connecting…"}
-                  </span>
-                </footer>
-              </form>
-            </>
-          )}
-        </section>
-      )}
+                    </div>
+                    <footer>
+                      <label>
+                        <span className="sr-only">OpenAI model</span>
+                        <select
+                          aria-label="OpenAI model"
+                          value={model}
+                          disabled={pending || !models.length}
+                          onChange={(e) => void chooseModel(e.target.value)}
+                        >
+                          {models.length ? (
+                            models.map((m) => <option key={m}>{m}</option>)
+                          ) : (
+                            <option>OpenAI unavailable</option>
+                          )}
+                        </select>
+                      </label>
+                      <span className="chat-save-status" role="status">
+                        {pending
+                          ? "Working…"
+                          : error || archive.error
+                            ? "Needs attention"
+                            : archive.document
+                              ? "Saved to account"
+                              : "Connecting…"}
+                      </span>
+                    </footer>
+                  </form>
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

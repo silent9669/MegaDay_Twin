@@ -14,6 +14,7 @@ import {
   Database,
 } from "lucide-react";
 import Papa from "papaparse";
+import { useSearchParams } from "react-router";
 import { useAccountDocument, requestJSON } from "./account";
 import {
   SOURCE_DEFS,
@@ -54,8 +55,10 @@ export function DataStudio() {
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [saveError, setSaveError] = useState("");
-  const [selected, setSelected] = useState("orders"),
-    [tab, setTab] = useState<"records" | "diagnostics" | "schema">("records"),
+  const [sourceParams, setSourceParams] = useSearchParams();
+  const selected = sourceParams.get('source') ?? 'orders';
+  const setSelected = (kind: string) => setSourceParams(previous => { const next = new URLSearchParams(previous); next.set('source', kind); return next; });
+  const [tab, setTab] = useState<"records" | "diagnostics" | "schema">("records"),
     [query, setQuery] = useState(""),
     [page, setPage] = useState(0),
     [focusRow, setFocusRow] = useState<number | null>(null),
