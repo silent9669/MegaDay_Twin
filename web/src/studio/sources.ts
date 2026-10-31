@@ -200,12 +200,13 @@ export function inspect(
   const seen = new Set<string>();
   rows.forEach((row, i) => {
     if (issues.length >= 500) return;
+    const rowNumber = i + (payload === undefined ? 2 : 1);
     for (const key of definition.required)
       if (!(key in row))
         issues.push({
           level: "error",
           code: "MISSING_FIELD",
-          row: i + 2,
+          row: rowNumber,
           column: key,
           message: "Required field is missing.",
         });
@@ -220,7 +221,7 @@ export function inspect(
         issues.push({
           level: "warning",
           code: "UNTRUSTED_NOTE",
-          row: i + 2,
+          row: rowNumber,
           column,
           message: "Instruction-like note; treated only as untrusted data.",
         });
@@ -228,7 +229,7 @@ export function inspect(
         issues.push({
           level: "error",
           code: "NEG_STOCK",
-          row: i + 2,
+          row: rowNumber,
           column,
           message:
             "Negative stock. Review the source; do not treat as available inventory.",
@@ -242,7 +243,7 @@ export function inspect(
           issues.push({
             level: "error",
             code: "MISSING_COST",
-            row: i + 2,
+            row: rowNumber,
             column,
             message: "Unknown cost; economics must wait for a value.",
           });
@@ -250,7 +251,7 @@ export function inspect(
           issues.push({
             level: "warning",
             code: "MONEY_FORMAT",
-            row: i + 2,
+            row: rowNumber,
             column,
             message: "Formatted VND; backend normalization required.",
           });
@@ -262,7 +263,7 @@ export function inspect(
         issues.push({
           level: "warning",
           code: "DUP_ORDER",
-          row: i + 2,
+          row: rowNumber,
           message: "Repeated order line; backend ingestion deduplicates.",
         });
       seen.add(key);
@@ -271,7 +272,7 @@ export function inspect(
       issues.push({
         level: "error",
         code: "INVALID_SKUS",
-        row: i + 1,
+        row: rowNumber,
         column: "sku",
         message: "Campaign sku must be an array.",
       });
@@ -283,13 +284,19 @@ export function inspect(
       message:
         "Showing the first 500 diagnostics. Export or import into the backend for a full report.",
     });
-  if (kind === "ads")
+  if (
+    kind === "ads" &&
+    rows.some((row) => {
+      const timestamp = String(row["Thời gian"] ?? "").trim();
+      return !/(?:T|\s)\d{2}:\d{2}.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp);
+    })
+  )
     issues.push({
       level: "warning",
       code: "TIMEZONE_REVIEW",
       column: "Thời gian",
       message:
-        "Ads times have no timezone. Repository fixture is UTC; uploaded files need backend timezone verification.",
+        "Some ads timestamps have no explicit timezone. Confirm the export timezone before combining ads and orders; do not assume local time.",
     });
   return { kind, columns, rows, issues, payload };
 }
