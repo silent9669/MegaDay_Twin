@@ -38,6 +38,7 @@ import { DataStudio } from "../studio/DataStudio";
 import { ShiftOverviewPage } from "../pages/ShiftOverviewPage";
 import { CompareIndexPage } from "../pages/compare/ComparePage";
 import { CityChat } from "./CityChat";
+import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import type { createCity, District, WorldState } from "./world";
 import "./city.css";
 const DISTRICTS = [
@@ -553,28 +554,16 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                     <>
                       <h3>Platform buildings</h3>
                       <div className="platform-grid">
-                        {(["shopee", "tiktok", "meta", "google"] as const).map(
+                        {PLATFORM_IDS.map(
                           (p) => (
-                            <article key={p}>
+                            <article key={p} className={`platform-card platform-card-${p}`}>
                               <span className={`platform-logo brand-${p}`}>
-                                {p === "shopee"
-                                  ? "S"
-                                  : p === "tiktok"
-                                    ? "♪"
-                                    : p === "meta"
-                                      ? "∞"
-                                      : "G"}
+                                <img src={PLATFORMS[p].logo} alt="" width={32} height={32} />
                               </span>
-                              <h4>
-                                {p === "shopee"
-                                  ? "Shopee Ads"
-                                  : p === "tiktok"
-                                    ? "TikTok Ads"
-                                    : p === "meta"
-                                      ? "Meta Ads"
-                                      : "Google Ads"}
-                              </h4>
+                              <h4>{PLATFORMS[p].name}</h4>
+                              <p className="platform-signature">{PLATFORMS[p].signature}</p>
                               <button
+                                aria-label={p === "shopee" ? "Shopee Ads building is built" : `${viewSettings.platforms.includes(p) ? "Remove" : "Add"} ${PLATFORMS[p].name} building`}
                                 disabled={!settings.document || p === "shopee"}
                                 onClick={() =>
                                   void setSettings({
@@ -591,8 +580,8 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                               >
                                 {viewSettings.platforms.includes(p) ? (
                                   <>
-                                    <Check size={16} />
-                                    Built
+                                    {p === "shopee" ? <Check size={16} /> : <Minus size={16} />}
+                                    {p === "shopee" ? "Built" : "Remove building"}
                                   </>
                                 ) : (
                                   <>
