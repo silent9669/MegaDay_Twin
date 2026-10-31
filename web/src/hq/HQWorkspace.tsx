@@ -470,6 +470,7 @@ export function HQWorkspace({
                       pack={pack}
                       stock={selectedStock}
                       revision={revision}
+                      worksheet={worksheetDrafts[activeKey] ?? data.worksheets[activeKey]}
                     />
                   )}
                   {key === "comparisons" && (

@@ -1,3 +1,4 @@
+/* global document, innerWidth */
 import {chromium,webkit} from 'playwright';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
@@ -42,7 +43,16 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   assert((await page.locator('.hq-calculation').innerText()).includes('27 whole units'));
   await page.screenshot({path:new URL(`${engineName}-calculation.png`,out).pathname});
   await page.getByText('How this is calculated',{exact:true}).click();await page.getByRole('cell',{name:'2,535,000 VND',exact:true}).waitFor();
-  await page.getByRole('tab',{name:'SKU Details',exact:true}).click();await page.getByRole('tab',{name:'Comparisons',exact:true}).click();assert.equal(await page.getByLabel('Available units',{exact:true}).inputValue(),'83');
+  await page.getByRole('tab',{name:'SKU Details',exact:true}).click();
+  await page.getByRole('heading',{name:'Per-unit economics'}).waitFor();
+  assert((await page.getByRole('row',{name:/Contribution before ads/}).innerText()).includes('45,000 VND'));
+  for(const width of [1440,768,320]) {
+    await page.setViewportSize({width,height:1000});
+    await page.screenshot({path:new URL(`${engineName}-unit-cost-${width}.png`,out).pathname});
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  }
+  await page.setViewportSize({width:1440,height:1000});
+  await page.getByRole('tab',{name:'Comparisons',exact:true}).click();assert.equal(await page.getByLabel('Available units',{exact:true}).inputValue(),'83');
   await page.getByRole('button',{name:'Save assumptions'}).click();await page.getByRole('button',{name:'Analyze with AI',exact:true}).click();const chat=page.getByRole('dialog',{name:'Milo',exact:true});await chat.waitFor();assert.equal(requests,0);
   const a=await hq.boundingBox(),b=await chat.boundingBox();assert(b.x+b.width<=a.x+1,'Panels overlap');
   await hq.locator('.district-workspace-body').evaluate(element=>{element.scrollTop=0;});await page.screenshot({path:new URL(`${engineName}-comparison-chat.png`,out).pathname});
