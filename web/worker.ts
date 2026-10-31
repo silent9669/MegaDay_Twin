@@ -94,6 +94,8 @@ async function handle(request: Request, env: Env): Promise<Response> {
         new Request(request, { headers }),
       );
     }
+    if (path === "/api/studio/shop" && request.method === "GET")
+      return env.ASSETS.fetch(new Request(new URL("/shop-baseline.json", url)));
     if (path === "/api/studio/import") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "studio:admin" })).success)
         return fail(429, "Studio is busy. Try again in a minute.");
