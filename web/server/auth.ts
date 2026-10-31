@@ -1,5 +1,6 @@
 export type AccessEnv = {
   ADMIN_PASSWORD_HASH?: string;
+  ADMIN_ACCOUNTS_PASSWORD_HASH?: string;
   JUDGES_PASSWORD_HASH?: string;
   SESSION_SECRET?: string;
   LOGIN_LIMITER?: {
@@ -7,6 +8,13 @@ export type AccessEnv = {
   };
 };
 const COOKIE = "megaday_session";
+function accountPasswordHash(user: string, env: AccessEnv) {
+  if (user === "admin") return env.ADMIN_PASSWORD_HASH;
+  if (user === "judges") return env.JUDGES_PASSWORD_HASH;
+  if (["admin1", "admin2", "admin3", "admin4"].includes(user))
+    return env.ADMIN_ACCOUNTS_PASSWORD_HASH;
+  return undefined;
+}
 export function sessionExpiry(request: Request) {
   return (
     Number(
@@ -60,9 +68,7 @@ export async function sessionAccount(request: Request, env: AccessEnv) {
   const [user, exp, nonce, signature, extra] = token.split(".");
   const expiry = Number(exp),
     now = Math.floor(Date.now() / 1000);
-  const configured =
-    (user === "admin" && !!env.ADMIN_PASSWORD_HASH) ||
-    (user === "judges" && !!env.JUDGES_PASSWORD_HASH);
+  const configured = !!user && !!accountPasswordHash(user, env);
   if (
     !configured ||
     !nonce ||
@@ -154,12 +160,7 @@ export async function login(request: Request, env: AccessEnv) {
       body.password.length > 256
     )
       return fail(400, "Enter your username and password.");
-    const encoded =
-      body.username === "admin"
-        ? env.ADMIN_PASSWORD_HASH
-        : body.username === "judges"
-          ? env.JUDGES_PASSWORD_HASH
-          : undefined;
+    const encoded = accountPasswordHash(body.username, env);
     if (!encoded || !(await matchesPassword(body.password, encoded)))
       return fail(401, "Username or password is incorrect.");
     const payload = `${body.username}.${Math.floor(Date.now() / 1000) + 43200}.${encode(crypto.getRandomValues(new Uint8Array(16)))}`;

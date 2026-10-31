@@ -264,6 +264,65 @@ describe("account access", () => {
       ).status,
     ).toBe(403);
   });
+  it.each(["admin1", "admin2", "admin3", "admin4"])("gives %s the shared workspace and existing backend permissions", async (username) => {
+    const { env } = await authenticated();
+    const salt = "numbered-accounts-test-salt";
+    const configured = {
+      ...env,
+      ADMIN_ACCOUNTS_PASSWORD_HASH: `scrypt:${salt}:${scryptSync("numbered-test-password", salt, 64).toString("base64url")}`,
+    };
+    const response = await login(new Request(origin + "/api/auth/login", {
+      method: "POST", headers: { Origin: origin },
+      body: JSON.stringify({ username, password: "numbered-test-password" }),
+    }), configured);
+    expect(response.status).toBe(200);
+    const cookie = response.headers.get("set-cookie")!.split(";")[0]!;
+    const headers = { Cookie: cookie };
+    const account = await worker.fetch(new Request(origin + "/api/auth/session", { headers }), configured);
+    expect(await account.json()).toEqual({ authenticated: true, account: username });
+    const settings = await worker.fetch(new Request(origin + "/api/workspace/settings", { headers }), {
+      ...configured,
+      WORKSPACE: {
+        idFromName: (name: string) => { expect(name).toBe("admin"); return name; },
+        get: () => ({ fetch: async () => Response.json({ revision: 1 }) }),
+      },
+    });
+    expect(settings.status).toBe(200);
+    const backend = await worker.fetch(new Request(origin + "/api/v1/health", { headers }), {
+      ...configured,
+      DECISION_BACKEND: { fetch: async (request: Request) => {
+        expect(request.headers.get("X-User")).toBe(username);
+        expect(request.headers.get("X-Role")).toBe("lead");
+        return Response.json({ data: { db: "ok" } });
+      } },
+    });
+    expect(backend.status).toBe(200);
+    expect(await session(new Request(origin, { headers }), env)).toBe(false);
+    expect(await session(new Request(origin, {
+      headers: { Cookie: cookie.replace(`${username}.`, "admin.") },
+    }), configured)).toBe(false);
+  });
+  it("rejects incorrect numbered-account credentials and unlisted usernames", async () => {
+    const { env } = await authenticated();
+    const configured = { ...env, ADMIN_ACCOUNTS_PASSWORD_HASH: await passwordHash("numbered-test-password") };
+    for (const [username, password] of [
+      ["admin1", "wrong"], ["admin2", "test-password"],
+      ["admin", "numbered-test-password"], ["admin0", "numbered-test-password"],
+      ["admin5", "numbered-test-password"], ["admin11", "numbered-test-password"],
+      ["Admin1", "numbered-test-password"], ["constructor", "numbered-test-password"],
+    ]) {
+      const response = await login(new Request(origin + "/api/auth/login", {
+        method: "POST", headers: { Origin: origin }, body: JSON.stringify({ username, password }),
+      }), configured);
+      expect(response.status).toBe(401);
+      expect(response.headers.has("set-cookie")).toBe(false);
+    }
+    const unconfigured = await login(new Request(origin + "/api/auth/login", {
+      method: "POST", headers: { Origin: origin },
+      body: JSON.stringify({ username: "admin1", password: "numbered-test-password" }),
+    }), env);
+    expect(unconfigured.status).toBe(401);
+  });
   it("permits the judges account with its own password hash", async () => {
     const env = {
       ...base,

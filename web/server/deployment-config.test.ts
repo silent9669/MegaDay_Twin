@@ -22,7 +22,7 @@ it("does not require optional Python secrets when publishing the web", async () 
   const { default: config } = await import("../cloudflare.config");
   for (const name of ["DATA_BACKEND_URL", "DATA_BACKEND_USER", "DATA_BACKEND_ROLE"])
     expect(config.worker.env).not.toHaveProperty(name);
-  for (const name of ["ADMIN_PASSWORD_HASH", "JUDGES_PASSWORD_HASH", "SESSION_SECRET", "OPENAI_API_KEY"])
+  for (const name of ["ADMIN_PASSWORD_HASH", "ADMIN_ACCOUNTS_PASSWORD_HASH", "JUDGES_PASSWORD_HASH", "SESSION_SECRET", "OPENAI_API_KEY"])
     expect(config.worker.env).toHaveProperty(name);
   expect(config.worker.env).toHaveProperty("DECISION_BACKEND");
 });
