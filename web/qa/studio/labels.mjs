@@ -1,106 +1,83 @@
-// Real browser UI, mocked workspace and label provider API; no production writes.
+/* global document, innerWidth */
+// Local Worker storage and ZIP integration; synthetic inventory and mocked model output.
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-
-const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5186';
-const pack = JSON.parse(await readFile(new URL('../../server/repository-sources.json', import.meta.url), 'utf8'));
-const out = new URL('../../../qa/runs/product-labels/', import.meta.url);
+import { strToU8, zipSync } from 'fflate';
+const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5187';
+assert.ok(['127.0.0.1', 'localhost'].includes(new URL(base).hostname), 'Synthetic data must stay local');
+const out = new URL('../../../qa/runs/studio-import/', import.meta.url);
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ headless: true, channel: process.env.STUDIO_QA_CHANNEL });
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
-  const docs = Object.fromEntries(Object.entries({
-    sources: pack, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] },
-    sandbox: { hour: 1, event: 'observe' }, chats: { preferredModel: '', sessions: [] },
-  }).map(([name, data]) => [name, { revision: 1, updatedAt: new Date().toISOString(), data }]));
-  const products = Array.from({ length: 10 }, (_, i) => ({
-    id: `orders:SKU${i}`, reference: `SKU${i}`, name: `Bình nước ${i}`, alternateNames: [],
-    source: 'orders', identity: 'platform_sku', rowCount: 3,
-  }));
-  let configured = false, run = null, posts = 0, nextFailure = false;
-  const response = () => ({
-    configured, provider: configured ? 'QA provider' : null,
-    sourceRevision: docs.sources.revision, sourceFingerprint: String(docs.sources.revision).padStart(64, '0'),
-    products, run, stale: !!run && run.sourceRevision !== docs.sources.revision,
-  });
-  await context.route('**/api/workspace/*', (route) => {
-    const name = new URL(route.request().url()).pathname.split('/').pop();
-    if (!docs[name]) return route.fulfill({ status: 404, json: { error: { message: 'Unknown document' } } });
-    if (route.request().method() === 'PUT') {
-      const body = route.request().postDataJSON();
-      if (body.revision !== docs[name].revision) return route.fulfill({ status: 409, json: { error: { message: 'Conflict' } } });
-      docs[name] = { ...docs[name], revision: docs[name].revision + 1, data: body.data };
-    }
-    return route.fulfill({ json: docs[name] });
-  });
-  await context.route('**/api/product-labels', async (route) => {
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(`${base}/mock-data`);
+  await page.getByLabel('Username', { exact: true }).fill('admin');
+  await page.getByLabel('Password', { exact: true }).fill(process.env.STUDIO_QA_PASSWORD || 'studio-local-test');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByText('Saved to account', { exact: true }).waitFor();
+  const csv = 'Mã nội bộ,Tên hàng,Tồn thực tế,Thời điểm cập nhật\nQA-CUP,Ceramic cup,17,2026-10-31 18:00\nQA-TET,Đèn trang trí Tết,24,2026-10-31 18:00';
+  const zip = zipSync({ 'shop/inventory.csv': strToU8(csv), 'readme.txt': strToU8('Synthetic test fixture') });
+  await page.getByLabel('Upload ZIP archive').setInputFiles({ name: 'inventory.zip', mimeType: 'application/zip', buffer: Buffer.from(zip) });
+  await page.getByRole('button', { name: 'Load 1 table to workspace' }).waitFor();
+  await page.getByText('Preview recognized table').click();
+  assert.equal(await page.locator('.archive-preview').getByText('17', { exact: true }).count(), 1);
+  await page.screenshot({ path: new URL('archive-review.png', out).pathname });
+  await page.getByRole('button', { name: 'Load 1 table to workspace' }).click();
+  await page.getByText('Saved to account', { exact: true }).waitFor();
+  await page.reload();
+  await page.getByRole('button', { name: 'Inventory 2 records Uploaded / edited', exact: true }).click();
+  await page.getByRole('button', { name: 'Ceramic cup', exact: true }).waitFor();
+  const saved = await (await context.request.get(`${base}/api/workspace/sources`)).json();
+  assert.ok(saved.data.files.find(f => f.kind === 'inventory').text.includes('QA-CUP'));
+  await page.getByRole('button', { name: 'Warehouse', exact: true }).click();
+  await page.getByRole('button', { name: 'Close tutorial', exact: true }).click();
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await page.locator('.warehouse-table').getByText('Ceramic cup', { exact: true }).waitFor();
+  assert.equal(await page.locator('.warehouse-table').getByText('17', { exact: true }).count(), 1);
+  await page.getByText('Decision model is not connected.', { exact: true }).waitFor();
+  assert.ok(await page.getByRole('button', { name: 'Label inventory' }).isDisabled());
+  let run = null, posts = 0;
+  const original = await (await context.request.get(`${base}/api/product-labels`)).json();
+  await page.route('**/api/product-labels', route => {
     if (route.request().method() === 'POST') {
       posts++;
-      assert.equal(route.request().postDataJSON().sourceRevision, docs.sources.revision, 'Only the saved revision can be classified');
-      run = {
-        id: '11111111-1111-4111-8111-111111111111', sourceRevision: docs.sources.revision,
-        sourceFingerprint: response().sourceFingerprint, provider: 'QA provider',
-        startedAt: new Date().toISOString(), completedAt: new Date().toISOString(),
-        status: nextFailure ? 'failed' : 'partial', error: nextFailure ? 'Provider temporarily unavailable.' : null,
-        results: nextFailure ? [] : [{ productId: products[0].id, group: 'mua_vu', reason: 'Seasonality reported by the test provider.', confidence: 0.82 }],
-      };
-      nextFailure = false;
+      const body = route.request().postDataJSON();
+      assert.equal(body.context.market, 'Vietnam');
+      assert.equal(body.context.evidence[0].productCode, 'QA-TET');
+      run = { id: '11111111-1111-4111-8111-111111111111', provider: 'QA structured output', context: body.context,
+        sourceRevision: saved.revision, sourceFingerprint: original.sourceFingerprint, status: 'partial',
+        startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), error: null,
+        results: original.products.map(p => ({ productId: p.id, group: p.reference === 'QA-TET' ? 'Seasonal' : null,
+          reason: p.reference === 'QA-TET' ? 'Designed for Tet; inference from product use.' : 'Need dated product demand evidence.' })) };
     }
-    await route.fulfill({ json: response() });
+    return route.fulfill({ json: { ...original, configured: true, provider: 'QA structured output', run } });
   });
-  const page = await context.newPage();
-  await page.routeWebSocket('**/api/workspace/events', (socket) => socket.onMessage((message) => { if (message === 'ping') socket.send('pong'); }));
-  const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`${base}/mock-data`);
-  const panel = page.locator('.product-label-panel');
-  await panel.getByText('External labeling tool is not connected').waitFor();
-  assert.equal(posts, 0);
-  assert.equal(await panel.getByRole('button', { name: 'Run labeling', exact: true }).isDisabled(), true);
-  await panel.getByRole('button', { name: /Show products/ }).click();
-  assert.equal(await panel.getByText('Chưa phân loại', { exact: true }).count(), 8);
-  configured = true;
-  await panel.getByRole('button', { name: 'Refresh product labels' }).click();
-  await panel.getByText('Ready to request product labels').waitFor();
-  assert.equal(posts, 0, 'Enabling provider on initial demo must not label automatically');
-  nextFailure = true;
-  const csv = 'Mã nội bộ,Tồn thực tế,Tên hàng\nQA,5,Imported bottle';
-  await page.getByLabel('Import source files').setInputFiles({ name: 'inventory.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
-  await page.getByText('Saved to account', { exact: true }).waitFor();
-  await panel.getByText('Labeling failed — retry is available').waitFor();
-  assert.equal(posts, 1, 'One labeling attempt after source save');
-  assert.ok(docs.sources.data.files.find((file) => file.kind === 'inventory').text.includes('Imported bottle'));
-  await panel.getByRole('button', { name: 'Retry labeling' }).click();
-  await panel.getByText('Mùa vụ', { exact: true }).waitFor();
-  assert.equal(posts, 2);
-  await panel.getByText('Tool confidence: 82%').waitFor();
-  await page.reload();
-  await panel.getByText('Some products still need a label').waitFor();
-  await panel.getByRole('button', { name: /Show products/ }).click();
-  await panel.getByText('Mùa vụ', { exact: true }).waitFor();
-  assert.equal(posts, 2, 'Reload must not rerun a saved labeling result');
-  await panel.getByLabel('Search products').fill('SKU9');
-  await panel.getByRole('heading', { name: 'Bình nước 9', exact: true }).waitFor();
-  assert.equal(await panel.locator('li').count(), 1);
-  await panel.getByLabel('Search products').fill('');
-  for (const width of [1440, 768, 390, 320]) {
+  await page.getByRole('button', { name: 'Refresh product labels' }).click();
+  await page.getByText('Evidence (0)', { exact: true }).click();
+  await page.getByLabel('Assessment date', { exact: true }).fill('2026-10-31');
+  await page.getByLabel('Product code', { exact: true }).selectOption('QA-TET');
+  await page.getByLabel('Observation date', { exact: true }).fill('2026-10-30');
+  await page.getByLabel('Evidence source', { exact: true }).fill('Product specification');
+  await page.getByLabel('Observation', { exact: true }).fill('Lamp designed exclusively for Tet decorations.');
+  await page.getByRole('button', { name: 'Add evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Label inventory', exact: true }).click();
+  await page.getByText('Seasonal', { exact: true }).waitFor();
+  await page.getByText('Need dated product demand evidence.', { exact: true }).waitFor();
+  assert.equal(posts, 1);
+  await page.getByText('Evidence (1)', { exact: true }).click();
+  for (const width of [1440, 1024, 768, 320]) {
     await page.setViewportSize({ width, height: 1000 });
-    await panel.getByRole('heading', { name: 'Product labels', exact: true }).scrollIntoViewIfNeeded();
-    assert.equal(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth + 1), true, `Overflow at ${width}px`);
-    for (const button of await panel.locator('button').all()) {
-      const bounds = await button.boundingBox();
-      assert.ok(bounds && bounds.height >= 44 && bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
-    }
-    await page.screenshot({ path: fileURLToPath(new URL(`labels-${width}.png`, out)) });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `No page overflow at ${width}`);
+    await page.screenshot({ path: new URL(`warehouse-${width}.png`, out).pathname });
   }
-  docs.sources.revision++;
-  await panel.getByRole('button', { name: 'Refresh product labels' }).click();
-  await panel.getByText(/Previous results belong to older source data/).waitFor();
-  assert.equal(await panel.getByText('Mùa vụ', { exact: true }).count(), 0);
+  await page.getByLabel('Market', { exact: true }).fill('Thailand');
+  assert.equal(await page.getByText('Seasonal', { exact: true }).count(), 0, 'Changed market invalidates labels');
   assert.deepEqual(errors, []);
-  const results = ['Unconfigured tool shows candidates without fake labels or POSTs', 'Saved import auto-triggers exactly once; provider failure preserves source save', 'Retry renders partial labels, reason, confidence and unknown products', 'Reload restores labels without rerunning; search and mobile layouts work', 'Source revision change hides old results'];
-  await writeFile(new URL('results.json', out), JSON.stringify({ mode: 'mocked account/provider APIs, real browser UI', results }, null, 2));
-  console.log(results.join('\n'));
+  await writeFile(new URL('result.json', out), JSON.stringify({ realWorker: ['ZIP extraction', 'table preview', 'durable save and reload', 'map inventory'], mockedModel: ['explicit run', 'evidence', 'labels', 'context invalidation'], widths: [1440, 1024, 768, 320], errors }, null, 2));
+  console.log('Passed: local Worker ZIP → persisted tables → warehouse; model UI contract; four viewport widths.');
 } finally { await browser.close(); }

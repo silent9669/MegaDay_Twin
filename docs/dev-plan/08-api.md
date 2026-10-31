@@ -633,3 +633,22 @@ and persists the reply before returning. It no longer accepts client-supplied
 conversation context. Failed generation leaves the saved user message available
 for retry. See [account workspace](../city-demo/account-workspace.md) for schema
 bounds, synchronization and frontend/backend boundaries.
+
+## Data Studio Worker APIs (2026-10-31)
+
+These account-scoped routes run in the Cloudflare Worker, separately from the
+Python `/api/v1` analytics API:
+
+- `POST /api/studio/import`: raw ZIP, maximum 20 MiB compressed and expanded.
+  Returns `{ tables: [{ file, source, rowCount, method, columns }], skipped, model }`.
+  Analysis does not persist changes; the reviewed selection is saved through
+  the existing revision-checked `PUT /api/workspace/sources` contract.
+- `GET /api/product-labels`: inventory candidates and the latest persisted run.
+- `POST /api/product-labels`: `{ sourceRevision, context: { market, asOf,
+  evidence: [{ productCode, observedAt, source, observation }] } }`.
+  Demand labels are `Trendy | Seasonal | Normal | null`. Null requires a reason
+  explaining missing evidence. Context, provider/prompt version and source
+  fingerprint accompany each run. Labels remain separate from forecast groups.
+
+Authentication and same-origin checks apply. Model inputs are untrusted data.
+See `web/README.md` for configuration, limits, failure semantics and validation.
