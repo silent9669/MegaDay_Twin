@@ -254,3 +254,14 @@ kiểm tra ảnh hưởng chọn mô hình và backtest, và quyết định cá
 Trong chế độ tool, trường hợp không có kết quả hợp lệ phải thể hiện chưa phân
 loại thay vì âm thầm gán ổn định hoặc giả vờ đã gọi tool. Hợp đồng API, timeout
 và chính sách fallback sẽ chốt khi có tài liệu của nhà cung cấp.
+
+### Khung tích hợp đã chuẩn bị (31/10/2026)
+
+Theo yêu cầu tiếp theo, Data Studio đã có danh sách candidates, GET/POST cho
+tool labels, adapter server mặc định tắt, lưu trạng thái/kết quả riêng theo
+revision và fingerprint của sáu nguồn. Import chỉ kích hoạt sau khi lưu thành
+công; kết quả cũ không áp dụng cho nguồn mới. Xem `web/README.md` để nối provider.
+Phần này chưa gửi dữ liệu ra dịch vụ ngoài, chưa đối soát mã xuyên nguồn và
+chưa ghi đè nhóm nhu cầu dùng bởi forecast. Classifier cũ tiếp tục hoạt động
+đúng lựa chọn trước đó của người dùng; đồng đội sẽ hoàn thiện kết nối tool và
+luồng áp dụng nhãn sau khi có API.

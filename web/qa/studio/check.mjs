@@ -30,6 +30,10 @@ try {
     return route.fulfill({ json: docs[name] });
   });
   const page = await context.newPage();
+  await context.route('**/api/product-labels', (route) => route.fulfill({ json: {
+    configured: false, provider: null, sourceRevision: docs.sources.revision,
+    sourceFingerprint: 'a'.repeat(64), products: [], run: null, stale: false,
+  } }));
   await page.routeWebSocket('**/api/workspace/events', (socket) => {
     socket.onMessage((message) => { if (message === 'ping') socket.send('pong'); });
   });

@@ -154,6 +154,61 @@ Xem `.env.example`. Chỉ biến có tiền tố `VITE_` vào bundle, nên **kh�
 | `VITE_DEV_USER`, `VITE_DEV_USER_NAME`, `VITE_DEV_ROLE` | `u-ops-1`, `Lan`, `operator` | Gửi qua header `X-User`/`X-Role` (08 §1) |
 | `OPENAPI_URL` | trống | URL cho `gen:api` |
 
+## Nối tool gán nhóm nhu cầu cho Data Studio
+
+Khung đã có, adapter mặc định **chưa cấu hình**. Điểm cần implement là
+`getProductLabelProvider(env)` trong `server/product-label-provider.ts`:
+trả về `{ id, classify(input, signal) }` khi có cấu hình thật, ngược lại trả `null`.
+`classify` nhận `LabelInput` từ `src/studio/product-labels.ts` và trả về:
+
+```json
+{
+  "labels": [
+    { "productId": "<echo exact input.products[i].id>", "group": "mua_vu", "reason": "Evidence supplied by the provider", "confidence": 0.82 }
+  ]
+}
+```
+
+`group` chỉ nhận `moi`, `ban_thua`, `mua_vu`, `trend`, `on_dinh`, hoặc `null`
+khi chưa kết luận được. `reason` bắt buộc; `confidence` tùy chọn, trong [0,1].
+Có thể trả một phần danh sách; sản phẩm còn thiếu giữ trạng thái chưa phân loại.
+Mã lạ, mã trùng, nhãn sai, lý do rỗng hay confidence ngoài khoảng bị từ chối.
+Đặt timeout trong adapter, tôn trọng `AbortSignal`, giữ key ở Worker secrets và
+không đưa tên/ghi chú sản phẩm thành chỉ dẫn cho mô hình. Không thêm key vào UI.
+Khung hiện không giả định URL, hãng cung cấp, payload HTTP hoặc API key nào.
+
+Hai endpoint đã nằm sau session và kiểm tra same-origin:
+
+- `GET /api/product-labels`: candidates của nguồn đã lưu, trạng thái cấu hình,
+  lần chạy gần nhất và cờ stale.
+- `POST /api/product-labels` với `{ "sourceRevision": 7 }`: chạy adapter cho đúng
+  phiên bản đã lưu. Không nhận nhãn hay file từ client trong request này.
+
+Nguồn được lưu trước; import thành công mới kích hoạt một lần gán nhãn khi
+adapter đã cấu hình. Mở demo/reload không tự gọi tool. Có nút chạy/thử lại;
+tool lỗi không làm thất bại việc lưu file. Kết quả lưu riêng trong Durable Object,
+không cho browser ghi trực tiếp. Claim và finish kiểm tra revision/fingerprint,
+chống chạy trùng và kết quả trả chậm. Giới hạn hiện tại 2.000 candidates,
+30 giây mỗi lần chạy, lease 35 giây; không có hàng đợi background bền vững.
+
+Candidates được rút từ tên sản phẩm trong đơn hàng, tồn kho và giá vốn. Ads,
+cấu trúc chiến dịch, chương trình sale không cung cấp tên đủ tin cậy để tự tạo
+thêm sản phẩm; cả sáu nguồn vẫn nằm trong fingerprint. ID giữ riêng platform
+SKU, mã nội bộ và tên nhập tay; **chưa đối soát SKU xuyên nguồn**. Adapter chỉ
+nhận tên, mã, tên khác và số bản ghi, không nhận file gốc, contact hoặc ghi chú.
+Để kết luận nhóm nhu cầu theo lịch sử, bên tích hợp phải bổ sung hợp đồng dữ liệu
+và bằng chứng phù hợp: tên sản phẩm đơn lẻ không chứng minh được trend/bán thưa.
+
+Nhãn tool hiện là kết quả riêng trong Data Studio, **chưa ghi vào Python forecast**.
+Theo lựa chọn người dùng, classifier hiện tại tiếp tục hoạt động. Công việc còn
+lại của bên tích hợp: adapter thật, secrets/config, đối soát canonical SKU và
+cơ chế áp dụng nhãn vào backend có quyền sửa tay/audit/backtest tương ứng.
+
+Kiểm tra với `npm run check`. Browser QA: chạy Vite cổng 5186 rồi
+`node qa/studio/labels.mjs` (có thể đặt `STUDIO_QA_CHANNEL=msedge`). Bài browser
+dùng API giả lập; test server dùng SQLite thật với provider giả, không gọi tool
+hay ghi production. Ảnh và kết quả nằm trong `qa/runs/product-labels/` ở gốc repo.
+
 ## Cấu trúc
 
 ```

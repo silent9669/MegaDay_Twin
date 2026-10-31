@@ -35,6 +35,129 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+.product-label-panel {
+  flex-shrink: 0;
+  padding: 18px 20px;
+  border: 1px solid #d9e2ce;
+  border-radius: 10px;
+  background: #fbfcf6;
+}
+.product-label-panel > header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.product-label-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.product-label-panel p {
+  margin: 6px 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.product-label-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.data-studio .product-label-panel button {
+  min-height: 44px;
+  white-space: normal;
+}
+.product-label-note {
+  color: #486047;
+  font-size: 13px;
+  max-width: 90ch;
+}
+.product-label-warning {
+  padding: 10px 12px;
+  border-left: 3px solid #9c7a43;
+  background: #faf2dc;
+  color: #72551f;
+}
+.product-label-search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0;
+  max-width: 400px;
+}
+.product-label-search input {
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #c6d4ba;
+  border-radius: 6px;
+  background: #fff;
+  color: #304136;
+  font: inherit;
+  min-width: 0;
+}
+.product-label-panel :is(button, input):focus-visible {
+  outline: 2px solid #42633a;
+  outline-offset: 2px;
+}
+.product-label-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.product-label-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid #e1e8d7;
+}
+.product-label-list h3 {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.product-label-list small {
+  font-size: 12px;
+  color: #486047;
+  overflow-wrap: anywhere;
+}
+.product-demand-label {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: #eaf0e2;
+  color: #304f39;
+  font-weight: 600;
+}
+.product-label-panel footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #e1e8d7;
+  padding-top: 12px;
+}
+.product-label-panel footer > span {
+  margin-right: auto;
+}
+@media (max-width: 600px) {
+  .product-label-panel {
+    padding: 14px;
+  }
+  .product-label-actions {
+    width: 100%;
+  }
+  .product-label-actions button {
+    flex: 1;
+  }
+  .product-label-list li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
 .studio-header {
   display: flex;
   justify-content: space-between;
