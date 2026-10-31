@@ -1,9 +1,15 @@
 import { Button } from "../components/ui/button";
 import { Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useSku } from "../api/queries";
+import { config } from "../lib/config";
+import type { SourcePack } from "../studio/sources";
+import type { StockRow } from "../studio/source-view";
+import { modelSuggestion, workspaceSuggestion, suggestedWorksheet } from "./worksheet-suggestions";
+import { WorksheetCalculation } from "./WorksheetCalculation";
 import { analyzeWithAI } from "../city/analysis-context";
 import {
   blankWorksheet,
-  exampleWorksheet,
   worksheetResults,
   type Worksheet,
   type TrackedProduct,
@@ -26,26 +32,49 @@ export function ScenarioWorksheet({
   onSave,
   onChange: setValue,
   busy,
+  pack,
+  stock,
+  revision,
 }: {
   product: TrackedProduct;
   saved?: Worksheet;
   onChange: (value: Worksheet) => void;
   onSave: (value: Worksheet) => void;
   busy: boolean;
+  pack: SourcePack | null;
+  stock?: StockRow;
+  revision: number;
 }) {
+  const model = useSku(product.mode === "model" ? product.sku : undefined);
+  const evidence = useMemo(() => product.mode === "model"
+    ? modelSuggestion(model.data?.data, config.useFixtures)
+    : workspaceSuggestion(pack, product.sku, stock), [product, model.data, pack, stock]);
+  const [previous, setPrevious] = useState<Worksheet | null>(null);
   const value = saved ?? blankWorksheet;
+  const count = Object.keys(evidence).length;
   const results = worksheetResults(value);
   return (
     <section className="hq-worksheet" aria-label="Scenario worksheet">
       <header>
         <div>
           <h3>Continue or pause?</h3>
-          <span className="hq-provenance">User assumptions · one product</span>
+          <span className="hq-provenance">Product facts & scenario assumptions</span>
         </div>
-        <Button variant="outline" onClick={() => setValue({ ...exampleWorksheet })}>
-          Load reference example
+        <Button variant="default" disabled={busy || !count || (product.mode === "model" && model.isFetching)} onClick={() => {
+          setPrevious({ ...value });
+          setValue(suggestedWorksheet(evidence));
+        }}>
+          <Sparkles size={16} /> Load best suggestion
         </Button>
       </header>
+      <div className="hq-suggestion-status" role="status">
+        <span>{product.mode === "model" && model.isPending ? "Loading product data…"
+          : model.isError && product.mode === "model" ? "Product data unavailable. Enter inputs manually or retry."
+          : count ? `${count} of 8 inputs available from ${product.mode === "workspace" ? `workspace revision ${revision}` : config.useFixtures ? "the model snapshot" : "the decision backend"}. Loading replaces the form; demand and new ad spend need assumptions for the same period.`
+          : "No unambiguous SKU-linked inputs. Add matching records in Data Studio or enter assumptions."}</span>
+        {previous && <Button variant="ghost" onClick={() => { setValue(previous); setPrevious(null); }}>Undo load</Button>}
+        {product.mode === "model" && model.isError && <Button variant="outline" onClick={() => void model.refetch()}>Retry</Button>}
+      </div>
       <div className="hq-assumptions">
         {fields.map(([key, label]) => (
           <label key={key}>
@@ -90,7 +119,7 @@ export function ScenarioWorksheet({
           aria-label="Continue versus pause results"
         >
           <table className="hq-financial-table">
-            <caption>Illustration for the selected period · VND</caption>
+            <caption>Scenario estimate · demand is assumed · VND</caption>
             <thead>
               <tr>
                 <th>Metric</th>
@@ -128,19 +157,7 @@ export function ScenarioWorksheet({
           Enter the assumptions to compare the two options.
         </p>
       )}
-      <details>
-        <summary>How this is calculated</summary>
-        <p>
-          Units sold = the smaller of demand and available units. Revenue =
-          units × price. Costs = units × (unit cost + packaging + price × fee
-          rate). Result = revenue − costs − new ad spend.
-        </p>
-        <p>
-          This worksheet excludes taxes, returns, fixed costs, restocking and
-          leftover inventory value. It does not estimate demand or enforce
-          campaign commitments.
-        </p>
-      </details>
+      <WorksheetCalculation value={value} evidence={evidence} fields={fields} />
       <footer>
         <Button variant="outline"
           disabled={busy || !results}
@@ -160,6 +177,8 @@ export function ScenarioWorksheet({
                   product,
                   assumptions: value,
                   results,
+                  evidence,
+                  revision: product.mode === "workspace" ? revision : undefined,
                   formula:
                     "units=min(stock,demand); costs=units*(cost+packaging+price*feePercent/100); afterAds=units*price-costs-spend",
                   excludes: [
@@ -172,7 +191,7 @@ export function ScenarioWorksheet({
                   ],
                 }),
               },
-              "Explain this product comparison in English. Trace each number to its assumptions and formula, explain why the outcomes differ, and suggest which assumptions need evidence. Treat demand as a user assumption, not a forecast.",
+              "Explain this product comparison in English. Cite matching source values and distinguish them from edited inputs. Trace each result through its formula and explain the difference. Treat demand and ad spend as assumptions, not a forecast or an optimized recommendation.",
             )
           }
         >
