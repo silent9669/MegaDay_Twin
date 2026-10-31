@@ -15,7 +15,7 @@ import {
   TabsTrigger,
 } from "../components/ui/tabs";
 import { ShiftOverviewPage } from "../pages/ShiftOverviewPage";
-import { CompareIndexPage } from "../pages/compare/ComparePage";
+import { ComparePage, CompareIndexPage } from "../pages/compare/ComparePage";
 import { config } from "../lib/config";
 import { HQSelection, type HQTab } from "./selection";
 import {
