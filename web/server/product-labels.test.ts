@@ -265,8 +265,8 @@ describe("product label workflow", () => {
 
 describe("label route boundaries", () => {
   const secret = "workspace-test-secret-at-least-32-bytes";
-  function cookie() {
-    const payload = `admin.${Math.floor(Date.now() / 1000) + 3600}.nonce`;
+  function cookie(account = "admin") {
+    const payload = `${account}.${Math.floor(Date.now() / 1000) + 3600}.nonce`;
     return `megaday_session=${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
   }
   const base = {
@@ -306,6 +306,17 @@ describe("label route boundaries", () => {
     files.shift();
     expect((await worker.fetch(post(), env)).status).toBe(422);
     expect(upstream).toHaveBeenCalledTimes(1);
+  });
+  it.each(["judges", "admin", "admin1", "admin2", "admin3", "admin4"])("checks the signed %s account before restocking", async account => {
+    const storage = vi.fn(async () => Response.json({ ok: true }));
+    const env = { ...base, JUDGES_PASSWORD_HASH: "configured", ADMIN_ACCOUNTS_PASSWORD_HASH: "configured",
+      WORKSPACE: { idFromName: () => "admin", get: () => ({ fetch: storage }) } };
+    const response = await worker.fetch(new Request(origin + "/api/studio/restock", {
+      method: "POST", headers: { Cookie: cookie(account), Origin: origin, "X-User": "admin", "X-Role": "admin" },
+      body: JSON.stringify({ revision: 1, operationId: "restock-test" }),
+    }), env);
+    expect(response.status).toBe(account === "judges" ? 403 : 200);
+    expect(storage).toHaveBeenCalledTimes(account === "judges" ? 0 : 1);
   });
   it("requires auth and same-origin writes", async () => {
     expect((await worker.fetch(new Request(origin + "/api/studio/restock", { method: "POST" }), base)).status).toBe(401);
