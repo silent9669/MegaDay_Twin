@@ -1,124 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1100">
-  <title>Inventory, campaign signals, and a decision dial</title>
-  <rect width="800" height="1100" fill="#173c34"/>
-  <!-- Inventory: closed parcels with folded tape and shipping marks. -->
-  <g stroke="#173c34" stroke-width="3" stroke-linejoin="round">
-    <path d="m107 422 118-68 145 83-118 69z" fill="#dfddbf"/>
-    <path d="m107 422 145 84v149l-145-84z" fill="#b5c9aa"/>
-    <path d="m252 506 118-69v149l-118 69z" fill="#779b80"/>
-    <path d="m152 396 144 84 29-17-145-84z" fill="#d9b767" stroke="none"/>
-    <path d="m296 480 29-17v46l-29 17z" fill="#b58d45" stroke="none"/>
-    <path d="m119 432 121 70m23 3 95-55" fill="none" stroke="#ebecd5" stroke-width="2"/>
-    <path d="m130 534 62 36v38l-62-36z" fill="#e6e8d0" stroke="none"/>
-    <path d="m141 549 39 23m-39-12 27 16" fill="none" stroke="#779b80" stroke-width="4"/>
-    <path d="m182 314 101-58 108 63-101 58z" fill="#ece8c8"/>
-    <path d="m182 314 108 63v112l-108-63z" fill="#c4cfae"/>
-    <path d="m290 377 101-58v112l-101 58z" fill="#8eaa88"/>
-    <path d="m220 292 107 64 24-14-108-63z" fill="#d9b767" stroke="none"/>
-    <path d="m327 356 24-14v39l-24 14z" fill="#b58d45" stroke="none"/>
-    <path d="m194 324 84 49m24 0 77-44" fill="none" stroke="#f4f0d8" stroke-width="2"/>
-    <path d="m207 382 32 19m-32-8 45 26" stroke="#779b80" fill="none" stroke-width="4"/>
-  </g>
-  <!-- A campaign horn, mounted on a mechanical stand. -->
-  <ellipse cx="590" cy="581" rx="62" ry="17" fill="#102f29"/>
-  <path d="M579 433v117" stroke="#87a68b" stroke-width="18"/>
-  <path d="M576 433v117" stroke="#c7d4b4" stroke-width="5"/>
-  <path d="M556 548h46l29 22c-20 14-70 14-90 0z" fill="#8eaa88" stroke="#173c34" stroke-width="3"/>
-  <path d="M550 567c16 7 43 8 63 0" fill="none" stroke="#c7d4b4" stroke-width="3"/>
-  <g transform="rotate(-22 575 382)" stroke="#173c34" stroke-width="3" stroke-linejoin="round">
-    <path d="M538 404h31v56h-20z" fill="#c8a253"/>
-    <path d="M547 411h13v38h-9z" fill="#ebcf8a" stroke="none"/>
-    <rect x="493" y="353" width="53" height="59" rx="16" fill="#8eaa88"/>
-    <path d="M510 357v51" stroke="#c7d4b4" stroke-width="4"/>
-    <path d="m533 352 110-47v155l-110-47z" fill="#d9dfc1"/>
-    <path d="m533 390 110 28v42l-110-47z" fill="#a5bea0" stroke="none"/>
-    <path d="m539 359 94-40" stroke="#f1f0d6" stroke-width="3"/>
-    <ellipse cx="643" cy="382" rx="30" ry="80" fill="#b6c9a7"/>
-    <ellipse cx="645" cy="382" rx="22" ry="68" fill="#315d4b" stroke="#e6e8c9" stroke-width="4"/>
-    <ellipse cx="642" cy="382" rx="10" ry="33" fill="#173c34" stroke="none"/>
-  </g>
-  <g fill="none" stroke="#d9b767" stroke-width="4" stroke-linecap="round">
-    <path d="m690 298 19-16M704 339l25-5M667 266l8-22"/>
-  </g>
-  <!-- Both inputs terminate at the dial's brass connector ports. -->
-  <path d="M331 459v25c0 33-40 29-40 62M553 450v21c0 32-44 28-44 72" fill="none" stroke="#102f29" stroke-width="15"/>
-  <path d="M331 459v25c0 33-40 29-40 62M553 450v21c0 32-44 28-44 72" fill="none" stroke="#c8a253" stroke-width="7"/>
-  <g fill="#d9b767" stroke="#173c34" stroke-width="3">
-    <rect x="322" y="450" width="18" height="23" rx="4"/>
-    <rect x="544" y="442" width="18" height="23" rx="4"/>
-    <circle cx="291" cy="544" r="13"/>
-    <circle cx="509" cy="544" r="13"/>
-  </g>
-  <!-- Desk instrument: foot, housing, bezel, scale and needle. -->
-  <ellipse cx="400" cy="877" rx="158" ry="23" fill="#102f29"/>
-  <path d="M370 793h60v49h-60z" fill="#779b80" stroke="#173c34" stroke-width="3"/>
-  <path d="M354 829h92l63 31c-47 25-171 25-218 0z" fill="#8eaa88" stroke="#173c34" stroke-width="3"/>
-  <path d="M307 859c42 16 141 16 186 0" fill="none" stroke="#c7d4b4" stroke-width="3"/>
-  <circle cx="400" cy="660" r="177" fill="#102f29"/>
-  <circle cx="400" cy="650" r="177" fill="#6a8f75" stroke="#b6c9a7" stroke-width="3"/>
-  <circle cx="400" cy="650" r="163" fill="#173c34" stroke="#a9c09e" stroke-width="2"/>
-  <circle cx="400" cy="650" r="153" fill="#e6e8cc"/>
-  <path d="M278.76 720a140 140 0 1 1 242.48 0" fill="none" stroke="#b5c9aa" stroke-width="23"/>
-  <path d="M508.86 562a140 140 0 0 1 12.38 158" fill="none" stroke="#d9b767" stroke-width="23"/>
-  <g fill="none" stroke="#315d4b" stroke-linecap="round">
-    <path d="M295.21 710.50 278.76 720.00" stroke-width="4"/>
-    <path d="M282.18 704.94 273.12 709.17" stroke-width="2"/>
-    <path d="M277.84 694.46 268.44 697.88" stroke-width="2"/>
-    <path d="M274.43 683.65 264.77 686.23" stroke-width="2"/>
-    <path d="M280.84 671.01 262.13 674.31" stroke-width="4"/>
-    <path d="M270.49 661.33 260.53 662.20" stroke-width="2"/>
-    <path d="M270.00 650.00 260.00 650.00" stroke-width="2"/>
-    <path d="M270.49 638.67 260.53 637.80" stroke-width="2"/>
-    <path d="M280.84 628.99 262.13 625.69" stroke-width="4"/>
-    <path d="M274.43 616.35 264.77 613.77" stroke-width="2"/>
-    <path d="M277.84 605.54 268.44 602.12" stroke-width="2"/>
-    <path d="M282.18 595.06 273.12 590.83" stroke-width="2"/>
-    <path d="M295.21 589.50 278.76 580.00" stroke-width="4"/>
-    <path d="M293.51 575.44 285.32 569.70" stroke-width="2"/>
-    <path d="M300.41 566.44 292.75 560.01" stroke-width="2"/>
-    <path d="M308.08 558.08 301.01 551.01" stroke-width="2"/>
-    <path d="M322.22 557.31 310.01 542.75" stroke-width="4"/>
-    <path d="M325.44 543.51 319.70 535.32" stroke-width="2"/>
-    <path d="M335.00 537.42 330.00 528.76" stroke-width="2"/>
-    <path d="M345.06 532.18 340.83 523.12" stroke-width="2"/>
-    <path d="M358.62 536.30 352.12 518.44" stroke-width="4"/>
-    <path d="M366.35 524.43 363.77 514.77" stroke-width="2"/>
-    <path d="M377.43 521.97 375.69 512.13" stroke-width="2"/>
-    <path d="M388.67 520.49 387.80 510.53" stroke-width="2"/>
-    <path d="M400.00 529.00 400.00 510.00" stroke-width="4"/>
-    <path d="M411.33 520.49 412.20 510.53" stroke-width="2"/>
-    <path d="M422.57 521.97 424.31 512.13" stroke-width="2"/>
-    <path d="M433.65 524.43 436.23 514.77" stroke-width="2"/>
-    <path d="M441.38 536.30 447.88 518.44" stroke-width="4"/>
-    <path d="M454.94 532.18 459.17 523.12" stroke-width="2"/>
-    <path d="M465.00 537.42 470.00 528.76" stroke-width="2"/>
-    <path d="M474.56 543.51 480.30 535.32" stroke-width="2"/>
-    <path d="M477.78 557.31 489.99 542.75" stroke-width="4"/>
-    <path d="M491.92 558.08 498.99 551.01" stroke-width="2"/>
-    <path d="M499.59 566.44 507.25 560.01" stroke-width="2"/>
-    <path d="M506.49 575.44 514.68 569.70" stroke-width="2"/>
-    <path d="M504.79 589.50 521.24 580.00" stroke-width="4"/>
-    <path d="M517.82 595.06 526.88 590.83" stroke-width="2"/>
-    <path d="M522.16 605.54 531.56 602.12" stroke-width="2"/>
-    <path d="M525.57 616.35 535.23 613.77" stroke-width="2"/>
-    <path d="M519.16 628.99 537.87 625.69" stroke-width="4"/>
-    <path d="M529.51 638.67 539.47 637.80" stroke-width="2"/>
-    <path d="M530.00 650.00 540.00 650.00" stroke-width="2"/>
-    <path d="M529.51 661.33 539.47 662.20" stroke-width="2"/>
-    <path d="M519.16 671.01 537.87 674.31" stroke-width="4"/>
-    <path d="M525.57 683.65 535.23 686.23" stroke-width="2"/>
-    <path d="M522.16 694.46 531.56 697.88" stroke-width="2"/>
-    <path d="M517.82 704.94 526.88 709.17" stroke-width="2"/>
-    <path d="M504.79 710.50 521.24 720.00" stroke-width="4"/>
-  </g>
-  <g fill="#d9b767" stroke="#173c34" stroke-width="2">
-    <circle cx="400" cy="479" r="5"/><circle cx="571" cy="650" r="5"/>
-    <circle cx="400" cy="821" r="5"/><circle cx="229" cy="650" r="5"/>
-  </g>
-  <path d="m394 645 89-87-77 98-28 22-6-6z" fill="#173c34"/>
-  <path d="m397 647 86-89-77 98z" fill="#c8a253"/>
-  <circle cx="400" cy="650" r="20" fill="#c8a253" stroke="#173c34" stroke-width="3"/>
-  <circle cx="400" cy="650" r="9" fill="#f0dc9e"/>
-  <path d="M369 739h62" stroke="#9cb496" stroke-width="4" stroke-linecap="round"/>
-  <circle cx="400" cy="765" r="5" fill="#315d4b"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000" fill="none">
+ <defs>
+  <pattern id="paper" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".5" fill="#e7e4cd" opacity=".12"/></pattern>
+  <pattern id="windows" width="26" height="24" patternUnits="userSpaceOnUse"><path d="M1 0v24M0 1h26" stroke="#d8dfce" stroke-opacity=".4"/></pattern>
+  <pattern id="tiles" width="16" height="10" patternUnits="userSpaceOnUse"><path d="M0 9h16M4 0v9M12 9v1" stroke="#774c37" stroke-opacity=".3"/></pattern>
+  <symbol id="palm" viewBox="0 0 100 170"><path d="M49 170q15-68 1-125" stroke="#b4a782" stroke-width="6"/><path d="M50 48Q15 8 0 54q30-15 50-6M50 48Q15 40 4 85q27-27 46-37M50 48Q55 3 80 14q-21 17-30 34M50 48q30-35 50-3-28-6-50 3M50 48q34 0 45 37-21-25-45-37" fill="#77977d"/></symbol>
+  <symbol id="shop" viewBox="0 0 110 210">
+   <path d="M5 38h100v172H5z" fill="#d8d2b7"/><path d="M0 36 24 8h66l20 28z" fill="#a57555"/><path d="M0 36 24 8h66l20 28z" fill="url(#tiles)"/>
+   <path d="M0 39h110M0 48h110M5 111h100" stroke="#f1ead5" stroke-width="6"/>
+   <path d="M20 60h24v40H20zm47 0h24v40H67z" fill="#395e52"/><path d="M18 119h28v37H18zm47 0h28v37H65z" fill="#49695c"/>
+   <path d="M13 102h84v10H13zm-4 56h92v9H9z" fill="#b6bba0"/>
+   <path d="M18 95v17m12-17v17m12-17v17m13-17v17m12-17v17m12-17v17m12-17v17" stroke="#395e52" stroke-width="2"/>
+   <path d="M17 177h76v33H17z" fill="#2d5146"/><path d="M55 177v33" stroke="#b1bea1" stroke-width="2"/>
+   <path d="m4 167 8-9h86l9 9v8H4z" fill="#edf0d8"/><path d="m17 158-2 17h12l2-17zm25 0-1 17h12v-17zm24 0 1 17h12l-2-17zm24 0 3 17h12l-7-17" fill="#64846a"/>
+  </symbol>
+ </defs>
+ <path fill="#173c34" d="M0 0h800v1000H0z"/>
+ <circle cx="400" cy="465" r="290" stroke="#b5c4a7" stroke-opacity=".12"/>
+ <circle cx="400" cy="465" r="247" stroke="#b5c4a7" stroke-opacity=".1"/>
+ <path d="M70 732h660M70 747h660" stroke="#819b7d" stroke-opacity=".4"/>
+ <circle cx="515" cy="304" r="75" fill="#d4bc78"/>
+ <!-- Distant skyline and Bitexco's tapered silhouette -->
+ <path d="M128 510V382h48v128m12 0V352h51v158m370 0V402h58v108m12 0V368h39v142" fill="#2c5146"/>
+ <path d="M441 537V336q0-63 23-113l20-33q33 52 42 120l9 227z" fill="#668c7e"/>
+ <path d="M441 537V336q0-63 23-113l20-33q33 52 42 120l9 227z" fill="url(#windows)"/>
+ <path d="M484 196v341M442 360h91M443 394h93M444 428h93" stroke="#b8c7ad" stroke-opacity=".4" stroke-width="2"/>
+ <path d="m510 317 47 9-8 13-39-7z" fill="#d5d9bd"/>
+ <!-- Calm stepped street composition -->
+ <path d="m74 663 260-79 390 82-264 94z" fill="#9eae91"/>
+ <path d="m74 663 386 97v17L74 680z" fill="#688573"/><path d="m460 760 264-94v17l-264 94z" fill="#81967b"/>
+ <use href="#shop" x="113" y="430" width="110" height="210"/>
+ <use href="#shop" x="218" y="411" width="110" height="210"/>
+ <use href="#shop" x="565" y="444" width="100" height="191"/>
+ <!-- Ben Thanh: two halls and the recognisable clock tower -->
+ <path d="M312 532h251v125H312z" fill="#c7ad75"/>
+ <path d="m292 534 40-69h211l42 69z" fill="#a8734f"/><path d="m292 534 40-69h211l42 69z" fill="url(#tiles)"/>
+ <path d="M305 536h270v12H305z" fill="#eee2be"/>
+ <g fill="#36584a"><path d="M324 657v-64a18 18 0 0 1 36 0v64zm49 0v-64a18 18 0 0 1 36 0v64zm95 0v-64a18 18 0 0 1 36 0v64zm49 0v-64a18 18 0 0 1 36 0v64z"/></g>
+ <path d="M404 453h67v210h-67z" fill="#dfc58a"/><path d="M398 446h79v14h-79z" fill="#f0e4c1"/>
+ <path d="m391 447 16-28h13l17-24 18 24h14l16 28z" fill="#a97b54"/>
+ <path d="M398 555h79v10h-79z" fill="#efe5c6"/>
+ <circle cx="437" cy="502" r="24" fill="#f3ecd6"/><circle cx="437" cy="502" r="20" stroke="#506b54" stroke-width="1.5"/>
+ <path d="M437 485v17l12 7" stroke="#36584a" stroke-width="3" stroke-linecap="round"/>
+ <path d="M415 663v-62a22 22 0 0 1 44 0v62z" fill="#355747"/>
+ <path d="M403 666h71v6h-71zm-8 8h87v6h-87" fill="#e6d9b4"/>
+ <path d="M411 546h51" stroke="#64775b" stroke-width="3" stroke-dasharray="4 3"/>
+ <!-- Palms, street furniture and a single scooter -->
+ <use href="#palm" x="63" y="484" width="95" height="162"/>
+ <use href="#palm" x="622" y="496" width="95" height="162"/>
+ <path d="M287 621v56m-21-52h42" stroke="#455f4c" stroke-width="4"/><ellipse cx="287" cy="620" rx="26" ry="8" fill="#ddd1a7"/>
+ <path d="M261 642v30m48-30v30M255 644h13m35 0h13" stroke="#556c53" stroke-width="4"/>
+ <g transform="translate(494 685)"><circle cx="0" cy="20" r="12" fill="#233f37"/><circle cx="57" cy="20" r="12" fill="#233f37"/><circle cx="0" cy="20" r="5" fill="#c9cfb0"/><circle cx="57" cy="20" r="5" fill="#c9cfb0"/><path d="M-10 9q5-18 26-11l10 17h14l3-34h10l8 33H8" fill="#c7aa69"/><path d="M5-4h23m15-16h14" stroke="#304c3e" stroke-width="5" stroke-linecap="round"/><path d="m49-19 7-10" stroke="#a8b793" stroke-width="3"/></g>
+ <!-- Thin logistics paths connect the city without dashboard decorations -->
+ <path d="m151 695 182 47 81-26m151-61 100 25-90 34" stroke="#e2c482" stroke-width="2" stroke-dasharray="3 8"/>
+ <g fill="#e2c482"><circle cx="151" cy="695" r="4"/><circle cx="414" cy="716" r="4"/><circle cx="575" cy="714" r="4"/></g>
+ <path fill="url(#paper)" d="M0 0h800v1000H0z"/>
 </svg>
