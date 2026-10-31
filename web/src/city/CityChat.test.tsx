@@ -6,6 +6,7 @@ import type { ChatArchive, Doc } from "../studio/workspace-types";
 let document: Doc<ChatArchive>;
 let failSave = false;
 beforeEach(() => {
+  vi.stubGlobal('matchMedia', vi.fn(query => ({matches:false, media:query, addEventListener:vi.fn(),removeEventListener:vi.fn()})));
   document = {
     revision: 1,
     updatedAt: new Date().toISOString(),
@@ -150,4 +151,24 @@ describe("account chat", () => {
       "Unsent draft",
     );
   });
+});
+
+it('keeps updates quiet and attaches bounded evidence only when an explanation is sent', async () => {
+  const { MemoryRouter } = await import('react-router');
+  const reference = {kind:'stock-zero' as const,sourceRevision:2,sandboxRevision:1,hour:1,source:'inventory' as const,entity:'SKU1',before:10,after:0};
+  const notice = {id:'2:1:stock-zero',kind:reference.kind,title:'Stock reached zero',detail:'SKU1: 10 → 0',before:10,after:0,important:true,simulation:false,reconnected:false,observedAt:new Date().toISOString(),href:'/city-demo?district=warehouse&stock=SKU1',reference};
+  const updates={notices:[notice],toast:notice,unread:1,dismissToast:vi.fn(),markRead:vi.fn(),dismiss:vi.fn()};
+  render(<MemoryRouter><CityChat updates={updates}/></MemoryRouter>);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.some(([path])=>path==='/api/pm/chat')).toBe(false);
+  await open();
+  fireEvent.click(screen.getByRole('tab',{name:/Updates/}));
+  expect(updates.markRead).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button',{name:'Explain'}));
+  expect(screen.getByRole('textbox',{name:'Message Milo'})).toHaveValue('Explain this workspace change: Stock reached zero. SKU1: 10 → 0');
+  expect(vi.mocked(fetch).mock.calls.some(([path])=>path==='/api/pm/chat')).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await screen.findByText('source timestamps');
+  const request=vi.mocked(fetch).mock.calls.find(([path])=>path==='/api/pm/chat')!;
+  expect(JSON.parse(String(request[1]?.body)).changeReference).toEqual(reference);
 });

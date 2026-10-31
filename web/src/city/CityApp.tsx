@@ -41,64 +41,38 @@ import { CityChat } from "./CityChat";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import type { createCity, District, WorldState } from "./world";
 import "./city.css";
+import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
+import { Tutorial } from "./Tutorial";
+import { TOUR, TOUR_KEY } from "./tutorial-steps";
+import { useWorkspaceMonitor } from "./monitor/useWorkspaceMonitor";
+import { Brand, BrandMark } from "./Brand";
 const DISTRICTS = [
   { id: "hq", name: "MegaDay HQ", icon: Building2 },
   { id: "warehouse", name: "Warehouse", icon: Warehouse },
   { id: "ads", name: "Ads Platform", icon: Megaphone },
   { id: "homes", name: "Residential district", icon: Home },
 ] as const;
-function Mark() {
-  return (
-    <span className="city-mark" aria-hidden="true">
-      <i />
-      <i />
-      <i />
-    </span>
-  );
-}
-const TOUR = [
-  {
-    place: null,
-    title: "Your commerce city",
-    text: "Explore the districts or use the sidebar. The city follows your account’s six source files.",
-  },
-  {
-    place: "warehouse",
-    title: "Start with your stock",
-    text: "Open Warehouse to inspect source inventory by internal code and timestamp. Unknown and negative stock stay visible for review.",
-  },
-  {
-    place: "ads",
-    title: "Connect the ad district",
-    text: "Shopee Ads is the default building. Add another platform here; campaign decisions still belong to the backend.",
-  },
-  {
-    place: "hq",
-    title: "Bring the team together",
-    text: "HQ opens a full-size workspace with your overview and comparisons. Every campaign change needs a human.",
-  },
-  {
-    place: null,
-    title: "Shape the view",
-    text: "View settings holds Signal core, animation and quality. The compact sidebar keeps these controls within reach.",
-  },
-  {
-    place: null,
-    title: "Your sources, one workspace",
-    text: "Data Studio loads the six repository sources. Import exports, review format logs and move the shared sandbox clock there.",
-  },
-  {
-    place: null,
-    title: "Ask your PM",
-    text: "Open the assistant from any screen. It can explain the workspace, while verified decisions remain with the backend tools.",
-  },
-] as const;
 export function CityApp({ studio = false }: { studio?: boolean }) {
+  const [mobile, setMobile] = useState(
+    () => matchMedia("(max-width: 899px)").matches,
+  );
+  useEffect(() => {
+    const media = matchMedia("(max-width: 899px)");
+    const update = () => setMobile(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const [chatAnchor, setChatAnchor] = useState<HTMLSpanElement | null>(null);
   const connected = useAccountEvents();
   const settings = useAccountDocument<ViewSettings>("settings"),
     sources = useAccountDocument<SourcePack>("sources"),
     sandbox = useAccountDocument<Sandbox>("sandbox");
+  const updates = useWorkspaceMonitor(
+    sources.document,
+    sandbox.document,
+    connected,
+  );
+  const [chatOpen, setChatOpen] = useState(false);
   const viewSettings = settings.document?.data ?? defaultSettings;
   const feed = useMemo(
     () =>
@@ -136,6 +110,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   const latest = useRef(state);
   latest.current = state;
   const enter = (next: District | null) => {
+    setChatOpen(false);
     setDistrict(next);
     setWorkspace(false);
     worldRef.current?.focus(next);
@@ -198,7 +173,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   }, [settingsOpen]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !chatOpen) {
         if (tour !== null) finishTour();
         else if (workspace) setWorkspace(false);
         else enter(null);
@@ -206,7 +181,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [workspace, tour]);
+  }, [workspace, tour, chatOpen]);
   const setSettings = async (next: ViewSettings) => {
     if (!settings.document) return;
     try {
@@ -220,7 +195,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   function finishTour() {
     setTour(null);
     try {
-      localStorage.setItem("hackathon.city.tour", "complete");
+      localStorage.setItem(TOUR_KEY, "complete");
     } catch {
       /* Optional device preference. */
     }
@@ -233,7 +208,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     if (!ready || studio) return;
     const initial = setTimeout(() => {
       try {
-        if (!localStorage.getItem("hackathon.city.tour")) setTour(0);
+        if (!localStorage.getItem(TOUR_KEY)) setTour(0);
       } catch {
         /* Replay remains available. */
       }
@@ -247,7 +222,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   };
   return (
     <div
-      className={`city-app ${studio ? "city-studio" : ""}`}
+      className={`city-app ${studio ? "city-studio" : ""} ${chatOpen ? "milo-open" : ""}`}
       data-compact={compact}
     >
       <a className="city-skip" href="#city-main">
@@ -262,10 +237,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
           {compact ? <PanelLeftOpen /> : <PanelLeftClose />}
         </button>
         <Link className="city-brand" to="/city-demo">
-          <Mark />
-          <span>
-            MegaDay <b>Twin</b>
-          </span>
+          <Brand />
         </Link>
         <span className="city-route">
           /{" "}
@@ -371,7 +343,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             <div ref={host} className="city-canvas" />
             {!ready && (
               <div className="city-loading" role="status">
-                <Mark />
+                <BrandMark />
                 <span>Opening your city…</span>
               </div>
             )}
@@ -381,7 +353,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               </p>
             )}
             <div className="city-scene-title">
-              <span className="eyebrow">SENSE → PLAN → CONTROL</span>
               <h1>
                 {district
                   ? DISTRICTS.find((d) => d.id === district)?.name
@@ -402,7 +373,10 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                   </button>
                   <button
                     className="primary"
-                    onClick={() => setWorkspace(!workspace)}
+                    onClick={() => {
+                      setChatOpen(false);
+                      setWorkspace(!workspace);
+                    }}
                   >
                     {workspace
                       ? "Hide workspace"
@@ -460,110 +434,135 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                 <Minus />
               </button>
             </div>
-            {workspace && district && (
-              <section
-                className="district-workspace"
-                aria-label={`${DISTRICTS.find((d) => d.id === district)?.name} workspace`}
-              >
-                <header>
-                  <h2>{DISTRICTS.find((d) => d.id === district)?.name}</h2>
-                  {district === "hq" && (
-                    <div className="workspace-tabs">
-                      <button
-                        aria-pressed={hqTab === "overview"}
-                        onClick={() => setHqTab("overview")}
-                      >
-                        Overview
-                      </button>
-                      <button
-                        aria-pressed={hqTab === "compare"}
-                        onClick={() => setHqTab("compare")}
-                      >
-                        Comparisons
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    className="city-icon"
-                    aria-label="Close workspace"
-                    onClick={() => setWorkspace(false)}
-                  >
-                    <X />
-                  </button>
-                </header>
-                <div className="district-workspace-body">
-                  {district === "hq" ? (
-                    hqTab === "overview" ? (
-                      <ShiftOverviewPage />
-                    ) : (
-                      <CompareIndexPage />
-                    )
-                  ) : district === "warehouse" ? (
-                    <>
-                      <div className="warehouse-title">
-                        <h3>Source inventory</h3>
-                        <Link to="/mock-data">
-                          Manage sources
-                          <ArrowRight size={16} />
-                        </Link>
+            {workspace && district && !chatOpen && (
+              <Sheet open onOpenChange={setWorkspace} modal={mobile}>
+                <SheetContent
+                  showCloseButton={false}
+                  overlay={mobile}
+                  className={`district-workspace city-sheet ${district === "hq" ? "hq-workspace" : ""}`}
+                  aria-label={`${DISTRICTS.find((d) => d.id === district)?.name} workspace`}
+                >
+                  <header>
+                    <SheetTitle>
+                      {DISTRICTS.find((d) => d.id === district)?.name}
+                    </SheetTitle>
+                    {district === "hq" && (
+                      <div className="workspace-tabs">
+                        <button
+                          aria-pressed={hqTab === "overview"}
+                          onClick={() => setHqTab("overview")}
+                        >
+                          Overview
+                        </button>
+                        <button
+                          aria-pressed={hqTab === "compare"}
+                          onClick={() => setHqTab("compare")}
+                        >
+                          Comparisons
+                        </button>
                       </div>
-                      <p className="workspace-note">
-                        Internal warehouse codes · source snapshots · backend
-                        SKU matching required
-                      </p>
-                      <div className="warehouse-table">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Internal code</th>
-                              <th>Product</th>
-                              <th>Available units</th>
-                              <th>Source timestamp</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {feed.stock.map((row) => (
-                              <tr key={row.code}>
-                                <td>
-                                  <code>{row.code}</code>
-                                </td>
-                                <td>{row.name}</td>
-                                <td>
-                                  {row.stock === null ? (
-                                    <span className="stock-unknown">
-                                      Unknown
-                                    </span>
-                                  ) : (
-                                    row.stock.toLocaleString()
-                                  )}
-                                </td>
-                                <td>{row.asOf}</td>
+                    )}
+                    <button
+                      className="city-icon"
+                      aria-label="Close workspace"
+                      onClick={() => setWorkspace(false)}
+                    >
+                      <X />
+                    </button>
+                  </header>
+                  <div className="district-workspace-body">
+                    {district === "hq" ? (
+                      hqTab === "overview" ? (
+                        <ShiftOverviewPage />
+                      ) : (
+                        <CompareIndexPage />
+                      )
+                    ) : district === "warehouse" ? (
+                      <>
+                        <div className="warehouse-title">
+                          <h3>Source inventory</h3>
+                          <Link to="/mock-data">
+                            Manage sources
+                            <ArrowRight size={16} />
+                          </Link>
+                        </div>
+                        <p className="workspace-note">
+                          Internal warehouse codes · source snapshots · backend
+                          SKU matching required
+                        </p>
+                        <div className="warehouse-table">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Internal code</th>
+                                <th>Product</th>
+                                <th>Available units</th>
+                                <th>Source timestamp</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {!feed.stock.length && (
-                          <p>
-                            No inventory observations at this clock. Change the
-                            source clock in Data Studio.
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  ) : district === "ads" ? (
-                    <>
-                      <h3>Platform buildings</h3>
-                      <div className="platform-grid">
-                        {PLATFORM_IDS.map(
-                          (p) => (
-                            <article key={p} className={`platform-card platform-card-${p}`}>
+                            </thead>
+                            <tbody>
+                              {feed.stock.map((row) => (
+                                <tr
+                                  key={row.code}
+                                  className={
+                                    params.get("stock") === row.code
+                                      ? "stock-highlight"
+                                      : undefined
+                                  }
+                                >
+                                  <td>
+                                    <code>{row.code}</code>
+                                  </td>
+                                  <td>{row.name}</td>
+                                  <td>
+                                    {row.stock === null ? (
+                                      <span className="stock-unknown">
+                                        Unknown
+                                      </span>
+                                    ) : (
+                                      row.stock.toLocaleString()
+                                    )}
+                                  </td>
+                                  <td>{row.asOf}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {!feed.stock.length && (
+                            <p>
+                              No inventory observations at this clock. Change
+                              the source clock in Data Studio.
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    ) : district === "ads" ? (
+                      <>
+                        <h3>Platform buildings</h3>
+                        <div className="platform-grid">
+                          {PLATFORM_IDS.map((p) => (
+                            <article
+                              key={p}
+                              className={`platform-card platform-card-${p}`}
+                            >
                               <span className={`platform-logo brand-${p}`}>
-                                <img src={PLATFORMS[p].logo} alt="" width={32} height={32} />
+                                <img
+                                  src={PLATFORMS[p].logo}
+                                  alt=""
+                                  width={32}
+                                  height={32}
+                                />
                               </span>
                               <h4>{PLATFORMS[p].name}</h4>
-                              <p className="platform-signature">{PLATFORMS[p].signature}</p>
+                              <p className="platform-signature">
+                                {PLATFORMS[p].signature}
+                              </p>
                               <button
-                                aria-label={p === "shopee" ? "Shopee Ads building is built" : `${viewSettings.platforms.includes(p) ? "Remove" : "Add"} ${PLATFORMS[p].name} building`}
+                                aria-label={
+                                  p === "shopee"
+                                    ? "Shopee Ads building is built"
+                                    : `${viewSettings.platforms.includes(p) ? "Remove" : "Add"} ${PLATFORMS[p].name} building`
+                                }
                                 disabled={!settings.document || p === "shopee"}
                                 onClick={() =>
                                   void setSettings({
@@ -580,8 +579,14 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                               >
                                 {viewSettings.platforms.includes(p) ? (
                                   <>
-                                    {p === "shopee" ? <Check size={16} /> : <Minus size={16} />}
-                                    {p === "shopee" ? "Built" : "Remove building"}
+                                    {p === "shopee" ? (
+                                      <Check size={16} />
+                                    ) : (
+                                      <Minus size={16} />
+                                    )}
+                                    {p === "shopee"
+                                      ? "Built"
+                                      : "Remove building"}
                                   </>
                                 ) : (
                                   <>
@@ -591,76 +596,36 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                                 )}
                               </button>
                             </article>
-                          ),
-                        )}
-                      </div>
-                      <p className="workspace-note">
-                        Building presence is a workspace setting. Connected
-                        campaign data comes through the backend.
-                      </p>
-                      <Link className="btn-secondary" to="/compare">
-                        Campaign comparisons
-                        <ArrowRight size={16} />
-                      </Link>
-                    </>
-                  ) : (
-                    <>
-                      <h3>Order observations</h3>
-                      <p>
-                        {feed.orderRows.toLocaleString()} rows through the
-                        shared source clock.
-                      </p>
-                      <Link to="/mock-data">
-                        Inspect order sources
-                        <ArrowRight size={16} />
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </section>
+                          ))}
+                        </div>
+                        <p className="workspace-note">
+                          Building presence is a workspace setting. Connected
+                          campaign data comes through the backend.
+                        </p>
+                        <Link className="btn-secondary" to="/compare">
+                          Campaign comparisons
+                          <ArrowRight size={16} />
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <h3>Order observations</h3>
+                        <p>
+                          {feed.orderRows.toLocaleString()} rows through the
+                          shared source clock.
+                        </p>
+                        <Link to="/mock-data">
+                          Inspect order sources
+                          <ArrowRight size={16} />
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
             )}
             {tour !== null && (
-              <section className="city-tour" aria-label="City tutorial">
-                <header>
-                  <span>
-                    YOUR CITY / {tour + 1} OF {TOUR.length}
-                  </span>
-                  <button aria-label="Close tutorial" onClick={finishTour}>
-                    <X size={18} />
-                  </button>
-                </header>
-                <h2>{TOUR[tour]!.title}</h2>
-                <p>{TOUR[tour]!.text}</p>
-                <footer>
-                  <button
-                    disabled={tour === 0}
-                    onClick={() => tourStep(tour - 1)}
-                  >
-                    Back
-                  </button>
-                  <div>
-                    {TOUR.map((_, i) => (
-                      <button
-                        key={i}
-                        aria-label={`Tutorial step ${i + 1}`}
-                        aria-current={tour === i ? "step" : undefined}
-                        onClick={() => tourStep(i)}
-                      />
-                    ))}
-                  </div>
-                  <button
-                    className="primary"
-                    onClick={() =>
-                      tour === TOUR.length - 1
-                        ? finishTour()
-                        : tourStep(tour + 1)
-                    }
-                  >
-                    {tour === TOUR.length - 1 ? "Explore" : "Next"}
-                    <ArrowRight size={16} />
-                  </button>
-                </footer>
-              </section>
+              <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />
             )}
           </>
         )}
@@ -673,7 +638,31 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             : "Loading account"}
         </span>
       </footer>
-      <CityChat launcherAnchor={chatAnchor} />
+      <CityChat
+        launcherAnchor={chatAnchor}
+        updates={updates}
+        onOpenChange={setChatOpen}
+        open={chatOpen}
+      />
+      <div className="monitor-live sr-only" role="status" aria-live="polite">
+        {updates.toast?.title ?? ""}
+      </div>
+      {updates.toast && (
+        <aside className="workspace-toast" aria-label="Workspace update">
+          <div>
+            <strong>{updates.toast.title}</strong>
+            <p>{updates.toast.detail}</p>
+          </div>
+          <button
+            onClick={() => window.dispatchEvent(new Event("workspace:updates"))}
+          >
+            Review
+          </button>
+          <button aria-label="Dismiss update" onClick={updates.dismissToast}>
+            <X size={16} />
+          </button>
+        </aside>
+      )}
       <dialog
         ref={settingsDialog}
         className="city-settings"
@@ -681,7 +670,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       >
         <header>
           <div>
-            <span className="eyebrow">City preferences</span>
             <h2>View settings</h2>
           </div>
           <button aria-label="Close settings" onClick={closeSettings}>
@@ -760,7 +748,10 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       <RouteSteering
         locationKey={location.key}
         ready={ready}
-        onDistrict={(id) => enterRef.current(id)}
+        onDistrict={(id) => {
+          enterRef.current(id);
+          if (params.has("stock")) setWorkspace(true);
+        }}
         onTour={() => tourStep(0)}
       />
     </div>

@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowUp,
+  Bell,
   Maximize2,
   Minimize2,
   History,
@@ -15,8 +22,38 @@ import { requestJSON } from "../studio/account";
 import { useChatArchive } from "./useChatArchive";
 import { ChatHistory } from "./ChatHistory";
 import type { ChatMessage, ChatSession } from "../studio/workspace-types";
+import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { MiloAvatar } from "./MiloAvatar";
+import { Updates } from "./monitor/Updates";
+import type { WorkspaceUpdates } from "./monitor/useWorkspaceMonitor";
+import type { ChangeReference } from "./monitor/changes";
 const EMPTY_MESSAGES: ChatMessage[] = [];
-export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | null }) {
+export function CityChat({
+  launcherAnchor,
+  updates,
+  onOpenChange,
+  open: controlledOpen,
+}: {
+  launcherAnchor?: HTMLElement | null;
+  updates?: WorkspaceUpdates;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+}) {
+  const [mobile, setMobile] = useState(
+    () => window.matchMedia("(max-width: 899px)").matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 899px)");
+    const update = () => setMobile(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  const [tab, setTab] = useState("chat");
+  const [changeReference, setChangeReference] = useState<
+    ChangeReference | undefined
+  >();
+
   const archive = useChatArchive();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
@@ -29,7 +66,7 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     optimistic && !messages.some((m) => m.id === optimistic.id)
       ? [...messages, optimistic]
       : messages;
-  const [open, setOpen] = useState(false),
+  const [localOpen, setLocalOpen] = useState(false),
     [expanded, setExpanded] = useState(false),
     [draft, setDraft] = useState(""),
     [pending, setPending] = useState(false),
@@ -40,9 +77,22 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     scroll = useRef<HTMLDivElement>(null),
     controller = useRef<AbortController | null>(null),
     trigger = useRef<HTMLButtonElement>(null);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = useCallback(
+    (value: boolean) => {
+      setLocalOpen(value);
+      onOpenChange?.(value);
+    },
+    [onOpenChange],
+  );
   const drafts = useRef(new Map<string, string>());
+  const references = useRef(new Map<string, ChangeReference | undefined>());
   useEffect(() => {
-    const show = () => setOpen(true);
+    const show = (event: Event) => {
+      setOpen(true);
+      if (event.type === "workspace:updates") setTab("updates");
+    };
+    window.addEventListener("workspace:updates", show);
     window.addEventListener("workspace:chat", show);
     const key = (e: KeyboardEvent) => {
       if (
@@ -50,7 +100,7 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
         ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")
       ) {
         e.preventDefault();
-        setOpen((v) => !v);
+        setOpen(!open);
       }
       if (e.key === "Escape") {
         setOpen(false);
@@ -61,9 +111,10 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     return () => {
       window.removeEventListener("keydown", key);
       window.removeEventListener("workspace:chat", show);
-      controller.current?.abort();
+      window.removeEventListener("workspace:updates", show);
     };
-  }, []);
+  }, [open, setOpen]);
+  useEffect(() => () => controller.current?.abort(), []);
   const preferredModel = archive.document?.data.preferredModel;
   useEffect(() => {
     if (!open) return;
@@ -130,8 +181,10 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
         body: JSON.stringify({
           sessionId: session.id,
           lastMessageId: message.id,
+          changeReference,
         }),
       });
+      setChangeReference(undefined);
       await archive.reload();
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError"))
@@ -178,6 +231,7 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
         body: JSON.stringify({
           sessionId: conversation.id,
           lastMessageId: conversation.messages.at(-1)!.id,
+          changeReference,
         }),
       });
     } catch (e) {
@@ -189,6 +243,8 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
     }
   }
   function newChat() {
+    references.current.set(sessionId ?? "new", changeReference);
+    setChangeReference(references.current.get("new"));
     drafts.current.set(sessionId ?? "new", draft);
     setSessionId(null);
     setDraft(drafts.current.get("new") ?? "");
@@ -198,39 +254,84 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
   }
 
   const launcher = (
-      <button
-        ref={trigger}
-        className="pm-launcher"
-        aria-label="Open PM assistant"
-        aria-expanded={open}
-        aria-controls="city-pm-chat"
-        onClick={() => setOpen(!open)}
-      >
-        <span className="pm-avatar" aria-hidden="true">
-          <img src="/pm.svg" alt="" />
+    <button
+      ref={trigger}
+      className="pm-launcher"
+      aria-label="Open PM assistant"
+      aria-expanded={open}
+      aria-controls="city-pm-chat"
+      onClick={() => setOpen(!open)}
+    >
+      <span className="pm-avatar" aria-hidden="true">
+        <MiloAvatar
+          state={
+            pending
+              ? "thinking"
+              : error
+                ? "error"
+                : updates?.unread
+                  ? "notification"
+                  : open
+                    ? "greeting"
+                    : "idle"
+          }
+        />
+      </span>
+      {!!updates?.unread && (
+        <span
+          className="pm-unread"
+          aria-label={`${updates.unread} unread updates`}
+        >
+          {updates.unread}
         </span>
-        <span className="pm-preview" aria-hidden="true">
-          <img src="/pm.svg" alt="" />
-          <span className="pm-caption">Ask your PM</span>
-        </span>
-      </button>
+      )}
+      <span className="pm-preview" aria-hidden="true">
+        <MiloAvatar
+          state={
+            pending
+              ? "thinking"
+              : error
+                ? "error"
+                : updates?.unread
+                  ? "notification"
+                  : open
+                    ? "greeting"
+                    : "idle"
+          }
+        />
+        <span className="pm-caption">Milo</span>
+      </span>
+    </button>
   );
 
   return (
     <div className="city-pm">
       {launcherAnchor ? createPortal(launcher, launcherAnchor) : launcher}
-      {open && (
-        <section
+      <Sheet open={open} onOpenChange={setOpen} modal={mobile}>
+        <SheetContent
           id="city-pm-chat"
-          className={`city-chat ${expanded ? "chat-expanded" : ""}`}
-          role="dialog"
-          aria-modal="false"
+          className={`city-chat city-sheet ${expanded ? "chat-expanded" : ""}`}
+          showCloseButton={false}
+          overlay={mobile}
+          finalFocus={trigger}
           aria-labelledby="chat-title"
         >
           <header>
             <div className="chat-identity">
-              <img src="/pm.svg" alt="" />
-              <h2 id="chat-title">Milo</h2>
+              <MiloAvatar
+                state={
+                  pending
+                    ? "thinking"
+                    : error
+                      ? "error"
+                      : updates?.unread
+                        ? "notification"
+                        : open
+                          ? "greeting"
+                          : "idle"
+                }
+              />
+              <SheetTitle id="chat-title">Milo</SheetTitle>
             </div>
             <button
               className="city-icon"
@@ -268,7 +369,38 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
               <X />
             </button>
           </header>
-          {history ? (
+          {updates && (
+            <Tabs
+              value={tab}
+              onValueChange={(value) => {
+                setTab(String(value));
+                if (value === "updates") updates.markRead();
+              }}
+            >
+              <TabsList className="milo-tabs" aria-label="Milo views">
+                <TabsTrigger value="chat">Chat</TabsTrigger>
+                <TabsTrigger value="updates">
+                  <Bell size={15} /> Updates{" "}
+                  {updates.unread > 0 && <span>{updates.unread}</span>}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+          {tab === "updates" && updates ? (
+            <Updates
+              updates={updates}
+              onNavigate={() => setOpen(false)}
+              onExplain={(notice) => {
+                setChangeReference(notice.reference);
+                setDraft(
+                  `Explain this workspace change: ${notice.title}. ${notice.detail}`,
+                );
+                setTab("chat");
+                setHistory(false);
+                setTimeout(() => input.current?.focus(), 0);
+              }}
+            />
+          ) : history ? (
             <ChatHistory
               sessions={archive.document?.data.sessions ?? []}
               activeId={sessionId}
@@ -279,6 +411,8 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
               }}
               onSelect={(id) => {
                 drafts.current.set(sessionId ?? "new", draft);
+                references.current.set(sessionId ?? "new", changeReference);
+                setChangeReference(references.current.get(id));
                 setSessionId(id);
                 setDraft(drafts.current.get(id) ?? "");
                 setError("");
@@ -387,6 +521,18 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
                     )}
                 </div>
               )}
+              {changeReference && (
+                <div className="change-attached">
+                  Workspace change attached
+                  <button
+                    type="button"
+                    aria-label="Remove change context"
+                    onClick={() => setChangeReference(undefined)}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
               <form className="chat-form" onSubmit={(e) => void send(e)}>
                 <div className="chat-composer">
                   <textarea
@@ -458,8 +604,8 @@ export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | nu
               </form>
             </>
           )}
-        </section>
-      )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
