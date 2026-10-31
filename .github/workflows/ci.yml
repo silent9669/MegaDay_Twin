@@ -67,3 +67,13 @@ jobs:
           node-version: 24
       - name: Verify generated fixtures without modifying the checkout
         run: node scripts/check-mock-data.mjs
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Python container and verify restart persistence
+        run: |
+          docker build -f backend/Dockerfile -t megaday-backend-test .
+          python scripts/hosted-smoke.py --image megaday-backend-test

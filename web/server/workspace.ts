@@ -2,6 +2,7 @@ import { sourceText, encodeSource } from "../src/studio/source-text";
 import { playbackHour, visibleSources } from "../src/studio/replay";
 import { savedChat } from "./chat-store";
 import type { PlannerEnv } from "./sale-planner";
+import { backendConnection } from "./backend-fetch";
 import { hqSchema, defaultHQ } from "../src/hq/types";
 import type {
   DurableObjectState,
@@ -276,7 +277,7 @@ export class AccountWorkspace {
     const url = new URL(request.url),
       name = url.pathname.split("/").pop() ?? "";
     // Parse archives and inventory here, not in the gateway's 10 ms CPU budget.
-    if (url.pathname === "/internal/milo/chat") return savedChat(request,this.env,{decisionToolsConnected:!!this.env.DATA_BACKEND_URL},this);
+    if (url.pathname === "/internal/milo/chat") return savedChat(request,this.env,{decisionToolsConnected:!!backendConnection(this.env)},this);
     if (url.pathname === "/internal/studio/import") return studioImport(request, this.env);
     if (url.pathname === "/internal/product-labels") return productLabels(request, this, getProductLabelProvider(this.env));
     const labelOperation = /^\/internal\/product-labels\/(snapshot|claim|finish|manual)$/.exec(url.pathname)?.[1];

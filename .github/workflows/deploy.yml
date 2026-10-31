@@ -32,8 +32,14 @@ jobs:
             const { needsDeployment } = require('./scripts/deployment.cjs');
             return await needsDeployment(github, context);
 
-  deploy:
+  backend:
     needs: changes
+    if: needs.changes.outputs.deploy == 'true'
+    uses: ./.github/workflows/deploy-backend.yml
+    secrets: inherit
+
+  deploy:
+    needs: [changes, backend]
     if: needs.changes.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12

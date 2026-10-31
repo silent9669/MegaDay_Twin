@@ -33,6 +33,10 @@ export default defineConfig({
         DATA_BACKEND_USER: bindings.secret(),
         DATA_BACKEND_ROLE: bindings.secret(),
       } : {}),
+      // Deploy megaday-decision-backend before publishing this production binding.
+      ...(process.env.MEGADAY_LOCAL_BACKEND === "1" ? {} : {
+        DECISION_BACKEND: bindings.worker({ worker: "megaday-decision-backend" }),
+      }),
       OPENAI_API_KEY: bindings.secret(),
       OPENAI_MODEL_IMPORT: bindings.text("gpt-6-luna"),
       OPENAI_MODEL_DECISION: bindings.text("gpt-6-luna"),
