@@ -1,3 +1,4 @@
+import { usePanelResize } from "./usePanelResize";
 import {
   useCallback,
   useEffect,
@@ -83,8 +84,9 @@ export function CityChat({
     optimistic && !messages.some((m) => m.id === optimistic.id)
       ? [...messages, optimistic]
       : messages;
+  const panel = usePanelResize(560, 420);
+  const { expanded, setExpanded } = panel;
   const [localOpen, setLocalOpen] = useState(false),
-    [expanded, setExpanded] = useState(false),
     [draft, setDraft] = useState(""),
     [pending, setPending] = useState(false),
     [models, setModels] = useState<string[]>([]),
@@ -135,7 +137,8 @@ export function CityChat({
   useEffect(() => {
     const show = (event: Event) => {
       setOpen(true);
-      if (event.type === "workspace:updates") setTab("updates");
+      setTab(event.type === "workspace:updates" ? "updates" : "chat");
+      setHistory(false);
     };
     window.addEventListener("workspace:updates", show);
     window.addEventListener("workspace:chat", show);
@@ -145,6 +148,7 @@ export function CityChat({
         ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")
       ) {
         e.preventDefault();
+        if (!open) { setTab("chat"); setHistory(false); }
         setOpen(!open);
       }
       if (e.key === "Escape" && open) {
@@ -338,7 +342,7 @@ export function CityChat({
   const launcher = (
     <div className="pm-companion" data-speaking={speaking}>
       <button ref={trigger} className="pm-launcher" aria-label="Open PM assistant"
-        aria-expanded={open} aria-controls="city-pm-chat" onClick={() => setOpen(!open)}>
+        aria-expanded={open} aria-controls="city-pm-chat" onClick={() => { setTab("chat"); setHistory(false); setOpen(true); }}>
         <span className="pm-avatar" aria-hidden="true"><img src="/assets/milo/avatar.png" alt="" /></span>
         {!!updates?.unread && <span className="pm-unread" aria-label={`${updates.unread} unread updates`}>{updates.unread}</span>}
         <span className="pm-preview" aria-hidden="true">
@@ -351,6 +355,7 @@ export function CityChat({
           <strong>{updates.toast.title}</strong>
           <p>{updates.toast.detail}</p>
           <button className="milo-review" onClick={() => { setTab("updates"); setOpen(true); updates.dismissToast(); }}>Review update <ArrowRight size={14} /></button>
+          <button onClick={updates.readAll}>Read all</button>
         </aside>
       )}
     </div>
@@ -362,6 +367,7 @@ export function CityChat({
       <Sheet open={open} onOpenChange={setOpen} modal={mobile}>
         <SheetContent
           id="city-pm-chat"
+          style={panel.style}
           className={`city-chat city-sheet ${expanded ? "chat-expanded" : ""}`}
           showCloseButton={false}
           overlay={mobile}
@@ -369,6 +375,7 @@ export function CityChat({
           initialFocus={tab === "chat" ? input : undefined}
           aria-labelledby="chat-title"
         >
+          <div className="panel-resize-grip" {...panel.grip} />
           <header>
             <div className="chat-identity">
               <MiloAvatar

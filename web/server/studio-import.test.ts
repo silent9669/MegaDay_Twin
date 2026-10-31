@@ -1,10 +1,15 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { strToU8, zipSync } from "fflate";
-import { analyzeArchive, extractArchive } from "./studio-import";
+import { analyzeArchive, extractArchive, studioImport } from "./studio-import";
 
 afterEach(() => vi.unstubAllGlobals());
 const archive = (files: Record<string, string>) => zipSync(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, strToU8(v)])));
+it("does not claim AI review succeeded when the model connection is missing", async () => {
+  const result = await studioImport(new Request("https://app.test/api/studio/import?review=1", { method: "POST", body: "zip" }), {});
+  expect(result.status).toBe(503);
+  expect(await result.text()).toContain("AI review is not configured");
+});
 describe("backend archive investigation", () => {
   it("reviews recognized tables in one call using bounded samples, and exposes review issues", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ tables: [], reviews: [{ file: "stock.csv", issues: ["Check negative stock"] }] }) }] }] }));
@@ -64,4 +69,13 @@ describe("backend archive investigation", () => {
     expect(result.tables[1]?.source.kind).toBe("general");
     expect(result.skipped).toEqual([]);
   });
+});
+
+it("excludes replay metadata and fast-imports recognized tables even when the AI connection fails", async () => {
+  const fetch = vi.fn(async () => { throw Error("offline"); });
+  vi.stubGlobal("fetch", fetch);
+  const result = await analyzeArchive(archive({ "live_11_11/stock.csv": "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,1", "live_11_11/_replay.json": '{"rows":[],"headers":[]}' }), { OPENAI_API_KEY: "test", OPENAI_MODEL_IMPORT: "test" }, false);
+  expect(result.tables).toHaveLength(1);
+  expect(result.skipped[0]?.file).toContain("_replay.json");
+  expect(fetch).not.toHaveBeenCalled();
 });

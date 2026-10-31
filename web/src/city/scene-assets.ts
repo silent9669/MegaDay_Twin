@@ -1,4 +1,5 @@
 import * as T from "three";
+import { textureArchitecture } from "./detail-textures";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
@@ -76,6 +77,7 @@ export function loadArchitecture(scene: T.Scene, host: HTMLElement, isNight: () 
           o.receiveShadow = true;
         }
       });
+      textureArchitecture(loaded);
       setArchitectureNight(loaded, isNight());
       scene.add(loaded);
       scene.remove(fallback);

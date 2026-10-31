@@ -221,15 +221,19 @@ it('keeps updates quiet and attaches bounded evidence only when an explanation i
   const { MemoryRouter } = await import('react-router');
   const reference = {kind:'stock-zero' as const,sourceRevision:2,sandboxRevision:1,hour:1,source:'inventory' as const,entity:'SKU1',before:10,after:0};
   const notice = {id:'2:1:stock-zero',kind:reference.kind,title:'Stock reached zero',detail:'SKU1: 10 → 0',before:10,after:0,important:true,simulation:false,reconnected:false,observedAt:new Date().toISOString(),href:'/city-demo?district=warehouse&stock=SKU1',reference};
-  const updates={notices:[notice],toast:notice,unread:1,dismissToast:vi.fn(),markRead:vi.fn(),dismiss:vi.fn()};
+  const updates={notices:[notice],toast:notice,unread:1,dismissToast:vi.fn(),markRead:vi.fn(),readAll:vi.fn(),dismiss:vi.fn()};
   render(<MemoryRouter><CityChat updates={updates}/></MemoryRouter>);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.some(([path])=>path==='/api/pm/chat')).toBe(false);
   expect(screen.getByLabelText('Workspace update')).toHaveTextContent('Stock reached zero');
+  fireEvent.click(screen.getByRole('button', { name: 'Read all' }));
+  expect(updates.readAll).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button', { name: 'Review update' }));
   expect(updates.dismissToast).toHaveBeenCalledOnce();
   await screen.findByRole('tab', { name: /Updates/ });
   expect(updates.markRead).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Read all' }));
+  expect(updates.readAll).toHaveBeenCalledTimes(2);
   fireEvent.click(screen.getByRole('button',{name:'Explain'}));
   expect(screen.getByRole('textbox',{name:'Message Milo'})).toHaveValue('Explain this workspace change: Stock reached zero. SKU1: 10 → 0');
   expect(vi.mocked(fetch).mock.calls.some(([path])=>path==='/api/pm/chat')).toBe(false);
@@ -237,4 +241,18 @@ it('keeps updates quiet and attaches bounded evidence only when an explanation i
   await screen.findByText('source timestamps');
   const request=vi.mocked(fetch).mock.calls.find(([path])=>path==='/api/pm/chat')!;
   expect(JSON.parse(String(request[1]?.body)).changeReference).toEqual(reference);
+});
+
+it('opens Chat directly from the avatar and sidebar after viewing Updates', async () => {
+  const { MemoryRouter } = await import('react-router');
+  const updates = { notices: [], toast: null, unread: 0, dismissToast: vi.fn(), markRead: vi.fn(), readAll: vi.fn(), dismiss: vi.fn() };
+  render(<MemoryRouter><CityChat updates={updates} /></MemoryRouter>);
+  await open();
+  fireEvent.click(screen.getByRole('tab', { name: /Updates/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open PM assistant' }));
+  expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+  fireEvent.click(screen.getByRole('tab', { name: /Updates/ }));
+  fireEvent(window, new Event('workspace:chat'));
+  expect(screen.getByRole('textbox', { name: 'Message Milo' })).toBeVisible();
 });

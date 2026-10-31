@@ -5,6 +5,16 @@ export type StudioModelEnv = {
   OPENAI_MODEL_DECISION?: string;
 };
 
+export class ModelRequestError extends Error {
+  constructor(status: number) {
+    super(status === 401 || status === 403 ? "The configured AI connection was rejected. Check the Worker's OpenAI secret and model access."
+      : status === 404 ? "The configured AI model is unavailable for this account. Check the import/decision model setting."
+      : status === 429 ? "The AI service is rate-limited or out of quota. Retry shortly or check the account quota."
+      : status === 400 ? "The AI service rejected the structured-output request. Check that the configured model supports this format."
+      : "The AI service is temporarily unavailable. Retry shortly.");
+  }
+}
+
 /** Server-only structured output. Uploaded content stays in the untrusted user input. */
 export async function modelJSON(env: StudioModelEnv, model: string, instructions: string,
   input: unknown, schema: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
@@ -17,7 +27,7 @@ export async function modelJSON(env: StudioModelEnv, model: string, instructions
       text: { format: { type: "json_schema", name: "studio_result", strict: true, schema } },
     }),
   });
-  if (!response.ok) throw Error("The model could not complete the analysis. Retry shortly.");
+  if (!response.ok) throw new ModelRequestError(response.status);
   const body = await response.json() as {
     status?: string;
     output?: { type: string; content?: { type: string; text?: string }[] }[];

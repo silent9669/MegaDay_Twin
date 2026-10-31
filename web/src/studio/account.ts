@@ -9,7 +9,9 @@ export async function requestJSON<T>(
     cache: "no-store",
     headers: { ...options?.headers },
   });
-  const body = await response.json();
+  let body;
+  try { body = await response.json(); }
+  catch { throw Object.assign(Error(response.status === 401 ? "Sign in again to continue." : `The server returned an unreadable response (HTTP ${response.status}). Retry shortly.`), { status: response.status }); }
   if (!response.ok)
     throw Object.assign(Error(body.error?.message ?? "Request failed."), {
       status: response.status,

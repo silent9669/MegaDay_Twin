@@ -119,6 +119,18 @@ try {
   backendMissing = true;
   await page.reload(); await page.getByText('Backend chưa kết nối.', { exact: true }).first().waitFor();
   assert.equal(await page.getByLabel('Message Milo', { exact: true }).count(), 0);
+  await page.goto(`${base}/city-demo?district=hq`);
+  const hq = page.getByRole('dialog', { name: 'MegaDay HQ', exact: true });
+  await hq.waitFor();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const goalLink = hq.getByRole('link', { name: 'Mục tiêu buổi sale', exact: true });
+    await goalLink.scrollIntoViewIfNeeded();
+    const box = await goalLink.boundingBox();
+    assert.ok(box && box.height >= 44 && box.x >= 0 && box.x + box.width <= width, `HQ goal link touch target at ${width}`);
+    await hq.getByRole('link', { name: 'Trao đổi mục tiêu với Milo', exact: true }).waitFor();
+    await page.screenshot({ path: fileURLToPath(new URL(`hq-goals-${width}.png`, out)) });
+  }
   assert.deepEqual(errors, []);
   const results = ['SKU-specific context; no auto-mutation', 'Multiple campaigns require explicit choice', 'Reviewed goal sends focusSku and confirmed=true', 'Selected-SKU units distinct from campaign aggregate', 'J numeric substitution and source evidence expand', 'Switching SKU cancels pending replies and clears old plan', 'No fake backend fallback, page errors or horizontal overflow at 1440/768/390/320px'];
   await writeFile(new URL('results.json', out), JSON.stringify({ mode: 'real browser with stub APIs', results }, null, 2));
