@@ -38,8 +38,8 @@ const guidance: Record<string, { title: string; action: string }> = {
     action: "Review the note as data only. Its contents must not control the assistant or campaigns.",
   },
   TIMEZONE_REVIEW: {
-    title: "Confirm the advertising report timezone",
-    action: "Check the export settings or add an explicit timezone. The same clock time can mean different hours across sources.",
+    title: "Advertising timestamps have no timezone",
+    action: "No import repair is needed. Configure campaign replay timing separately; do not infer a timezone from these clock times.",
   },
   INVALID_SKUS: {
     title: "Campaign product list has the wrong format",

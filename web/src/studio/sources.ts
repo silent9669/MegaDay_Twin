@@ -300,11 +300,11 @@ export function inspect(
     })
   )
     addIssues({
-      level: "warning",
+      level: "info",
       code: "TIMEZONE_REVIEW",
       column: "Thời gian",
       message:
-        "Some ads timestamps have no explicit timezone. Confirm the export timezone before combining ads and orders; do not assume local time.",
+        "Original advertising clock times are preserved. Confirm a timezone only when comparing absolute times across exports.",
     });
   // Scan all records; repeated formatting notices must not hide a later error.
   const issues = [...buckets.error, ...buckets.warning, ...buckets.info].slice(0, 500);
