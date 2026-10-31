@@ -19,8 +19,11 @@ this is not tenant isolation or a production multi-shop authorization design.
 3. Create the private bucket once:
    `npx wrangler r2 bucket create megaday-decision-state`.
    Do not enable public bucket access. Do not add automatic deletion to its state object.
-4. Run `.github/workflows/deploy-backend.yml` on this branch to provision the
-   backend before publishing the web service binding. GitHub's Linux runner has Docker.
+4. Run the existing `ci.yml` workflow on this branch with `deploy_backend=true`
+   to provision the backend after checks and before publishing the web binding:
+   `gh workflow run ci.yml --ref feat/cloudflare-python-backend -f deploy_backend=true`.
+   The new standalone deploy workflow is also available after merging it to main.
+   GitHub's Linux runner has Docker.
    Local deployment requires a running Docker engine (`npm run deploy:backend`).
 5. After backend deployment succeeds, merge the reviewed change. `deploy.yml`
    deploys and smoke-tests the backend before promoting the web build. Future

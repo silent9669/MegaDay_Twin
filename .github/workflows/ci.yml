@@ -3,10 +3,15 @@ name: ci
 # Full validation is opt-in; run the same checks locally before merging.
 on:
   workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: Provision the private Cloudflare backend after all checks pass
+        type: boolean
+        default: false
 
 concurrency:
   group: manual-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -77,3 +82,9 @@ jobs:
         run: |
           docker build -f backend/Dockerfile -t megaday-backend-test .
           python scripts/hosted-smoke.py --image megaday-backend-test
+
+  provision-backend:
+    if: inputs.deploy_backend == true
+    needs: [backend, web, mock-data, container]
+    uses: ./.github/workflows/deploy-backend.yml
+    secrets: inherit
