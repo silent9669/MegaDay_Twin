@@ -98,6 +98,7 @@ describe("six-source workspace contract", () => {
       files: [
         {
           ...pack.files[2]!,
+          replay: { date: "2026-11-11", hours: [1, 1, 2], lagHours: 0 },
           text: "Mã nội bộ,Tồn thực tế,Tên hàng,Thời điểm cập nhật\nA,-2,Apple,2026-11-11 01:00\nB,,Banana,2026-11-11 01:00\nA,5,Apple,2026-11-11 02:00",
         },
       ],

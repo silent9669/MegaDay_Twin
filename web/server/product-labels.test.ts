@@ -294,7 +294,7 @@ describe("label route boundaries", () => {
       const forwarded = form.getAll("files") as File[];
       expect(forwarded).toHaveLength(1);
       expect(forwarded[0]!.name).toBe("ton_kho_google_sheet.csv");
-      expect(await forwarded[0]!.text()).toBe("Mã nội bộ,Tên hàng,Tồn thực tế\r\nA,Cup,17\r\n");
+      expect(await forwarded[0]!.text()).toBe("Mã nội bộ,Tên hàng,Tồn thực tế\r\nA,Cup,17");
       return Response.json({ accepted: true });
     });
     vi.stubGlobal("fetch", upstream);

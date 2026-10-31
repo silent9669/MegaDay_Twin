@@ -16,7 +16,7 @@ export function workspaceSummary(sources: Doc<SourcePack>, sandbox: Doc<Sandbox>
     scanSource(file, (row, index) => {
       if (file.replay && file.replay.hours[index]! >= 0 && file.replay.hours[index]! > hour - file.replay.lagHours) return;
       if (file.kind === "orders") {
-        if (!file.commit || Number(String(row["Ngày đặt hàng"] ?? "").slice(11, 13)) < hour) orders++;
+        orders++;
       } else if (file.kind === "campaigns") campaigns++;
       else {
         columns ??= Object.fromEntries(Object.keys(row).map(key => [normalize(key), key]));
@@ -24,7 +24,6 @@ export function workspaceSummary(sources: Doc<SourcePack>, sandbox: Doc<Sandbox>
         const code = String(value("Mã nội bộ") ?? "").trim();
         if (code !== sku) return;
         const asOf = String(value("Thời điểm cập nhật") || value("Ngày") || "");
-        if (file.commit && asOf.includes(":") && Number(asOf.slice(11, 13)) > hour) return;
         if (stock && stock.asOf > asOf) return;
         const raw = String(value("Tồn thực tế") ?? "").trim(), amount = raw ? Number(raw) : NaN;
         stock = { code, name: String(value("Tên hàng") ?? code), asOf,

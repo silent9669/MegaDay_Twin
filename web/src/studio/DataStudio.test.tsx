@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DataStudio } from "./DataStudio";
 import { requestJSON, useAccountDocument } from "./account";
 import { makeSource, type SourcePack } from "./sources";
@@ -8,6 +8,7 @@ import { makeSource, type SourcePack } from "./sources";
 vi.mock("./account", () => ({ requestJSON: vi.fn(), useAccountDocument: vi.fn() }));
 vi.mock("./SandboxControl", () => ({ SandboxControl: () => null }));
 const save = vi.fn();
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const setup = (files: SourcePack["files"] = []) => {
   vi.mocked(useAccountDocument).mockReturnValue({
     document: { revision: 7, updatedAt: "2026-11-10T00:00:00Z", data: { schema: "hackathon.sources.v1", files } },
@@ -98,4 +99,28 @@ it("keeps the current data when loading fails and allows retry", async () => {
   expect(await screen.findByText("Shop data unavailable")).toBeInTheDocument();
   expect(save).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "Import shop folder" })).toBeEnabled();
+});
+
+it.each(['failed', 'loaded', 'malformed'])("reports %s import results and refreshes backend views", async outcome => {
+  const file = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-10,A,Cup,2", "upload");
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  URL.createObjectURL = vi.fn(() => 'blob:test');
+  URL.revokeObjectURL = vi.fn();
+  const refresh = vi.fn();
+  window.addEventListener('workspace:backend-refresh', refresh);
+  const response = outcome === 'malformed' ? { accepted: true } : { data: { pending_aliases: 0, batches: [{
+    file_name: 'stock.csv', status: outcome, batch_status: outcome === 'failed' ? 'failed' : 'ok', rows_held: 0, issues: {},
+  }] } };
+  vi.mocked(requestJSON).mockImplementation(async path => {
+    if (path === '/api/auth/session') return { authenticated: true, account: 'admin' };
+    if (path === '/api/data-backend/import') return response;
+    if (path === '/api/product-labels/sync') throw Error('Sync unavailable');
+  });
+  setup([file]);
+  fireEvent.click(screen.getByRole('button', { name: 'Send saved sources to backend' }));
+  await screen.findByText(outcome === 'failed' ? /Import needs attention/ : outcome === 'loaded' ? /Label synchronization needs attention: Sync unavailable/ : /Cannot confirm the import result/);
+  expect(refresh).toHaveBeenCalledOnce();
+  const syncCalls = vi.mocked(requestJSON).mock.calls.filter(([path]) => path === '/api/product-labels/sync');
+  expect(syncCalls).toHaveLength(outcome === 'loaded' ? 1 : 0);
+  window.removeEventListener('workspace:backend-refresh', refresh);
 });
