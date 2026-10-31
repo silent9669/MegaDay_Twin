@@ -98,7 +98,7 @@ export function ScenarioWorksheet({
         }}>Reload stock & recalculate</Button>}
         <span>{loading ? "Loading product data…"
           : error ? "Product data unavailable. Enter inputs manually or retry."
-          : count ? `${count} of 8 inputs loaded. Demand and ad spend need assumptions.`
+          : currentModel ? "Model estimates loaded." : count ? `${count} product inputs loaded automatically.`
           : "No unambiguous SKU-linked inputs. Add matching records in Data Studio or enter assumptions."}</span>
         {previous && <Button variant="ghost" onClick={() => { setValue(previous); setPrevious(null); }}>Undo load</Button>}
         {error && <Button variant="outline" onClick={retry}>Retry</Button>}
