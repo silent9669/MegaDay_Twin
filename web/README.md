@@ -115,11 +115,18 @@ The Cloudflare Build configuration uses `npm run build:cloudflare` followed by
 `npm run deploy:cloudflare`. PRs and pushes check only changed components;
 frontend CI runs one typechecked Cloudflare build. Web/config or bundled-data
 changes trigger promotion; docs-only and backend-only changes do not redeploy
-the frontend. A manual workflow run checks every component.
+the frontend. A manual workflow run checks every component and, on `main`,
+retries promotion and deployment verification for that commit. PR path detection
+uses the GitHub API without a checkout; web CI prepares its source pack once.
 
 Teammates: open a PR to `main`, wait for the `ci` check, then merge. Do not merge
-or push to `cloudflare-production` directly. Watch GitHub Actions for CI and the
-promotion job; watch Worker `megadaytwin` → Builds in Cloudflare for deployment.
+or push to `cloudflare-production` directly. The `deploy` job waits up to ten
+minutes for the matching `Workers Builds: megadaytwin` check from Cloudflare's
+GitHub App, then verifies live D1 health, login and private-route access. Failed,
+cancelled or missing builds fail the job; branch promotion alone is not success.
+GitHub's `production` environment records this result, with a link to the
+Cloudflare build in the job summary. Skipped unrelated jobs do not skip deploy;
+failed CI and PRs cannot deploy. An older manual run cannot replace newer `main`.
 Runtime secrets and the D1/AccountWorkspace bindings remain on the Worker.
 
 Rollback: redeploy a known-good `megadaytwin` version and keep the

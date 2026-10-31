@@ -177,7 +177,9 @@ Bản demo Cloudflare: <https://megadaytwin.dangphuc.me>. Deploy dùng `cf` CLI,
 Worker `megadaytwin` và D1 `megadaytwin-db`; hiện frontend dùng dữ liệu mẫu,
 backend Python/DuckDB chưa deploy. Nhánh `main` được bảo vệ bởi check `ci`; sau khi merge một thay đổi đã qua CI,
 workflow tự đẩy đúng commit sang nhánh `cloudflare-production`. Cloudflare Workers
-Builds tự kéo nhánh đó, build và deploy. Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
+Builds tự kéo nhánh đó, build và deploy. Job `deploy` chờ kết quả Cloudflare và kiểm tra
+health/access trên website trước khi đánh dấu môi trường `production` thành công.
+Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
 
 
 Kiểm tra trước khi push (giống hệt CI):
@@ -263,6 +265,7 @@ Một workflow duy nhất, [.github/workflows/ci.yml](.github/workflows/ci.yml),
 | `web` | `web/` | eslint, tsc, vitest, build |
 | `mock-data` | `mock-data/` | Sinh lại cỡ `nho` và `demo`, phải khớp y hệt bản đã commit |
 | `ci` | luôn chạy | Cổng: đỏ nếu job nào lỗi. Đây là check bắt buộc của nhánh `main` |
+| `deploy` | push web/data lên `main`, hoặc chạy tay trên `main`, sau khi `ci` xanh | Chờ Cloudflare deploy đúng commit, kiểm health và access, cập nhật trạng thái `production` |
 
 Repo public nên GitHub chạy CI miễn phí. GitHub cũng quét và chặn ngay lúc push nếu ai lỡ commit API key.
 
