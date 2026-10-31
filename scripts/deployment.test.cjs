@@ -43,22 +43,53 @@ test('manual dispatch verifies production even when no changes are pending', asy
 
 test('promotes the exact main commit without force', async () => {
   let updated;
-  await promote({ rest: {
+  const promoted = await promote({ rest: {
     repos: { getBranch: async () => ({ data: { commit: { sha: 'current' } } }) },
     git: { updateRef: async (value) => { updated = value; } },
   } }, context);
+  assert.equal(promoted, true);
   assert.deepEqual(updated, { ...context.repo, ref: 'heads/cloudflare-production', sha: 'current', force: false });
 });
 
-test('rejects old commits and non-main refs without promoting', async () => {
+test('skips superseded commits and rejects non-main refs without promoting', async () => {
   let promoted = false;
   const github = { rest: {
     repos: { getBranch: async () => ({ data: { commit: { sha: 'newer' } } }) },
     git: { updateRef: async () => { promoted = true; } },
   } };
-  await assert.rejects(promote(github, context), /newer main/);
+  assert.equal(await promote(github, context), false);
   await assert.rejects(promote(github, { ...context, ref: 'refs/heads/feature' }), /main/);
   assert.equal(promoted, false);
+});
+
+test('real promotion errors still fail instead of being treated as superseded', async () => {
+  const github = { rest: {
+    repos: { getBranch: async () => ({ data: { commit: { sha: 'current' } } }) },
+    git: { updateRef: async () => { throw new Error('permission denied'); } },
+  } };
+  await assert.rejects(promote(github, context), /permission denied/);
+  github.rest.repos.getBranch = async () => { throw new Error('network unavailable'); };
+  await assert.rejects(promote(github, context), /network unavailable/);
+});
+
+test('workflow stops after a superseded promotion without claiming production health', async () => {
+  const { readFileSync } = require('node:fs');
+  const workflow = readFileSync(`${__dirname}/../.github/workflows/deploy.yml`, 'utf8');
+  const script = workflow.split('script: |').at(-1).split('\n')
+    .map(line => line.replace(/^            /, '')).join('\n');
+  const messages = [];
+  const core = {
+    notice: message => messages.push(message),
+    summary: { addRaw(message) { messages.push(message); return this; }, async write() {} },
+  };
+  const unexpected = async () => assert.fail('Superseded runs must not wait or verify');
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  await new AsyncFunction('require', 'github', 'context', 'core', script)(
+    () => ({ promote: async () => false, waitForBuild: unexpected, verifyProduction: unexpected }),
+    {}, context, core,
+  );
+  assert.ok(messages.some(message => message.includes('newer main')));
+  assert.ok(!messages.some(message => message.includes('passed')));
 });
 
 function poll(batches) {

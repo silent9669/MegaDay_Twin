@@ -23,11 +23,13 @@ async function promote(github, context) {
   if (context.ref !== 'refs/heads/main') throw new Error('Only main can deploy.');
   const { data: main } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
   if (main.commit.sha !== context.sha) {
-    throw new Error('A newer main commit exists; refusing to deploy this older commit.');
+    // A later push owns deployment. This is an expected skip, not a build failure.
+    return false;
   }
   await github.rest.git.updateRef({
     ...context.repo, ref: 'heads/cloudflare-production', sha: context.sha, force: false,
   });
+  return true;
 }
 
 async function waitForBuild(github, context, {

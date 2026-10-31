@@ -60,7 +60,11 @@ jobs:
         with:
           script: |
             const { promote, waitForBuild, verifyProduction } = require('./scripts/deployment.cjs');
-            await promote(github, context);
+            if (!await promote(github, context)) {
+              core.notice('Deployment skipped: a newer main commit superseded this run.');
+              await core.summary.addRaw('Skipped: a newer main commit will deploy. This run did not promote or verify production.').write();
+              return;
+            }
             const buildUrl = await waitForBuild(github, context);
             await core.summary.addLink('Cloudflare deployment', buildUrl).write();
             await verifyProduction();
