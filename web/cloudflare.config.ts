@@ -24,6 +24,7 @@ export default defineConfig({
       ADMIN_PASSWORD_HASH: bindings.secret(),
       JUDGES_PASSWORD_HASH: bindings.secret(),
       SESSION_SECRET: bindings.secret(),
+      // The separate Python backend is optional; its secrets must not block shop deployment.
       OPENAI_API_KEY: bindings.secret(),
       OPENAI_MODEL_IMPORT: bindings.text("gpt-6-luna"),
       OPENAI_MODEL_DECISION: bindings.text("gpt-6-luna"),

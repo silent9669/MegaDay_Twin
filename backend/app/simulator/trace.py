@@ -60,13 +60,19 @@ def build_trace(conn: duckdb.DuckDBPyConnection, run: SimRun, input_hash: str) -
     focus = quantity_sku(inp)
     actions = []
     for action in run.runs:
+        revenue = sum(action.revenue_by_sku.values(), np.zeros_like(action.contribution))
         penalty = inp.penalty * action.lost_units
         component_sum = action.contribution - action.spend + action.leftover_value - penalty
         actions.append(
             {
                 "key": action.action.key,
                 "action": action.action.model_dump(mode="json"),
+                "feasible": action.feasible,
+                "violations": [message for _, message in action.violations],
                 "metrics": {
+                    "revenue": Dist.of(revenue).model_dump(),
+                    "selling_cost": Dist.of(revenue - action.contribution).model_dump(),
+                    "after_ads": Dist.of(action.contribution - action.spend).model_dump(),
                     "objective": Dist.of(action.j).model_dump(),
                     "contribution": Dist.of(action.contribution).model_dump(),
                     "spend": Dist.of(action.spend).model_dump(),
@@ -86,6 +92,13 @@ def build_trace(conn: duckdb.DuckDBPyConnection, run: SimRun, input_hash: str) -
                 "per_sku": [
                     {
                         "sku_id": sku_id,
+                        "revenue": Dist.of(action.revenue_by_sku[sku_id]).model_dump(),
+                        "leftover_units": (
+                            Dist.of(action.leftover_by_sku[sku_id]).model_dump()
+                            if sku_id in action.leftover_by_sku
+                            and next(s for s in inp.skus if s.sku_id == sku_id).stock0 < UNLIMITED
+                            else None
+                        ),
                         "units_sold": Dist.of(action.sold_by_sku[sku_id]).model_dump(),
                         "contribution": Dist.of(contribution).model_dump(),
                     }

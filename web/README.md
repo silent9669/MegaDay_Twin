@@ -207,7 +207,9 @@ clock at hour zero, advancing one event hour every six seconds across navigation
 and reloads. Replay buckets are inclusive (hour h shows observations through h:59),
 with the manifest's ad lag. Data Studio retains all source rows for editing;
 Warehouse, HQ, ads, residents and Milo workspace tools see only observed rows.
-Pause, resume and seek use the same account clock. Reimporting the same event
+Pause, resume and seek use the same account clock. If the optional Python backend
+is configured, event import also stages the ZIP for its existing CD002 replay
+controls; the campaign backend retains its separate clock and analysis workflow. Reimporting the same event
 replaces event rows instead of accumulating duplicates.
 
 The authenticated gateway streams import and labeling requests to the existing

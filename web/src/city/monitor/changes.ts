@@ -37,6 +37,7 @@ export const changeReferenceSchema = z
   .strict();
 export type ChangeReference = z.infer<typeof changeReferenceSchema>;
 export type ChangeNotice = {
+  backendCampaign?: boolean;
   id: string;
   kind: ChangeReference["kind"];
   title: string;

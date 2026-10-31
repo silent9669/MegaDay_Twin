@@ -192,5 +192,7 @@ export async function studioImport(request: Request, env: StudioModelEnv) {
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
   try { return Response.json(await analyzeArchive(bytes, env, review)); }
-  catch (error) { return fail(422, error instanceof Error && error.name !== "ZodError" ? error.message : "Invalid archive analysis."); }
+  catch (error) {
+    return fail(422, error instanceof Error && error.name !== "ZodError" ? error.message : "Invalid archive analysis.");
+  }
 }
