@@ -101,7 +101,7 @@ describe("product label workflow", () => {
     const edited = await (await workspace.fetch(new Request(origin + "/api/workspace/sources"))).json() as Doc<SourcePack>;
     expect(edited.data.files.find(f => f.kind === "inventory")?.text).not.toContain("Demand label");
   });
-  it("retains partial/unclassified results and permits retry", async () => {
+  it("reuses partial results until evidence changes", async () => {
     const { workspace, input } = await setup();
     const provider = { id: "test", classify: vi.fn(async () => ({ labels: [
       { productId: input.products[0]!.id, group: null, reason: "Insufficient evidence" },
@@ -109,6 +109,10 @@ describe("product label workflow", () => {
     const response = await productLabels(request(1), workspace, provider);
     expect(await response.json()).toMatchObject({ run: { status: "partial", results: [{ group: null }] } });
     await productLabels(request(2), workspace, provider);
+    expect(provider.classify).toHaveBeenCalledTimes(1);
+    const changedEvidence = new Request(origin + "/api/product-labels", { method: "POST", body: JSON.stringify({ sourceRevision: 2,
+      context: { market: "Vietnam", asOf: "2026-10-31", evidence: [{ productCode: "Internal1", observedAt: "2026-10-30", source: "Report", observation: "New product-specific evidence" }] } }) });
+    expect((await productLabels(changedEvidence, workspace, provider)).status).toBe(200);
     expect(provider.classify).toHaveBeenCalledTimes(2);
   });
   it.each(["unknown-id", "duplicate-id", "unknown-group", "bad-confidence", "bad-envelope"])(
@@ -139,6 +143,16 @@ describe("product label workflow", () => {
       { productCode: "Other", observedAt: "2026-10-30", source: "Report", observation: "unrelated" },
     ]) expect((await productLabels(post({ ...context, evidence: [evidence] }), workspace, provider)).status).toBe(422);
     expect(provider.classify).toHaveBeenCalledTimes(2);
+  });
+  it("deletes inventory records and labels together, rejecting stale restores", async () => {
+    const { workspace, saveSources, database } = await setup();
+    const provider = { id: "test", classify: async (input: LabelInput) => labels(input) };
+    await productLabels(request(1), workspace, provider);
+    expect((await saveSources(2, { schema: "hackathon.sources.v1", files: [] })).status).toBe(200);
+    expect(await (await productLabels(request(), workspace, provider)).json()).toMatchObject({ products: [], run: null });
+    expect(database.prepare("SELECT * FROM studio_rows").all()).toEqual([]);
+    expect(database.prepare("SELECT * FROM chunks WHERE name = 'product-labels'").all()).toEqual([]);
+    expect((await saveSources(2)).status).toBe(409);
   });
   it("redacts provider errors and lets a failed job retry", async () => {
     const { workspace } = await setup();

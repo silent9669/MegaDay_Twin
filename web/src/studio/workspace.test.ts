@@ -4,7 +4,9 @@ import type { DurableObjectState } from "@cloudflare/workers-types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountWorkspace } from "../../server/workspace";
 import { savedChat } from "../../server/chat-store";
-import { makeSource } from "./sources";
+import Papa from "papaparse";
+import rawPack from "../../server/repository-sources.json";
+import { hashText, makeSource } from "./sources";
 import { defaultSettings } from "./workspace-types";
 function setup() {
   const database = new DatabaseSync(":memory:");
@@ -54,6 +56,52 @@ const req = (name: string, data?: unknown, revision = 1) =>
   );
 afterEach(() => vi.unstubAllGlobals());
 describe("persistent account documents", () => {
+  it("clears untouched legacy demo tables once while retaining uploads", async () => {
+    const { workspace, database, reconstruct } = setup();
+    const upload = await makeSource("custom.csv", "item,value\nKeep,1", "upload");
+    await workspace.fetch(req("sources", { ...rawPack, files: [...rawPack.files, upload] }, 0));
+    database.prepare("DELETE FROM documents WHERE name = ?").run("empty-studio-v1");
+    database.prepare("DELETE FROM chunks WHERE name = ?").run("empty-studio-v1");
+    const migrated = reconstruct();
+    const doc = await (await migrated.fetch(req("sources"))).json();
+    expect(doc.data.files.map((f: { name: string }) => f.name)).toEqual(["custom.csv"]);
+    expect(doc.revision).toBe(2);
+    expect(database.prepare("SELECT id FROM studio_tables").all()).toHaveLength(1);
+    expect(await (await reconstruct().fetch(req("sources"))).json()).toEqual(doc);
+    database.close();
+  });
+  it("clears demo inventory with only a derived label column but preserves edited inventory", async () => {
+    const { workspace, database, reconstruct } = setup();
+    await workspace.fetch(req("sources"));
+    const demo = rawPack.files.find(file => file.kind === "inventory")!;
+    const rows = Papa.parse<Record<string, string>>(demo.text, { header: true }).data;
+    const text = Papa.unparse(rows.map(row => ({ ...row, "Demand label": "Normal" })));
+    const files = [{ ...demo, text, hash: await hashText(text) }];
+    database.prepare("DELETE FROM chunks WHERE name = ?").run("sources");
+    database.prepare("INSERT INTO chunks VALUES (?, ?, ?)").run("sources", 0, JSON.stringify({ ...rawPack, files }));
+    for (const table of ["documents", "chunks"]) database.prepare(`DELETE FROM ${table} WHERE name = ?`).run("empty-studio-v1");
+    expect(await (await reconstruct().fetch(req("sources"))).json()).toMatchObject({ data: { files: [] } });
+    const edited = await makeSource(demo.name, demo.text, "edited in workspace");
+    expect((await workspace.fetch(req("sources", { ...rawPack, files: [edited] }, 2))).status).toBe(200);
+    expect(await (await reconstruct().fetch(req("sources"))).json()).toMatchObject({ data: { files: [{ origin: "edited in workspace" }] } });
+    database.close();
+  });
+  it("saves only changed table rows and deletes removed tables with their rows", async () => {
+    const { workspace, database, reconstruct } = setup();
+    const one = await makeSource("one.csv", "item,value\nA,1", "upload");
+    const two = await makeSource("two.csv", "item,value\nB,2", "upload");
+    await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [one, two] }, 0));
+    database.exec("CREATE TRIGGER protect_unchanged BEFORE DELETE ON studio_rows WHEN OLD.table_id = 'general:one.csv' BEGIN SELECT RAISE(ABORT, 'unchanged table rewritten'); END");
+    const changed = await makeSource("two.csv", "item,value\nB,3", "upload");
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [one, changed] }, 1))).status).toBe(200);
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [one] }, 2))).status).toBe(200);
+    expect(database.prepare("SELECT table_id FROM studio_rows").all()).toEqual([{ table_id: "general:one.csv" }]);
+    database.exec("DROP TRIGGER protect_unchanged");
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [] }, 3))).status).toBe(200);
+    expect(await (await reconstruct().fetch(req("sources"))).json()).toMatchObject({ data: { files: [] } });
+    expect(database.prepare("SELECT * FROM studio_rows").all()).toEqual([]);
+    database.close();
+  });
   it("starts empty, stores general and inventory rows, and keeps them across reconstruction", async () => {
     const { workspace, reconstruct, database } = setup();
     expect(await (await workspace.fetch(req("sources"))).json()).toMatchObject({ revision: 1, data: { files: [] } });

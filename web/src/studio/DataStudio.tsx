@@ -5,7 +5,7 @@ import {
   FileJson,
   FileSpreadsheet,
   FolderOpen,
-  RefreshCw,
+  Trash2,
   Save,
   Search,
   Upload,
@@ -210,20 +210,17 @@ export function DataStudio() {
       if (folder.current) folder.current.value = "";
     }
   };
-  const refresh = async () => {
-    setBusy(true);
+  const deleteTables = async (all = false) => {
+    if (dirty || saving || busy || conflict || !cloud.document || (!all && !current)) return;
+    if (!window.confirm(all ? "Delete all tables from this workspace?" : `Delete ${current!.name}?`)) return;
+    setBusy(true); setSaveError("");
     try {
-      const result = await requestJSON<{ pack: SourcePack; notice: string }>(
-        "/api/repository-sources",
-      );
-      const pack = await validatePack(result.pack);
-      change(pack);
-      setMessage(result.notice);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "GitHub unavailable.");
-    } finally {
-      setBusy(false);
-    }
+      const next = all ? [] : files.filter(source => sourceKey(source) !== sourceKey(current!));
+      await saveCloud({ schema: "hackathon.sources.v1", files: next }, cloud.document.revision);
+      setDraft(null); setDirty(false); setSelected(next[0] ? sourceKey(next[0]) : "");
+      setPage(0); setQuery(""); setCell(null); setMessage("");
+    } catch (error) { setSaveError(error instanceof Error ? error.message : "Could not delete tables."); }
+    finally { setBusy(false); }
   };
   const exportPack = () => {
     if (files.length)
@@ -291,7 +288,7 @@ export function DataStudio() {
           </button>
         </div>
       </header>
-      {!!files.length && (
+      {demoCount > 0 && (
         <p className="studio-source-summary">
           {demoCount === files.length
             ? `All ${files.length} sources are repository demo data.`
@@ -349,11 +346,14 @@ export function DataStudio() {
         </div>
       )}
       <ArchiveImport blocked={dirty || saving || conflict || busy || !cloud.document || !!saveError}
-        onLoad={incoming => {
-          change({ schema: "hackathon.sources.v1", files: mergeSources(files, incoming) });
-          setSelected(sourceKey(incoming[0]!));
-          setPage(0); setQuery(""); setFocusRow(null); setTab("records");
-          setMessage(`${incoming.length} tables loaded. Saving to workspace…`);
+        onLoad={async incoming => {
+          setBusy(true);
+          try {
+            await saveCloud({ schema: "hackathon.sources.v1", files: mergeSources(files, incoming) }, revision);
+            setDraft(null); setDirty(false);
+            setSelected(sourceKey(incoming[0]!));
+            setPage(0); setQuery(""); setFocusRow(null); setTab("records"); setMessage("");
+          } finally { setBusy(false); }
         }} />
       {demoCount > 0 && <SandboxControl />}
       {!files.length && cloud.document && <p className="source-empty">No tables yet.</p>}
@@ -410,12 +410,8 @@ export function DataStudio() {
               <FolderOpen size={16} />
               Import shop folder
             </button>
-            <button
-              onClick={() => void refresh()}
-              disabled={busy || dirty || !files.length}
-            >
-              <RefreshCw size={16} />
-              Reload from GitHub
+            <button onClick={() => void deleteTables(true)} disabled={busy || dirty || saving || conflict}>
+              <Trash2 size={16} /> Delete all data
             </button>
             <button
               onClick={() => void save()}
@@ -435,6 +431,9 @@ export function DataStudio() {
               </h2>
               <code>{current?.name}</code>
             </div>
+            <button disabled={busy || dirty || saving || conflict || !current} onClick={() => void deleteTables()}>
+              <Trash2 size={15} /> Delete table
+            </button>
             <button
               disabled={!current}
               onClick={() => current && download(current.name, current.text)}

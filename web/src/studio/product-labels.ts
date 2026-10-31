@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sourceView } from "./source-view";
 import { hashText, inspect, normalize, type SourceKind, type SourcePack } from "./sources";
 
 export const DEMAND_LABELS = {
@@ -125,5 +126,13 @@ export async function sourceFingerprint(pack: SourcePack): Promise<string> {
   return hashText(JSON.stringify(pack.files.map((source) => [source.kind, source.hash]).sort(([a], [b]) => a!.localeCompare(b!))));
 }
 export async function buildLabelInput(pack: SourcePack, sourceRevision: number): Promise<LabelInput> {
-  return { sourceRevision, sourceFingerprint: await sourceFingerprint(pack), products: extractLabelProducts({ ...pack, files: pack.files.filter(f => f.kind === "inventory") }).filter(p => p.identity === "internal_code") };
+  const inventory = { ...pack, files: pack.files.filter(source => source.kind === "inventory") };
+  const stocked = sourceView(inventory, 24).stock.filter(row => (row.stock ?? 0) > 0);
+  if (stocked.length > MAX_LABEL_PRODUCTS) throw Error(`At most ${MAX_LABEL_PRODUCTS} stocked products can be labeled per workspace.`);
+  const products: LabelProduct[] = stocked.filter(row => row.name.trim()).map(row => {
+    if (row.name.length > 300 || row.code.length > 300) throw Error("Product name or code exceeds 300 characters.");
+    return { id: JSON.stringify(["inventory", "internal_code", row.code]), name: row.name.trim(), alternateNames: [],
+      source: "inventory", identity: "internal_code", reference: row.code, rowCount: 1 };
+  });
+  return { sourceRevision, sourceFingerprint: await sourceFingerprint(pack), products };
 }
