@@ -49,7 +49,7 @@ def inspect_archive(raw: bytes) -> dict[str, Any]:
                 if item.is_dir():
                     continue
                 if path.name not in {*FILES.values(), "_replay.json"} or path.name in seen:
-                    raise ValueError("ZIP chỉ nhận một bộ live_11_11, không kèm ground truth.")
+                    raise ValueError("ZIP chỉ nhận một bộ live_11_11, không kèm file khác.")
                 seen.add(path.name)
                 if path.name == "_replay.json":
                     sources.append(item)
