@@ -46,4 +46,7 @@ The harness refuses non-localhost origins. `QA_SEED=1` imports the bundled shop 
 - Login controls, authentication gate, private chat storage and local D1 health smoke checks passed.
 - A real local Data Studio cell edit autosaved, synchronized over websocket into a second independent browser context, and persisted after reloading that second context.
 
-Changes are local; no production deployment was performed.
+After rebasing onto `8ebeecc` (including the newer account, restock and backend
+fixes), `npm run check` passed again: 516 tests passed and the same optional
+archive test was skipped. These implementation checks are local; production
+verification is recorded in the release pull request.
