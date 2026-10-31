@@ -3,6 +3,11 @@ import { afterEach, expect, it, vi } from "vitest";
 
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
+it("allows bounded CPU time for full-shop replay saves", async () => {
+  const { default: config } = await import("../cloudflare.config");
+  expect(config.worker.limits?.cpuMs).toBe(120000);
+});
+
 it("does not require optional Python secrets when publishing the web", async () => {
   vi.stubEnv("MEGADAY_LOCAL_BACKEND", "");
   vi.resetModules();

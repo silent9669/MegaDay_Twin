@@ -7,6 +7,9 @@ export default defineConfig({
     entrypoint: "./worker.ts",
     compatibilityDate: "2026-10-30",
     compatibilityFlags: ["nodejs_compat"],
+    // Full-shop replay imports validate and index ~300k rows atomically.
+    // The default 30s Durable Object CPU budget resets these saves in production.
+    limits: { cpuMs: 120000 },
     domains: ["megadaytwin.dangphuc.me"],
     workersDev: false,
     previewUrls: false,

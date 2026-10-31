@@ -470,6 +470,7 @@ export function HQWorkspace({
                       pack={pack}
                       stock={selectedStock}
                       revision={revision}
+                      worksheet={worksheetDrafts[activeKey] ?? data.worksheets[activeKey]}
                     />
                   )}
                   {key === "comparisons" && (
@@ -477,6 +478,9 @@ export function HQWorkspace({
                       <ScenarioWorksheet
                         key={activeKey}
                         product={active}
+                        pack={pack}
+                        stock={selectedStock}
+                        revision={revision}
                         saved={
                           worksheetDrafts[activeKey] ??
                           data.worksheets[activeKey]
@@ -500,7 +504,7 @@ export function HQWorkspace({
                       ) : (
                         <p className="hq-provenance">
                           Model simulations require a connected decision
-                          backend. This worksheet uses your assumptions only.
+                          backend. This worksheet combines source facts with your assumptions.
                         </p>
                       )}
                     </>

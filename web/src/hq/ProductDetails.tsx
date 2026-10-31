@@ -7,7 +7,8 @@ import { normalize, type SourcePack } from "../studio/sources";
 import type { StockRow } from "../studio/source-view";
 import { analyzeWithAI } from "../city/analysis-context";
 import { ErrorState, SkeletonRows } from "../components/states";
-import type { TrackedProduct } from "./types";
+import type { TrackedProduct, Worksheet } from "./types";
+import { ProductEconomics } from "./ProductEconomics";
 const codeColumns = new Set([
   "ma noi bo",
   "sku",
@@ -44,19 +45,23 @@ export function ProductDetails({
   pack,
   stock,
   revision,
+  worksheet,
 }: {
   product: TrackedProduct;
   pack: SourcePack | null;
   stock?: StockRow;
   revision: number;
+  worksheet?: Worksheet;
 }) {
   const records = useMemo(
     () => matchingRecords(pack, product.sku),
     [pack, product.sku],
   );
-  if (product.mode === "model") return <ModelDetails sku={product.sku} />;
+  const economics = <ProductEconomics product={product} pack={pack} stock={stock} worksheet={worksheet} />;
+  if (product.mode === "model") return <>{economics}<ModelDetails sku={product.sku} /></>;
   return (
     <section className="hq-details">
+      {economics}
       <header>
         <h3>Source records</h3>
         <Button variant="outline"
