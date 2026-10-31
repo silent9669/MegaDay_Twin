@@ -6,6 +6,8 @@ import { normalize, type SourcePack } from "./sources";
 import { sourceView } from "./source-view";
 import "./studio.css";
 
+const ORDER_HEADERS = ["Mã đơn hàng", "Ngày đặt hàng", "Tên sản phẩm", "Số lượng", "Trạng thái đơn hàng"];
+
 /** Counts and raw records from the saved account, without fixture economics or inferred SKU joins. */
 export function SourceWorkspace({ pack, district }: { pack: SourcePack | null; district: "hq" | "residential" }) {
   const [search, setSearch] = useState("");
@@ -16,9 +18,16 @@ export function SourceWorkspace({ pack, district }: { pack: SourcePack | null; d
     return source ? readSource(source) : null;
   }, [pack]);
   const tableCounts = useMemo(() => pack?.files.map(file => ({ name: file.name, kind: file.kind, count: readSource(file).rows.length })) ?? [], [pack]);
-  const headers = ["Mã đơn hàng", "Ngày đặt hàng", "Tên sản phẩm", "Số lượng", "Trạng thái đơn hàng"];
+  const headers = ORDER_HEADERS;
   const column = (name: string) => orders?.columns.find(key => normalize(key) === normalize(name)) ?? name;
-  const rows = (orders?.rows ?? []).filter(row => headers.some(header => String(row[column(header)] ?? "").toLowerCase().includes(search.toLowerCase())));
+  const rows = useMemo(() => {
+    if (district === "hq" || !orders) return [];
+    if (!search) return orders.rows;
+    const query = search.toLowerCase();
+    const keys = ORDER_HEADERS
+      .map(name => orders.columns.find(key => normalize(key) === normalize(name)) ?? name);
+    return orders.rows.filter(row => keys.some(key => String(row[key] ?? "").toLowerCase().includes(query)));
+  }, [district, orders, search]);
   const pages = Math.max(1, Math.ceil(rows.length / 30));
   const currentPage = Math.min(page, pages - 1);
   return <section className="source-workspace">

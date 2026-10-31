@@ -645,6 +645,11 @@ The authenticated server resolves current stock/counts/source diagnostics from a
 These account-scoped routes run in the Cloudflare Worker, separately from the
 Python `/api/v1` analytics API:
 
+- `GET /api/workspace/{sources|settings|sandbox|chats|hq}`: returns the existing
+  `{ revision, updatedAt, data }` document with `ETag: "{name}:{revision}"`.
+  Sending that exact value in `If-None-Match` returns an empty `304` while the
+  revision is unchanged. Authentication still applies and responses use
+  `Cache-Control: no-store`; revalidation does not enable a shared HTTP cache.
 - `POST /api/studio/import`: raw ZIP, maximum 20 MiB compressed and expanded.
   Returns `{ tables: [{ file, source, rowCount, method, columns }], skipped, model }`.
   Analysis does not persist changes; the reviewed selection is saved through

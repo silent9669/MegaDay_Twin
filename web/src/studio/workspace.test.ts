@@ -81,6 +81,29 @@ describe("persistent account documents", () => {
     expect((await workspace.fetch(restock(1, crypto.randomUUID()))).status).toBe(409);
     database.close();
   });
+  it("revalidates from metadata without loading document chunks and returns new data after a save", async () => {
+    const { workspace, database } = setup();
+    const initial = await workspace.fetch(req("settings"));
+    const tag = initial.headers.get("ETag");
+    expect(tag).toBe('"settings:1"');
+    const conditional = () => workspace.fetch(new Request("https://workspace.test/api/workspace/settings", {
+      headers: { "If-None-Match": tag! },
+    }));
+    // A metadata-only response works even if the stored JSON cannot be parsed.
+    const chunk = database.prepare("SELECT content FROM chunks WHERE name = 'settings'").get()!.content;
+    database.prepare("UPDATE chunks SET content = 'invalid' WHERE name = 'settings'").run();
+    const unchanged = await conditional();
+    expect(unchanged.status).toBe(304);
+    expect(await unchanged.text()).toBe("");
+    expect(unchanged.headers.get("Cache-Control")).toBe("no-store");
+    database.prepare("UPDATE chunks SET content = ? WHERE name = 'settings'").run(String(chunk));
+    await workspace.fetch(req("settings", { ...defaultSettings, motion: false }));
+    const changed = await conditional();
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("ETag")).toBe('"settings:2"');
+    expect((await changed.json()).data.motion).toBe(false);
+    database.close();
+  });
   it("keeps a static shop snapshot through event edits, reloads and separate deletions", async () => {
     const { workspace, reconstruct, database } = setup();
     const baseline = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-10,A,Cup,10", "shop");

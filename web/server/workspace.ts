@@ -385,6 +385,12 @@ export class AccountWorkspace {
       return fail(404, "Workspace document not found.");
     if (name === "sources" && request.method === "DELETE") return this.deleteSourceLayer(request);
     if (request.method === "GET") {
+      const revision = this.ctx.storage.sql.exec<{ revision: number }>(
+        "SELECT revision FROM documents WHERE name = ?", name,
+      ).toArray()[0]?.revision;
+      const etag = revision === undefined ? null : `"${name}:${revision}"`;
+      if (etag && request.headers.get("If-None-Match") === etag)
+        return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "no-store" } });
       let document = this.read(name);
       if (!document) {
         const data =
@@ -401,7 +407,9 @@ export class AccountWorkspace {
       }
       // Existing accounts already contain baseline rows; snapshot them once,
       // without downloading or replacing them with bundled demo data.
-      if (name === "sources" && document && !this.read("shop-sources")) {
+      if (name === "sources" && document && !this.ctx.storage.sql.exec(
+        "SELECT revision FROM documents WHERE name = ?", "shop-sources",
+      ).toArray().length) {
         const snapshot = { schema: "hackathon.sources.v1", files: await sourceLayer((document.data as SourcePack).files, "shop") };
         this.ctx.storage.transactionSync(() => {
           if (!this.read("shop-sources") && this.read(name)?.revision === document!.revision)
@@ -409,7 +417,7 @@ export class AccountWorkspace {
         });
       }
       return Response.json(document, {
-        headers: { "Cache-Control": "no-store" },
+        headers: { "Cache-Control": "no-store", ...(document ? { ETag: `"${name}:${document.revision}"` } : {}) },
       });
     }
     if (request.method !== "PUT") return fail(405, "Method not allowed.");
