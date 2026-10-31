@@ -166,10 +166,14 @@ bindings in `cloudflare.config.ts` (never use `VITE_*` for credentials):
   Falls back to `OPENAI_MODEL` if supplied. Recognized tables work without AI.
 - `OPENAI_MODEL_DECISION`: defaults to `gpt-6-luna`, configured independently. No automatic chat-model fallback for product classification.
 
-Data Studio → **Analyze ZIP** extracts UTF-8 CSV/JSON on the Worker and previews
-recognized tables and proposed mappings. Select one file per source type, review
+New accounts start with an empty Data Studio. Existing saved sources are preserved.
+
+Data Studio → **Import ZIP** extracts UTF-8 CSV/JSON on the Worker and previews
+recognized tables, general tables and proposed mappings. Select one file per business source type and any general tables, review
 column mappings and sample rows, then **Load tables to workspace**. The existing
-revision-checked autosave persists the selected tables to AccountWorkspace; the
+revision-checked autosave persists the selected tables to AccountWorkspace. SQLite
+`studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
+with the source document revision; no user or model SQL is executed. The
 map uses the saved inventory. Other source types retain their current data.
 The demo clock only filters repository demo inventory, not uploaded snapshots.
 
@@ -177,13 +181,12 @@ The demo clock only filters repository demo inventory, not uploaded snapshots.
 model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
 100 archive entries, 24 CSV/JSON files. Paths with traversal are rejected;
 answer-key/hidden files and unsupported types are excluded. Known contracts
-are parsed deterministically. Unknown CSVs send headers only (without contact
+are parsed deterministically. Unknown flat CSV/JSON tables send headers only (without contact
 columns) to the model. Every mapping must use existing columns and satisfy a
-supported table contract; row values are never model-generated. Ambiguous
-files are reported as skipped. Arbitrary nested JSON and spreadsheets are not
-supported. Existing direct CSV/JSON and folder import remain available.
+supported table contract; row values are never model-generated. Unmapped tables remain general tables. JSON objects and arrays of records are
+supported (nested values remain JSON); spreadsheets are not supported. Existing direct CSV/JSON and folder import remain available.
 
-Map → **Warehouse** → **Open workspace** → **Label inventory** classifies saved
+Map → **Warehouse** → **Open workspace** → **Label data** classifies saved
 inventory products only. Enter market and assessment date. **Evidence** accepts
 product code, observation date, source and observation. Each model batch gets
 only evidence for its products. No web search is performed; metadata and manual
@@ -205,12 +208,19 @@ leased, changed sources reject late results, and a completed identical request
 is reused. Changed assessment context can start a new run. Legacy five-group
 results are stale and must be regenerated. Failures never erase source data.
 
+Successful/partial runs atomically add a read-only `Demand label` column to the
+inventory CSV and SQLite records. Blank values are unclassified; missing-evidence
+reasons remain in the run. The column appears in Data Studio, Warehouse and CSV
+exports. Editing/reimporting sources clears derived labels; browser uploads cannot
+forge them. The existing Python bridge forwards only its six supported business
+formats, without the derived label column; general tables stay in the workspace.
+
 Checks: `npm run check`; run `node qa/studio/serve.mjs` to serve the built
 Worker locally on port 5187, then `node qa/studio/labels.mjs` for the browser
 flow. The local QA login is `admin` / `studio-local-test` (or set
 `STUDIO_QA_PASSWORD` for both scripts). Credentials and data stay in ignored
 `.cloudflare/studio-qa/`; screenshots and results go to `qa/runs/studio-import/`.
-The script writes synthetic inventory only to localhost. Provider
+The script resets and writes synthetic tables only on localhost. Provider
 contract tests stub the OpenAI response; they do not prove a live model call.
 
 ## Cấu trúc

@@ -104,14 +104,13 @@ describe("six-source workspace contract", () => {
       ),
     ).toBe(true);
   });
-  it("rejects unknown, malformed, incomplete and duplicate source imports", async () => {
-    expect(() => inspect("bad.csv", "a,b\n1,2")).toThrow(
-      "unknown source format",
-    );
+  it("accepts empty/partial packs and general tables but rejects malformed and duplicate imports", async () => {
+    expect(inspect("custom.csv", "a,b\n1,2").kind).toBe("general");
+    expect((await validatePack({ ...pack, files: [] })).files).toEqual([]);
     expect(() => inspect("bad.json", "{")).toThrow("JSON syntax");
     await expect(
       validatePack({ ...pack, files: pack.files.slice(0, 5) }),
-    ).rejects.toThrow("six");
+    ).resolves.toHaveProperty("files.length", 5);
     await expect(
       validatePack({
         ...pack,

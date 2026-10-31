@@ -1,9 +1,10 @@
-import { inspect, normalize, type SourcePack } from "./sources";
+import { DEMAND_COLUMN, inspect, normalize, type SourcePack } from "./sources";
 export type StockRow = {
   code: string;
   name: string;
   stock: number | null;
   asOf: string;
+  demand?: string;
 };
 export function sourceView(pack: SourcePack | null, hour: number) {
   const inventory = pack?.files.find((f) => f.kind === "inventory");
@@ -26,6 +27,7 @@ export function sourceView(pack: SourcePack | null, hour: number) {
         name: String(row[column("Tên hàng")] ?? code),
         stock: Number.isFinite(value) && value >= 0 ? value : null,
         asOf,
+        ...(parsed.columns.includes(DEMAND_COLUMN) ? { demand: String(row[DEMAND_COLUMN] ?? "") } : {}),
       });
     }
   }

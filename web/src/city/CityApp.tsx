@@ -62,7 +62,7 @@ const TOUR = [
   {
     place: null,
     title: "Your commerce city",
-    text: "Explore the districts or use the sidebar. The city follows your account’s six source files.",
+    text: "Explore the districts or use the sidebar. The city follows your account’s imported tables.",
   },
   {
     place: "warehouse",
@@ -503,7 +503,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                   ) : district === "warehouse" ? (
                     <>
                       <div className="warehouse-title">
-                        <h3>Source inventory</h3>
                         <Link to="/mock-data">
                           Manage sources
                           <ArrowRight size={16} />

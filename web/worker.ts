@@ -14,7 +14,7 @@ import { studioImport } from "./server/studio-import";
 import type { StudioModelEnv } from "./server/model-json";
 import { productLabels } from "./server/product-labels";
 import { getProductLabelProvider } from "./server/product-label-provider";
-import { SOURCE_DEFS, type SourcePack } from "./src/studio/sources";
+import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
   PMEnv & StudioModelEnv & {
@@ -185,7 +185,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
         ).fetch(new Request(new URL("/api/workspace/sources", url)));
         const doc = (await stored.json()) as { data: SourcePack };
         const form = new FormData();
-        for (const f of doc.data.files)
+        const supported = (await withoutDemandLabels(doc.data)).files.filter(f => f.kind !== "general");
+        if (!supported.length) return fail(422, "Import a supported business table first.");
+        for (const f of supported)
           form.append(
             "files",
             new Blob([f.text], {

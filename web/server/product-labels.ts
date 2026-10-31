@@ -91,5 +91,9 @@ export async function productLabels(
   const finished = await internal("finish", run);
   if (!finished.ok) return finished;
   const saved = await finished.json() as { run: LabelRun };
-  return response(saved.run);
+  const latestResponse = await internal("snapshot");
+  if (!latestResponse.ok) return latestResponse;
+  const latest = await latestResponse.json() as Snapshot;
+  input = await buildLabelInput(latest.sources.data, latest.sources.revision);
+  return response(latest.run ?? saved.run);
 }

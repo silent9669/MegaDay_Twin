@@ -55,22 +55,24 @@ export function ProductLabels({ sourceRevision, blocked, inventory }: { sourceRe
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceRevision, context: parsed.data }),
       });
+      window.dispatchEvent(new CustomEvent("workspace:changed", { detail: "sources" }));
     } catch (e) { setError(e instanceof Error ? e.message : "Labeling failed."); }
     finally { posting.current = false; setSubmitting(false); void reload(); }
   }
   const results = new Map(current && !stale && !blocked && !running && data?.run?.status !== "failed"
     ? data?.run?.results.map(r => [r.productId, r]) ?? [] : []);
   const products = current ? data?.products ?? [] : [];
-  const rows = inventory ?? products.map(p => ({ code: p.reference, name: p.name, stock: null, asOf: "" }));
+  const rows: StockRow[] = inventory ?? products.map(p => ({ code: p.reference, name: p.name, stock: null, asOf: "" }));
+  const hasDemand = rows.some(row => row.demand !== undefined) || !!data?.run?.results.length;
   const filtered = rows.filter(p => `${p.name} ${p.code}`.toLowerCase().includes(search.toLowerCase()));
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.min(page, pages - 1);
   return <section className="product-label-panel" aria-labelledby="product-label-title">
-    <header><h3 id="product-label-title"><Tags size={18} aria-hidden /> Demand labels</h3>
+    <header><h3 id="product-label-title"><Tags size={18} aria-hidden /> Inventory</h3>
       <div className="product-label-actions">
         <button disabled={submitting} onClick={() => { setError(""); void reload(); }} aria-label="Refresh product labels"><RefreshCw size={15} aria-hidden /> Refresh</button>
         <button disabled={blocked || !current || !data?.configured || running || !products.length} onClick={() => void run()}>
-          {running ? "Labeling…" : "Label inventory"}
+          {running ? "Labeling…" : "Label data"}
         </button>
       </div>
     </header>
@@ -106,14 +108,14 @@ export function ProductLabels({ sourceRevision, blocked, inventory }: { sourceRe
     </details>
     <label className="product-label-search">Search products<input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} placeholder="Name or product code" /></label>
     <div className="warehouse-table" role="region" aria-label="Inventory table" tabIndex={0}><table>
-      <thead><tr><th>Product</th><th>Available units</th><th>Demand</th><th>Source timestamp</th></tr></thead>
+      <thead><tr><th>Product</th><th>Available units</th>{hasDemand && <th>Demand label</th>}<th>Source timestamp</th></tr></thead>
       <tbody>{filtered.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE).map(row => {
         const product = products.find(p => p.reference === row.code);
         const label = product ? results.get(product.id) : undefined;
         return <tr key={row.code}><td><strong>{row.name}</strong><br /><code>{row.code}</code></td>
           <td>{row.stock === null ? "Unknown" : row.stock.toLocaleString()}</td>
-          <td><strong className="product-demand-label">{label?.group ? DEMAND_LABELS[label.group] ?? "Unclassified" : "Unclassified"}</strong>
-            {label && <p>{label.reason}</p>}</td><td>{row.asOf || "—"}</td></tr>;
+          {hasDemand && <td><strong className="product-demand-label">{!stale && !blocked && !running && data?.run?.status !== "failed" ? label?.group ? DEMAND_LABELS[label.group] : row.demand || "Unclassified" : "Unclassified"}</strong>
+            {label && <p>{label.reason}</p>}</td>}<td>{row.asOf || "—"}</td></tr>;
       })}</tbody>
     </table></div>
     {!rows.length && <p>No inventory observations. Load inventory in Data Studio.</p>}

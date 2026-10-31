@@ -18,7 +18,7 @@ describe("warehouse demand labels", () => {
     await screen.findByText("Cup");
     expect(request.mock.calls.every(([, options]) => options?.method !== "POST")).toBe(true);
     fireEvent.change(screen.getByLabelText("Assessment date"), { target: { value: context.asOf } });
-    fireEvent.click(screen.getByRole("button", { name: "Label inventory" }));
+    fireEvent.click(screen.getByRole("button", { name: "Label data" }));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/product-labels", expect.objectContaining({ method: "POST", body: JSON.stringify({ sourceRevision: 1, context }) })));
   });
   it("keeps unknown products unclassified and explains missing evidence", async () => {
@@ -34,7 +34,7 @@ describe("warehouse demand labels", () => {
     request.mockResolvedValue({ ...response, configured: false });
     render(<ProductLabels sourceRevision={1} blocked />);
     await screen.findByText("Decision model is not connected.");
-    expect(screen.getByRole("button", { name: "Label inventory" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Label data" })).toBeDisabled();
   });
 });
 it("does not display late labels after a newer source revision arrives", async () => {
@@ -47,5 +47,5 @@ it("does not display late labels after a newer source revision arrives", async (
   resolve(response);
   await screen.findByText("Labels need updating for these sources or assessment details.");
   expect(screen.queryByText("Cup")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Label inventory" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Label data" })).toBeDisabled();
 });

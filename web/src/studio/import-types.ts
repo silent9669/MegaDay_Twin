@@ -3,7 +3,7 @@ export type ImportTable = {
   file: string;
   source: Source;
   rowCount: number;
-  method: "recognized" | "model";
+  method: "recognized" | "model" | "general";
   columns: { source: string; target: string }[];
 };
 export type ImportAnalysis = {
