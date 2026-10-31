@@ -1,5 +1,5 @@
 import { sourceText, encodeSource } from "../src/studio/source-text";
-import { playbackHour, visibleSources } from "../src/studio/replay";
+import { playbackHour, visibleSources, sourceLayer, mergeReplaySources } from "../src/studio/replay";
 import { savedChat } from "./chat-store";
 import type { PlannerEnv } from "./sale-planner";
 import { hqSchema, defaultHQ } from "../src/hq/types";
@@ -16,7 +16,7 @@ import {
   defaultChatArchive,
 } from "../src/studio/workspace-types";
 import Papa from "papaparse";
-import { validatePack, MAX_BYTES, inspect, sourceKey, hashText, normalize, DEMAND_COLUMN, withoutDemandLabels } from "../src/studio/sources";
+import { validatePack, MAX_BYTES, inspect, sourceKey, hashText, normalize, DEMAND_COLUMN, withoutDemandLabels, mergeSources } from "../src/studio/sources";
 import type { Source, SourcePack } from "../src/studio/sources";
 import {
   labelRunSchema, sourceFingerprint, buildLabelInput, productLabelSchema, type ProductLabel, type LabelRun,
@@ -115,9 +115,45 @@ export class AccountWorkspace {
     );
     if (name === "sources") {
       this.materialize(data as SourcePack, revision, previous);
+      // The shop snapshot survives event imports and their edits. It is updated
+      // only when saving the shop itself, and stored separately from the live view.
+      if (!(data as SourcePack).files.some(source => source.replay))
+        this.writeDocument("shop-sources", data, this.read("shop-sources")?.revision ?? 0);
       if (!(data as SourcePack).files.some(source => source.kind === "inventory")) this.removeDocument("product-labels");
     }
     return { revision, updatedAt, data };
+  }
+
+  private async deleteSourceLayer(request: Request): Promise<Response> {
+    try {
+      const raw = await request.text();
+      if (raw.length > 1000) return fail(413, "Delete request too large.");
+      const body = JSON.parse(raw);
+      if (!["shop", "event"].includes(body.scope) || !Number.isSafeInteger(body.revision) || body.revision < 0)
+        return fail(422, "Choose shop or event data and a valid source revision.");
+      const current = this.read("sources");
+      if (!current || current.revision !== body.revision) return fail(409, "Sources changed. Refresh before deleting.", "REVISION_CONFLICT");
+      const pack = current.data as SourcePack;
+      const shop = this.read("shop-sources")?.data as SourcePack | undefined;
+      let files = body.scope === "shop" ? await sourceLayer(pack.files, "event")
+        : shop ? mergeSources(shop.files.filter(file => pack.files.some(current => sourceKey(current) === sourceKey(file))), pack.files.filter(file => !file.replay)) : await sourceLayer(pack.files, "shop");
+      const overrides = this.read("product-labels")?.data.overrides as ProductLabel[] | undefined;
+      if (body.scope === "event" && overrides?.length)
+        files = (await this.labeledSources({ schema: "hackathon.sources.v1", files }, overrides)).files;
+      const saved = this.ctx.storage.transactionSync(() => {
+        const result = this.writeDocument("sources", { schema: "hackathon.sources.v1", files }, body.revision);
+        if (!result) return null;
+        if (body.scope === "shop") this.writeDocument("shop-sources", { schema: "hackathon.sources.v1", files: [] }, this.read("shop-sources")?.revision ?? 0);
+        if (body.scope === "event") this.writeDocument("sandbox", defaultSandbox, this.read("sandbox")?.revision ?? 0);
+        return result;
+      });
+      if (!saved) return fail(409, "Sources changed. Refresh before deleting.", "REVISION_CONFLICT");
+      this.notify("sources", saved.revision);
+      if (body.scope === "event") this.notify("sandbox", this.read("sandbox")!.revision);
+      return Response.json(saved, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      return workspaceQuotaFailure(error) ?? fail(422, "Could not delete data. Your saved workspace is retained.");
+    }
   }
   private write(name: string, data: unknown, expected: number) {
     return this.ctx.storage.transactionSync(() => this.writeDocument(name, data, expected));
@@ -301,6 +337,7 @@ export class AccountWorkspace {
     }
     if (!["sources", "settings", "sandbox", "chats", "hq"].includes(name))
       return fail(404, "Workspace document not found.");
+    if (name === "sources" && request.method === "DELETE") return this.deleteSourceLayer(request);
     if (request.method === "GET") {
       let document = this.read(name);
       if (!document) {
@@ -316,6 +353,15 @@ export class AccountWorkspace {
                 : defaultSandbox;
         document = this.write(name, data, 0) ?? this.read(name);
       }
+      // Existing accounts already contain baseline rows; snapshot them once,
+      // without downloading or replacing them with bundled demo data.
+      if (name === "sources" && document && !this.read("shop-sources")) {
+        const snapshot = { schema: "hackathon.sources.v1", files: await sourceLayer((document.data as SourcePack).files, "shop") };
+        this.ctx.storage.transactionSync(() => {
+          if (!this.read("shop-sources") && this.read(name)?.revision === document!.revision)
+            this.writeDocument("shop-sources", snapshot, 0);
+        });
+      }
       return Response.json(document, {
         headers: { "Cache-Control": "no-store" },
       });
@@ -330,6 +376,7 @@ export class AccountWorkspace {
       const body = JSON.parse(raw);
       if (!Number.isSafeInteger(body.revision) || body.revision < 0)
         return fail(422, "A valid revision is required.");
+      if (body.scope !== undefined && (name !== "sources" || body.scope !== "shop")) return fail(422, "Invalid source scope.");
       let data =
         name === "sources"
           ? await withoutDemandLabels(await validatePack(body.data))
@@ -343,10 +390,22 @@ export class AccountWorkspace {
       const overrides = name === "sources" ? this.read("product-labels")?.data.overrides as ProductLabel[] | undefined : undefined;
       if (overrides?.length) data = await this.labeledSources(data as SourcePack, overrides);
       const previousSources = name === "sources" ? this.read("sources")?.data as SourcePack | undefined : undefined;
-      const replayChanged = name === "sources" && (data as SourcePack).files.some(file => file.replay && !previousSources?.files.some(old => old.kind === file.kind && JSON.stringify(old.replay) === JSON.stringify(file.replay)));
+      const storedShop = name === "sources" ? this.read("shop-sources") : null;
+      let shopSnapshot: SourcePack | undefined;
+      if (body.scope === "shop") {
+        if ((data as SourcePack).files.some(file => file.replay)) return fail(422, "Shop data cannot contain event rows.");
+        const baseline = storedShop?.data.files ?? await sourceLayer(previousSources?.files ?? [], "shop");
+        shopSnapshot = { schema: "hackathon.sources.v1", files: mergeSources(mergeSources(baseline, previousSources?.files.filter(file => !file.replay) ?? []), (data as SourcePack).files) };
+        data = { schema: "hackathon.sources.v1", files: await mergeReplaySources(shopSnapshot.files, await sourceLayer(previousSources?.files ?? [], "event")) };
+        data = await validatePack(data);
+      } else if (name === "sources" && !storedShop?.data.files.length) {
+        shopSnapshot = { schema: "hackathon.sources.v1", files: await sourceLayer((data as SourcePack).files, "shop") };
+      }
+      const replayChanged = name === "sources" && body.scope !== "shop" && (data as SourcePack).files.some(file => file.replay && !previousSources?.files.some(old => old.kind === file.kind && JSON.stringify(old.replay) === JSON.stringify(file.replay)));
       const replayRemoved = name === "sources" && previousSources?.files.some(file => file.replay) && !(data as SourcePack).files.some(file => file.replay);
       const saved = this.ctx.storage.transactionSync(() => {
         const result = this.writeDocument(name, data, body.revision);
+        if (result && shopSnapshot && (data as SourcePack).files.some(file => file.replay)) this.writeDocument("shop-sources", shopSnapshot, this.read("shop-sources")?.revision ?? 0);
         if (result && replayChanged) this.writeDocument("sandbox", { hour: 0, event: "observe", startedAt: new Date().toISOString() }, this.read("sandbox")?.revision ?? 0);
         if (result && replayRemoved) this.writeDocument("sandbox", defaultSandbox, this.read("sandbox")?.revision ?? 0);
         return result;

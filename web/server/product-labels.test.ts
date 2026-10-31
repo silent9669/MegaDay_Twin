@@ -308,6 +308,8 @@ describe("label route boundaries", () => {
     expect(upstream).toHaveBeenCalledTimes(1);
   });
   it("requires auth and same-origin writes", async () => {
+    expect((await worker.fetch(new Request(origin + "/api/workspace/sources", { method: "DELETE", body: JSON.stringify({ scope: "shop", revision: 1 }) }), base)).status).toBe(401);
+    expect((await worker.fetch(new Request(origin + "/api/workspace/sources", { method: "DELETE", headers: { Cookie: cookie(), Origin: "https://other.test" }, body: JSON.stringify({ scope: "event", revision: 1 }) }), base)).status).toBe(403);
     expect((await worker.fetch(request(), base)).status).toBe(401);
     expect((await worker.fetch(new Request(origin + "/api/studio/import", { method: "POST" }), base)).status).toBe(401);
     expect((await worker.fetch(new Request(origin + "/api/studio/import", { method: "POST", headers: { Cookie: cookie(), Origin: "https://other.test" } }), base)).status).toBe(403);

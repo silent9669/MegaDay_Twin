@@ -18,6 +18,7 @@ import {
 import Papa from "papaparse";
 import { useSearchParams } from "react-router";
 import { useAccountDocument, requestJSON } from "./account";
+import type { Doc } from "./workspace-types";
 import {
   SOURCE_DEFS,
   makeSource,
@@ -106,6 +107,8 @@ export function DataStudio() {
   const sourceErrors = logs.filter((i) => i.level === "error").length;
   const sourceWarnings = logs.filter((i) => i.level === "warning").length;
   const demoCount = files.filter((f) => f.commit).length;
+  const hasShop = files.some(file => !file.replay || file.replay.hours.some(hour => hour < 0));
+  const hasEvent = files.some(file => file.replay?.hours.some(hour => hour >= 0));
   useEffect(() => {
     if (tab === "records" && focusRow !== null && current) {
       window.document.getElementById(`source-record-${current.kind}-${focusRow}`)?.focus();
@@ -157,7 +160,7 @@ export function DataStudio() {
     setBusy(true); setImportingShop(true); setMessage(""); setSaveError("");
     try {
       const pack = await validatePack(await requestJSON<SourcePack>("/api/studio/shop"));
-      await saveCloud({ schema: "hackathon.sources.v1", files: mergeSources(files, pack.files) }, revision);
+      await saveCloud(pack, revision, "shop");
       setDraft(null); setDirty(false);
       setSelected(sourceKey(pack.files[0]!));
       setPage(0); setQuery(""); setFocusRow(null); setTab("records");
@@ -224,13 +227,26 @@ export function DataStudio() {
       if (input.current) input.current.value = "";
     }
   };
-  const deleteTables = async (all = false) => {
-    if (dirty || saving || busy || conflict || !cloud.document || (!all && !current)) return;
-    if (!window.confirm(all ? "Delete all tables from this workspace?" : `Delete ${current!.name}?`)) return;
+  const deleteTables = async (scope?: "shop" | "event") => {
+    if (dirty || saving || busy || conflict || !cloud.document || (!scope && !current)) return;
+    const question = scope === "event" ? "Delete event data and stop playback? Your saved shop data will stay."
+      : scope === "shop" ? "Delete shop data? Loaded event data will stay." : `Delete ${current!.name}?`;
+    if (!window.confirm(question)) return;
     setBusy(true); setSaveError("");
     try {
-      const next = all ? [] : files.filter(source => sourceKey(source) !== sourceKey(current!));
-      await saveCloud({ schema: "hackathon.sources.v1", files: next }, cloud.document.revision);
+      let next: Source[];
+      if (scope) {
+        const saved = await requestJSON<Doc<SourcePack>>("/api/workspace/sources", {
+          method: "DELETE", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope, revision: cloud.document.revision }),
+        });
+        next = saved.data.files;
+        await cloud.reload();
+        window.dispatchEvent(new CustomEvent("workspace:changed", { detail: "sources" }));
+      } else {
+        next = files.filter(source => sourceKey(source) !== sourceKey(current!));
+        await saveCloud({ schema: "hackathon.sources.v1", files: next }, cloud.document.revision);
+      }
       setDraft(null); setDirty(false); setSelected(next[0] ? sourceKey(next[0]) : "");
       setPage(0); setQuery(""); setCell(null); setMessage("");
     } catch (error) { setSaveError(error instanceof Error ? error.message : "Could not delete tables."); }
@@ -418,8 +434,11 @@ export function DataStudio() {
             );
           })}
           <div className="source-list-tools">
-            <button onClick={() => void deleteTables(true)} disabled={busy || dirty || saving || conflict}>
-              <Trash2 size={16} /> Delete all data
+            <button onClick={() => void deleteTables("shop")} disabled={busy || dirty || saving || conflict || !hasShop}>
+              <Trash2 size={16} /> Delete shop data
+            </button>
+            <button onClick={() => void deleteTables("event")} disabled={busy || dirty || saving || conflict || !hasEvent}>
+              <Trash2 size={16} /> Delete event data
             </button>
             <button
               onClick={() => void save()}
@@ -439,9 +458,9 @@ export function DataStudio() {
               </h2>
               <code>{current?.name}</code>
             </div>
-            <button disabled={busy || dirty || saving || conflict || !current} onClick={() => void deleteTables()}>
+            {!current?.replay && <button disabled={busy || dirty || saving || conflict || !current} onClick={() => void deleteTables()}>
               <Trash2 size={15} /> Delete table
-            </button>
+            </button>}
             <button
               disabled={!current}
               onClick={() => current && download(current.name, sourceText(current))}

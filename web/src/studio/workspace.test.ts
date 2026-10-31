@@ -8,6 +8,8 @@ import Papa from "papaparse";
 import rawPack from "../../server/repository-sources.json";
 import { hashText, makeSource } from "./sources";
 import { defaultSettings } from "./workspace-types";
+import { mergeReplaySources } from "./replay";
+import { sourceText } from "./source-text";
 function setup() {
   const database = new DatabaseSync(":memory:");
   const sent: string[] = [];
@@ -59,6 +61,79 @@ const req = (name: string, data?: unknown, revision = 1) =>
   );
 afterEach(() => vi.unstubAllGlobals());
 describe("persistent account documents", () => {
+  it("keeps a static shop snapshot through event edits, reloads and separate deletions", async () => {
+    const { workspace, reconstruct, database } = setup();
+    const baseline = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-10,A,Cup,10", "shop");
+    const event = { ...await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-11,A,Cup,6", "event"), replay: { date: "2026-11-11", hours: [0], lagHours: 0 } };
+    const save = (files: typeof baseline[], revision: number) => workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files }, revision));
+    const remove = (scope: string, revision: number) => reconstruct().fetch(new Request("https://workspace.test/api/workspace/sources", { method: "DELETE", body: JSON.stringify({ scope, revision }) }));
+    expect((await save([baseline], 0)).status).toBe(200);
+    const mixed = await mergeReplaySources([baseline], [event]);
+    expect((await save(mixed, 1)).status).toBe(200);
+    const snapshot = database.prepare("SELECT content FROM chunks WHERE name = 'shop-sources' ORDER BY position").all().map(row => row.content).join("");
+    expect(JSON.parse(snapshot).files[0].hash).toBe(baseline.hash);
+    expect((await remove("event", 1)).status).toBe(409);
+    const restored = await (await remove("event", 2)).json();
+    expect(restored.data.files[0].hash).toBe(baseline.hash);
+    expect(restored.data.files[0].replay).toBeUndefined();
+    expect((await (await reconstruct().fetch(req("sandbox"))).json()).data.startedAt).toBeUndefined();
+    expect((await save(mixed, 3)).status).toBe(200);
+    const eventOnly = await (await remove("shop", 4)).json();
+    expect(eventOnly.data.files[0].replay.hours).toEqual([0]);
+    expect(sourceText(eventOnly.data.files[0])).not.toContain("2026-11-10");
+    expect((await (await reconstruct().fetch(req("sandbox"))).json()).data.startedAt).toBeDefined();
+    expect((await (await remove("event", 5)).json()).data.files).toEqual([]);
+    expect((await (await reconstruct().fetch(req("sources"))).json()).data.files).toEqual([]);
+    database.close();
+  });
+  it("imports shop data alongside an event without dropping event rows or restarting playback", async () => {
+    const { workspace, database } = setup();
+    const baseline = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-10,A,Cup,10", "shop");
+    const event = { ...await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-11,A,Cup,6", "event"), replay: { date: "2026-11-11", hours: [0], lagHours: 0 } };
+    await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [event] }, 0));
+    const clock = await (await workspace.fetch(req("sandbox"))).json();
+    const response = await workspace.fetch(new Request("https://workspace.test/api/workspace/sources", {
+      method: "PUT", body: JSON.stringify({ revision: 1, scope: "shop", data: { schema: "hackathon.sources.v1", files: [baseline] } }),
+    }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.files[0].replay.hours).toEqual([-1, 0]);
+    expect(await (await workspace.fetch(req("sandbox"))).json()).toEqual(clock);
+    const removed = await workspace.fetch(new Request("https://workspace.test/api/workspace/sources", { method: "DELETE", body: JSON.stringify({ scope: "event", revision: 2 }) }));
+    expect((await removed.json()).data.files[0].hash).toBe(baseline.hash);
+    database.close();
+  });
+  it("migrates an existing combined workspace once and keeps its shop snapshot through event edits", async () => {
+    const { workspace, reconstruct, database } = setup();
+    const baseline = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-10,A,Cup,10", "shop");
+    const event = { ...await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-11,A,Cup,6", "event"), replay: { date: "2026-11-11", hours: [0], lagHours: 0 } };
+    const files = await mergeReplaySources([baseline], [event]);
+    await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files }, 0));
+    database.prepare("DELETE FROM chunks WHERE name = 'shop-sources'").run();
+    database.prepare("DELETE FROM documents WHERE name = 'shop-sources'").run();
+    await reconstruct().fetch(req("sources"));
+    database.exec("CREATE TRIGGER protect_shop BEFORE DELETE ON chunks WHEN OLD.name = 'shop-sources' BEGIN SELECT RAISE(ABORT, 'shop snapshot rewritten'); END");
+    await reconstruct().fetch(req("sources"));
+    const edited = await makeSource("stock.csv", sourceText(files[0]!).replace(",6", ",3"), "edited");
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [{ ...edited, replay: files[0]!.replay }] }, 1))).status).toBe(200);
+    database.exec("DROP TRIGGER protect_shop");
+    const removed = await workspace.fetch(new Request("https://workspace.test/api/workspace/sources", { method: "DELETE", body: JSON.stringify({ scope: "event", revision: 2 }) }));
+    expect(sourceText((await removed.json()).data.files[0])).toContain("2026-11-10,A,Cup,10");
+    database.close();
+  });
+  it("rolls scoped deletion back if updating the playback clock fails", async () => {
+    const { workspace, database } = setup();
+    const baseline = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,10", "shop");
+    const event = { ...baseline, replay: { date: "2026-11-11", hours: [0], lagHours: 0 } };
+    await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [baseline] }, 0));
+    await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: await mergeReplaySources([baseline], [event]) }, 1));
+    const before = await (await workspace.fetch(req("sources"))).json();
+    database.exec("CREATE TRIGGER reject_clock BEFORE DELETE ON chunks WHEN OLD.name = 'sandbox' BEGIN SELECT RAISE(ABORT, 'clock failure'); END");
+    const removed = await workspace.fetch(new Request("https://workspace.test/api/workspace/sources", { method: "DELETE", body: JSON.stringify({ scope: "event", revision: 2 }) }));
+    expect(removed.status).toBe(422);
+    expect(await (await workspace.fetch(req("sources"))).json()).toEqual(before);
+    expect((await (await workspace.fetch(req("sandbox"))).json()).data.startedAt).toBeDefined();
+    database.close();
+  });
   it("stops event playback atomically when baseline tables replace the replay", async () => {
     const { workspace, reconstruct, database } = setup();
     const file = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "upload");

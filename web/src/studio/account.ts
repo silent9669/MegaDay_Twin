@@ -106,11 +106,11 @@ export function useAccountDocument<T>(name: WorkspaceKey) {
     };
   }, [name, reload]);
   const save = useCallback(
-    async (data: T, revision: number) => {
+    async (data: T, revision: number, scope?: "shop") => {
       const next = await requestJSON<Doc<T>>(`/api/workspace/${name}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data, revision }),
+        body: JSON.stringify({ data, revision, ...(scope ? { scope } : {}) }),
       });
       setDocument((old) =>
         !old || next.revision >= old.revision ? next : old,
