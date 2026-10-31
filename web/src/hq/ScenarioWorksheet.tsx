@@ -1,3 +1,4 @@
+import { Button } from "../components/ui/button";
 import { Sparkles } from "lucide-react";
 import { analyzeWithAI } from "../city/analysis-context";
 import {
@@ -41,9 +42,9 @@ export function ScenarioWorksheet({
           <h3>Continue or pause?</h3>
           <span className="hq-provenance">User assumptions · one product</span>
         </div>
-        <button onClick={() => setValue({ ...exampleWorksheet })}>
+        <Button variant="outline" onClick={() => setValue({ ...exampleWorksheet })}>
           Load reference example
-        </button>
+        </Button>
       </header>
       <div className="hq-assumptions">
         {fields.map(([key, label]) => (
@@ -141,15 +142,13 @@ export function ScenarioWorksheet({
         </p>
       </details>
       <footer>
-        <button
-          className="btn-secondary"
+        <Button variant="outline"
           disabled={busy || !results}
           onClick={() => onSave(value)}
         >
           Save assumptions
-        </button>
-        <button
-          className="btn-primary"
+        </Button>
+        <Button variant="default"
           disabled={!results}
           onClick={() =>
             analyzeWithAI(
@@ -179,7 +178,7 @@ export function ScenarioWorksheet({
         >
           <Sparkles size={16} />
           Analyze with AI
-        </button>
+        </Button>
       </footer>
     </section>
   );
