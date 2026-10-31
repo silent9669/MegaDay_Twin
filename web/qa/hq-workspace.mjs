@@ -54,7 +54,7 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   await page.waitForLoadState('networkidle');await page.goto(base+'/sku-assistant?sku=QA-A');
   await hq.waitFor();await page.getByLabel('Goal quantity scope').waitFor();
   assert(new URL(page.url()).pathname==='/city-demo');
-  assert((await page.getByLabel('Goal quantity scope').boundingBox()).height>=44);
+  await page.waitForFunction(()=>globalThis.document.querySelector('.hq-tracked > div[data-active="true"] small')?.textContent==='Model' && globalThis.document.querySelector('[aria-label="Goal quantity scope"]')?.getBoundingClientRect().height>=44);
   await page.getByRole('button',{name:'Select QA-A',exact:true}).last().waitFor();
   await page.getByLabel('Goal description',{exact:true}).fill('Sell 100 units');
   await page.getByRole('button',{name:'Enter parameters manually',exact:true}).click();
