@@ -18,6 +18,8 @@ import {
 export const routes: RouteObject[] = [
   { path: "/city-demo", element: <CityApp /> },
   { path: "/mock-data", element: <CityApp studio /> },
+  { path: "/sale-planner", element: <CityApp planner /> },
+  { path: "/sku-assistant", element: <CityApp skuAssistant /> },
   { path: "/login", element: <Login /> },
   {
     element: <AppShell />,

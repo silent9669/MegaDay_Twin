@@ -40,7 +40,7 @@ from app.economics.breakeven import (
     make_zone_bar,
     uniform_breakeven,
 )
-from app.economics.goals import Outcome, Selection, select_actions
+from app.economics.goals import Outcome, Selection, select_actions, validate_goal_params
 from app.simulator.constraints import MUST_RUN
 from app.simulator.engine import ActionRun, Perturb, SimRun, stockout_hour
 from app.simulator.inputs import SimInputs
@@ -109,6 +109,8 @@ def scenario_results(run: SimRun, sel: Selection | None = None) -> list[Scenario
                 goal_eligible=sel.eligible[i] if sel is not None else True,
                 p_target=sel.p_target[i] if sel is not None else None,
                 goal_note=sel.notes.get(i) if sel is not None else None,
+                goal_sku=quantity_sku(inp),
+                goal_units_sold=Dist.of(goal_units(run, r)) if quantity_sku(inp) else None,
                 duplicate_of=(
                     run.runs[sel.duplicate_of[i]].action.key
                     if sel is not None and i in sel.duplicate_of
@@ -119,17 +121,35 @@ def scenario_results(run: SimRun, sel: Selection | None = None) -> list[Scenario
     return out
 
 
+def quantity_sku(inp: SimInputs) -> str | None:
+    focus = inp.goal.params.get("focus_sku")
+    return str(focus) if focus and inp.goal.kind in ("sell_target", "clear_stock") else None
+
+
+def goal_units(run: SimRun, action: ActionRun) -> FloatArr:
+    focus = quantity_sku(run.inputs)
+    return action.sold_by_sku[focus] if focus else action.units_sold
+
+
 def select(run: SimRun) -> Selection:
     inp = run.inputs
     g = inp.goal
     p = inp.params
-    max_loss = float(g.params.get("max_loss_vnd", p.num("max_loss_vnd")))
+    validate_goal_params(g.params)
+    max_loss = (
+        float(g.params["max_loss_vnd"])
+        if "max_loss_vnd" in g.params
+        else p.num("max_loss_vnd")
+        if g.kind == "clear_stock"
+        else None
+    )
     return select_actions(
         g.kind,
-        [Outcome(r.action.key, r.feasible, r.j, r.units_sold, r.spend) for r in run.runs],
+        [Outcome(r.action.key, r.feasible, r.j, goal_units(run, r), r.spend) for r in run.runs],
         target_units=g.target_units,
         sell_target_prob=float(g.params.get("sell_target_prob", p.num("sell_target_prob"))),
         max_loss_vnd=max_loss,
+        max_spend_vnd=float(g.params["max_spend_vnd"]) if "max_spend_vnd" in g.params else None,
         min_marginal_return=float(
             g.params.get("min_marginal_return", p.num("min_marginal_return"))
         ),
@@ -170,12 +190,25 @@ def zone_bar(run: SimRun, resim: Resim) -> tuple[ZoneBar | None, str | None]:
     """Continue-vs-pause bar from the simulation (05 §7.2)."""
     inp = run.inputs
     by = run.by_key()
+    if quantity_sku(inp):
+        return None, "Không dùng thanh kinh tế chạy/dừng để kết luận mục tiêu số lượng riêng SKU."
     if "continue" not in by or "pause" not in by:
         extra = resim(
             [ActionSpec(kind="continue"), ActionSpec(kind="pause")], Perturb(), run.samples
         )
         by = {**extra.by_key(), **by}
     c, p = by["continue"], by["pause"]
+    spend_limit = inp.goal.params.get("max_spend_vnd")
+    loss_limit = inp.goal.params.get("max_loss_vnd")
+    if any(
+        (spend_limit is not None and not np.all(action.spend <= spend_limit))
+        or (loss_limit is not None and float(np.mean(action.j)) < -loss_limit)
+        for action in (c, p)
+    ):
+        return (
+            None,
+            "Không hiển thị thanh chạy/dừng vì một lựa chọn vượt giới hạn chi hoặc lỗ đã xác nhận.",
+        )
     js = inp.stock_skus
     restock = inp.restock_matrix().sum(axis=1)
     n_j = np.array([s.stock0 for s in js]) + restock
@@ -474,8 +507,8 @@ def build_recommendation(
         goal_cost = float(np.mean(runner.j) - np.mean(best.j))
         status = "recommend"
     elif runner is not None:
-        sb = best.units_sold if sel.metric == "units_sold" else best.j
-        sr = runner.units_sold if sel.metric == "units_sold" else runner.j
+        sb = goal_units(run, best) if sel.metric == "units_sold" else best.j
+        sr = goal_units(run, runner) if sel.metric == "units_sold" else runner.j
         p_best = float(np.mean(sb > sr))
         gain = float(np.mean(best.j) - np.mean(runner.j))
         min_p = params.num("decision_min_prob")
@@ -498,7 +531,16 @@ def build_recommendation(
         keep = run.by_key().get("pause")
         if keep is not None and keep.feasible and keep is not best:
             partner = keep
-    flips = flip_conditions(run, best, partner, resim) if (with_flips and partner) else []
+    has_goal_limits = any(
+        k in inp.goal.params for k in ("max_spend_vnd", "max_loss_vnd", "focus_sku")
+    )
+    # Existing economic flip thresholds do not re-check goal limits after a perturbation.
+    # Do not advertise those thresholds as actionable under a confirmed hard constraint.
+    flips = (
+        flip_conditions(run, best, partner, resim)
+        if with_flips and partner and not has_goal_limits
+        else []
+    )
 
     # reasons
     reasons = []
@@ -531,7 +573,7 @@ def build_recommendation(
         reasons.append("Không được tắt hẳn vì đã cam kết với sàn trong khung flash sale")
     if runner is not None and gain is not None and p_best is not None:
         if sel.metric == "units_sold":
-            du = float(np.mean(best.units_sold - runner.units_sold))
+            du = float(np.mean(goal_units(run, best) - goal_units(run, runner)))
             reasons.append(
                 f"{best.action.label_vi()} bán thêm ~{du:.1f} sp so với"
                 f" {runner.action.label_vi()} (xác suất {p_best:.0%}), chênh tiền"
@@ -555,8 +597,13 @@ def build_recommendation(
         reasons.append(bar.verdict_note)
     if status == "undetermined" and runner is not None:
         reasons.append("Chênh lệch chưa đủ rõ để đề xuất chắc chắn")
-    if not flips and partner is not None and with_flips:
+    if not flips and partner is not None and with_flips and not has_goal_limits:
         reasons.append("Kết luận giữ nguyên trong khoảng bất định hiện tại")
+    if quantity_sku(inp):
+        reasons.append(
+            f"Chỉ tiêu số lượng áp dụng riêng SKU {quantity_sku(inp)}; tiền và hành động vẫn"
+            " áp dụng cho toàn chiến dịch, không phải lợi nhuận hay ngân sách riêng SKU."
+        )
     reasons += conf_reasons[:2]
     rec = Recommendation(
         recommendation_id=rid,
@@ -660,6 +707,15 @@ def persist(
     nothing (sửa lỗi nhỏ M3, lỗi 2). ``request_json`` = the request as run, echoed back."""
     rec = out.recommendation
     now = utcnow()
+    if out.calculation_trace is not None:
+        conn.execute(
+            "INSERT INTO scenario_calculation_traces VALUES (?, ?, ?)",
+            [
+                out.scenario_id,
+                json.dumps(out.calculation_trace, allow_nan=False),
+                json.dumps([r.model_dump(mode="json") for r in out.results], allow_nan=False),
+            ],
+        )
     conn.execute(
         "INSERT INTO scenarios (scenario_id, campaign_id, goal_id, start_at, horizon_hours,"
         " param_version, overrides, inputs_ref, samples, seed, requested_by, created_at,"

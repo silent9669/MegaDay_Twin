@@ -105,6 +105,33 @@ def test_sell_target_none_meets_goal() -> None:
     assert "chưa giải quyết được" in rec.reasons[0]
 
 
+def test_confirmed_total_budget_is_forwarded_and_excludes_misleading_economic_comparison() -> None:
+    inp = make_inputs([sku("A", 24, lam=1.0, stock=100)], budget=600_000)
+    inp.goal = inp.goal.model_copy(update={"params": {"max_spend_vnd": 0}})
+    run, resim = _run(inp, ACTS[:3], 200)
+    rec, sel = build_recommendation(run, resim)
+    assert rec.best is not None and rec.best.kind == "pause"
+    assert sel.eligible == [False, True, False]
+    assert rec.zone_bar is None and rec.flip_conditions == []
+    assert any("vượt giới hạn chi" in reason for reason in rec.reasons)
+    results = scenario_results(run, sel)
+    assert not results[0].goal_eligible and results[0].goal_note is not None
+
+
+def test_confirmed_budget_can_leave_no_feasible_action() -> None:
+    inp = make_inputs(
+        [sku("A", 24, lam=1.0, stock=100)],
+        budget=600_000,
+        goal_kind="efficiency",
+        must_run_hours=[0, 1],
+    )
+    inp.goal = inp.goal.model_copy(update={"params": {"max_spend_vnd": 0}})
+    run, resim = _run(inp, ACTS[:3], 200)
+    rec, sel = build_recommendation(run, resim)
+    assert sel.none_meets_goal and rec.status == "none_meets_goal"
+    assert rec.best is None and rec.runner_up is None
+
+
 def test_scenario_param_caps_label() -> None:
     ps = ParamSet(stored={}, overrides=parse_overrides({"rank_loss_after_pause": 0.1}))
     inp = make_inputs([sku("A", 24)], params=ps)

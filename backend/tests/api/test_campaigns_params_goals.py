@@ -126,6 +126,67 @@ def test_ai_suggestion_needs_confirmation(api: TestClient) -> None:
 
 
 # ---------------------------------------------------------------- goals
+def test_goal_planner_capabilities(api: TestClient) -> None:
+    body = ok(api.get(f"{V1}/goal-planner/capabilities", headers=VIEWER))["data"]
+    assert body == {
+        "version": 1,
+        "constraints": [
+            "max_spend_vnd",
+            "max_loss_vnd",
+            "sell_target_prob",
+            "min_marginal_return",
+            "focus_sku",
+            "calculation_trace",
+        ],
+    }
+    assert api.get(f"{V1}/goal-planner/capabilities").status_code in (401, 403)
+
+
+@pytest.mark.parametrize(
+    "constraints",
+    [
+        {"max_spend_vnd": -1},
+        {"max_spend_vnd": True},
+        {"max_loss_vnd": "0"},
+        {"sell_target_prob": 1.1},
+        {"min_marginal_return": -1},
+        {"target_units": 1.5},
+        {"target_units": True},
+        {"target_units": "4"},
+    ],
+)
+def test_goal_rejects_invalid_constraints_before_replacing_active(
+    api: TestClient, constraints: dict[str, object]
+) -> None:
+    before = ok(api.get(f"{V1}/goals", params={"scope_id": "CD004"}, headers=VIEWER))["data"]
+    body = {
+        "scope_id": "CD004",
+        "kind": "sell_target",
+        "target_units": 10,
+        "deadline": "2026-11-12T00:00:00+07:00",
+        "constraints": constraints,
+    }
+    err(api.post(f"{V1}/goals", json=body, headers=LEAD), 400, "VALIDATION_ERROR")
+    after = ok(api.get(f"{V1}/goals", params={"scope_id": "CD004"}, headers=VIEWER))["data"]
+    assert after == before
+
+
+def test_goal_preserves_zero_budget_and_rejects_conflicting_constraints(api: TestClient) -> None:
+    body = {
+        "scope_id": "CD006",
+        "kind": "profit",
+        "deadline": "2026-11-12T00:00:00+07:00",
+        "constraints": {"max_spend_vnd": 0, "max_loss_vnd": 0},
+    }
+    saved = ok(api.post(f"{V1}/goals", json=body, headers=LEAD), 201)["data"]
+    assert saved["params"]["max_spend_vnd"] == 0 and saved["params"]["max_loss_vnd"] == 0
+    err(
+        api.post(f"{V1}/goals", json={**body, "params": {"max_spend_vnd": 1}}, headers=LEAD),
+        400,
+        "VALIDATION_ERROR",
+    )
+
+
 def test_goals_roles_versions(api: TestClient) -> None:
     body = {
         "scope": "campaign",
@@ -159,3 +220,29 @@ def test_goals_roles_versions(api: TestClient) -> None:
     err(api.post(f"{V1}/goals", json={**body, "scope_id": "CD999"}, headers=LEAD), 404,
         "NOT_FOUND")  # fmt: skip
     err(api.get(f"{V1}/goals/goal-khong-co", headers=VIEWER), 404, "NOT_FOUND")
+
+
+def test_focused_goal_requires_campaign_membership_before_any_write(api: TestClient) -> None:
+    body = {
+        "scope": "campaign",
+        "scope_id": "CD002",
+        "kind": "sell_target",
+        "target_units": 10,
+        "deadline": "2026-11-12T00:00:00+07:00",
+        "params": {"focus_sku": "NOICHIEN2L"},
+    }
+    saved = ok(api.post(f"{V1}/goals", json=body, headers=LEAD), 201)["data"]
+    assert saved["params"]["focus_sku"] == "NOICHIEN2L"
+    before = ok(api.get(f"{V1}/goals", params={"scope_id": "CD002"}, headers=VIEWER))["data"]
+    for focus in ["MISSING", "", None, False, 5, "x" * 151]:
+        invalid = {**body, "params": {"focus_sku": focus}}
+        err(api.post(f"{V1}/goals", json=invalid, headers=LEAD), 400, "VALIDATION_ERROR")
+        err(
+            api.put(f"{V1}/goals/campaign/CD002", json=invalid, headers=LEAD),
+            400,
+            "VALIDATION_ERROR",
+        )
+    after = ok(api.get(f"{V1}/goals", params={"scope_id": "CD002"}, headers=VIEWER))["data"]
+    assert after == before
+    capabilities = ok(api.get(f"{V1}/goal-planner/capabilities", headers=VIEWER))["data"]
+    assert {"focus_sku", "calculation_trace"} <= set(capabilities["constraints"])

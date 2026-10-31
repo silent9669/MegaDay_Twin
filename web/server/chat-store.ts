@@ -7,18 +7,22 @@ import type {
 } from "../src/studio/workspace-types";
 import { resolveChange } from "./workspace-change";
 import { changeReferenceSchema } from "../src/city/monitor/changes";
+import { miloContextSchema, type MiloContext } from "../src/city/milo-contract";
+import { buildMiloContext } from "./milo-context";
+import { interpretMiloGoal } from "./milo-goal";
+import type { PlannerEnv } from "./sale-planner";
 type Storage = { fetch(request: Request): Promise<Response> };
 
 // Read the conversation from authenticated account storage, never from client-supplied history.
 export async function savedChat(
   request: Request,
-  env: PMEnv,
+  env: PMEnv & PlannerEnv,
   context: unknown,
   storage: Storage,
 ) {
   const raw = await request.text();
   if (raw.length > 3000) return fail(413, "Request too large.");
-  let body: { sessionId?: string; lastMessageId?: string; changeReference?: unknown };
+  let body: { sessionId?: string; lastMessageId?: string; changeReference?: unknown; context?: unknown };
   try {
     body = JSON.parse(raw);
   } catch {
@@ -30,6 +34,12 @@ export async function savedChat(
     typeof body.lastMessageId !== "string"
   )
     return fail(422, "Choose a saved conversation.");
+  let requestedContext: MiloContext | undefined;
+  if (body.context !== undefined) {
+    const parsed = miloContextSchema.safeParse(body.context);
+    if (!parsed.success) return fail(422, "Invalid Milo context. Send identifiers only.");
+    requestedContext = parsed.data;
+  }
   let change;
   if (body.changeReference !== undefined) {
     const parsed = changeReferenceSchema.safeParse(body.changeReference);
@@ -47,14 +57,36 @@ export async function savedChat(
     (s) => s.id === body.sessionId,
   );
   if (!conversation) return fail(404, "Conversation not found.");
+  const selection = {
+    ...(conversation.context ?? requestedContext ?? {}),
+    ...(requestedContext?.screen ? { screen: requestedContext.screen } : {}),
+  };
+  const scope = (value: MiloContext | undefined) => JSON.stringify([
+    value?.sku ?? null, value?.campaignId ?? null, value?.scenarioId ?? null,
+  ]);
+  if (requestedContext && scope(requestedContext) !== scope(conversation.context))
+    return fail(409, "Ngữ cảnh đã thay đổi. Mở cuộc trò chuyện của sản phẩm đang chọn rồi thử lại.");
+  const originalMessages = JSON.stringify(conversation.messages);
   const current = (s: ChatSession) =>
     s.messages.at(-1)?.id === body.lastMessageId &&
-    s.messages.at(-1)?.role === "user";
+    s.messages.at(-1)?.role === "user" &&
+    JSON.stringify(s.messages) === originalMessages &&
+    scope(s.context) === scope(conversation.context);
   if (!current(conversation))
     return fail(
       409,
       "This conversation changed on another device. Reopen it before replying.",
     );
+  if (conversation.messages.length >= 200)
+    return fail(409, "Cuộc trò chuyện đã đầy. Hãy tạo cuộc trò chuyện mới để tiếp tục.");
+  const [facts, interpretation] = await Promise.all([
+    buildMiloContext(selection, env, storage, request.url),
+    interpretMiloGoal(conversation.messages, { ...env, OPENAI_MODEL: conversation.model }, undefined,
+      { discoverGoal: !!selection.sku }),
+  ]);
+  const plan = interpretation && facts.skuContext
+    ? { interpretation, context: facts.skuContext }
+    : undefined;
   const response = await pmChat(
     new Request(request.url, {
       method: "POST",
@@ -67,7 +99,12 @@ export async function savedChat(
       }),
     }),
     env,
-    change ? { workspace: context, change } : context,
+    {
+      workspaceMetadata: context, ...facts,
+      goal: interpretation ?? null,
+      canReviewGoal: !!plan,
+      ...(change ? { change } : {}),
+    },
   );
   if (!response.ok) return response;
   const result = (await response.json()) as { reply: string; model: string };
@@ -104,7 +141,7 @@ export async function savedChat(
       }),
     );
     if (saved.ok)
-      return Response.json({ ...result, document: await saved.json() });
+      return Response.json({ ...result, plan, document: await saved.json() });
     if (saved.status !== 409)
       return fail(
         503,

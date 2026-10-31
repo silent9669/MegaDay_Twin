@@ -40,8 +40,8 @@ export function useChatArchive() {
         const stored = archive.sessions.find((s) => s.id === session.id);
         if (
           stored &&
-          (stored.messages.length !== session.messages.length ||
-            stored.messages.at(-1)?.id !== session.messages.at(-1)?.id)
+          (JSON.stringify(stored.messages) !== JSON.stringify(session.messages) ||
+            JSON.stringify(stored.context ?? {}) !== JSON.stringify(session.context ?? {}))
         )
           throw Error(
             "This chat changed on another device. Reopen it from History. Your draft is kept.",
