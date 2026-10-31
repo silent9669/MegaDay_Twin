@@ -6,9 +6,10 @@ async function needsDeployment(github, context) {
   });
   // GitHub caps the comparison at 300 files; never skip an incomplete diff.
   if (!data.files || data.files.length >= 300) return true;
-  const relevant = (path = '') => path.startsWith('web/') || path.startsWith('mock-data/out/') ||
+  const relevant = (path = '') => path.startsWith('web/') || path.startsWith('backend/') || path.startsWith('mock-data/out/') ||
+    path === '.dockerignore' || path === '.github/workflows/deploy-backend.yml' ||
     path === '.github/workflows/deploy.yml' || path === 'scripts/deployment.cjs' ||
-    path === 'scripts/deployment.test.cjs';
+    path === 'scripts/deployment.test.cjs' || path === 'scripts/hosted-smoke.py';
   return data.files.some((file) => relevant(file.filename) || relevant(file.previous_filename));
 }
 

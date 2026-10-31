@@ -48,6 +48,10 @@ class LiveController:
         self.started_at: datetime | None = None
         self.finished = False
         self.command_lock = asyncio.Lock()
+        # Hosted deployments serialize replay hours with HTTP mutations and persist
+        # each settled hour. Local deployments retain the existing behavior.
+        self.step_guard: asyncio.Lock | None = None
+        self.after_step: Callable[[], Awaitable[None]] | None = None
 
     @property
     def live_dir(self) -> Path:
@@ -100,7 +104,10 @@ class LiveController:
     async def _replay(self, from_hour: int, interval: float) -> None:
         try:
             for hour in range(from_hour, 24):
-                await self._step(hour)
+                async with self.step_guard or contextlib.nullcontext():
+                    await self._step(hour)
+                    if self.after_step is not None:
+                        await self.after_step()
                 if hour < 23:
                     await asyncio.sleep(interval)
             self.finished = True

@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { backendFetch } from "./backend-fetch";
+import { backendConnection, backendFetch, type BackendEnv } from "./backend-fetch";
 import { goalDraftSchema } from "../src/planner/goal-contract";
 import type { PlannerContext, PlannerRunError } from "../src/planner/planner-api";
 import { assistantSkuSchema } from "../src/planner/assistant-contract";
 
-export type PlannerEnv = { DATA_BACKEND_URL?: string; DATA_BACKEND_USER?: string; DATA_BACKEND_ROLE?: string };
+export type PlannerEnv = BackendEnv;
 const constraints = ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return", "preview_apply"];
 const identifier = z.string().regex(/^[\w.-]{1,150}$/);
 const revisionSchema = z.strictObject({ goal_id: identifier, version: z.number().int().positive() });
@@ -21,19 +21,17 @@ export class BackendFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: Record<string, unknown>) { super(message); }
 }
 export function plannerBackend(env: PlannerEnv, signal?: AbortSignal) {
-  if (!env.DATA_BACKEND_URL || !env.DATA_BACKEND_USER || !env.DATA_BACKEND_ROLE) return null;
-  let base: URL;
-  try { base = new URL(env.DATA_BACKEND_URL.endsWith("/") ? env.DATA_BACKEND_URL : `${env.DATA_BACKEND_URL}/`); }
-  catch { return null; }
-  if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname))) return null;
+  const connection = backendConnection(env);
+  if (!connection) return null;
+  const { base, user, role, service } = connection;
   return async (path: string, body?: unknown): Promise<Record<string, unknown>> => {
     let response: Response;
     try {
       response = await backendFetch(new URL(path, base), {
         method: body === undefined ? "GET" : "POST",
-        headers: { "X-User": env.DATA_BACKEND_USER!, "X-Role": env.DATA_BACKEND_ROLE!, "Content-Type": "application/json" },
+        headers: { "X-User": user, "X-Role": role, "Content-Type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(body === undefined ? 15000 : 90000)]) : AbortSignal.timeout(body === undefined ? 15000 : 90000),
-      });
+      }, service);
     } catch { throw new BackendFailure(502, "BACKEND_UNAVAILABLE", "Không nhận được phản hồi từ backend. Dữ liệu đã lưu được giữ nguyên; hãy thử lại sau."); }
     let result: Record<string, unknown>;
     try { result = await response.json() as Record<string, unknown>; }
