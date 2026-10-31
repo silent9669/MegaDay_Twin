@@ -82,6 +82,27 @@ def test_pending_alias_is_not_guessed_from_a_name(api: TestClient) -> None:
     assert result["pending"][0]["raw_code"] == "MISSING"
 
 
+def test_label_api_times_are_local_without_rewriting_evidence(api: TestClient) -> None:
+    conn = api.app.state.db.write  # type: ignore[union-attr]
+    payload = body(api)
+    payload["evidence_through"] = payload["completed_at"]
+    payload["labels"][0]["reason"] = "Source timestamp 2026-01-01T00:00:00Z"
+    ok(api.post("/api/v1/demand-labels/sync", json=payload, headers=OPS))
+    stored = conn.execute("SELECT entry_id, payload FROM sku_demand_labels").fetchall()
+    signature = forecast_signature(conn, utcnow() + timedelta(days=1))
+    labels = ok(api.get("/api/v1/demand-labels", headers=VIEWER))["data"]["labels"]
+    detail = ok(api.get("/api/v1/skus/NOICHIEN2L", headers=VIEWER))["data"]
+    for view in (labels["NOICHIEN2L"], detail["demand"]["label_evidence"]):
+        for field in ("completed_at", "evidence_through"):
+            assert view[field].endswith("+07:00")
+            assert datetime.fromisoformat(view[field]) == datetime.fromisoformat(payload[field])
+        assert view["assessed_on"] == payload["assessed_on"]
+        assert view["reason"] == payload["labels"][0]["reason"]
+        assert view["source_fingerprint"] == payload["source_fingerprint"]
+    assert conn.execute("SELECT entry_id, payload FROM sku_demand_labels").fetchall() == stored
+    assert forecast_signature(conn, utcnow() + timedelta(days=1)) == signature
+
+
 def test_manual_replay_label_waits_for_its_evidence_hour(api: TestClient) -> None:
     conn = api.app.state.db.write  # type: ignore[union-attr]
     payload = body(api)

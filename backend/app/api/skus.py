@@ -8,9 +8,10 @@ from typing import Annotated, Any, Literal
 
 import duckdb
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PlainSerializer
 
 from app.api.common import MAX_LIMIT, compute_state, data_as_of, paginate
+from app.api.demand_view import demand_view
 from app.api.deps import Conn, Operator, Viewer, audit
 from app.api.schemas import Envelope, LocalDatetime, Meta, Page, SourceRef
 from app.api.snapshot import (
@@ -81,7 +82,9 @@ class SkuSummary(BaseModel):
 
 
 class SkuDetail(SkuSummary):
-    demand: dict[str, Any] = Field(default_factory=dict)
+    demand: Annotated[dict[str, Any], PlainSerializer(demand_view, when_used="json")] = Field(
+        default_factory=dict
+    )
     incoming: list[dict[str, Any]]
     price_list_vnd: int | None
     price_effective_vnd: int | None

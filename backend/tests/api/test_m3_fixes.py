@@ -5,6 +5,7 @@ deadline, ``duplicate_of`` in OpenAPI."""
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -133,7 +134,13 @@ def test_echoed_request_resends_as_run(
 
 # ------------------------------------------------------------------ lỗi 3, 4
 def test_no_utc_times_in_responses(api: TestClient, standard: dict[str, Any]) -> None:
+    from app.api import scenarios
+
     sid = standard["scenario_id"]
+    conn = api.app.state.db.write  # type: ignore[union-attr]
+    query = "SELECT trace FROM scenario_calculation_traces WHERE scenario_id=?"
+    stored = conn.execute(query, [sid]).fetchone()[0]
+    scenarios._RUNS.clear()  # Also project UTC evidence from durable, older snapshots.
     rid = standard["recommendation"]["recommendation_id"]
     paths = [
         "/campaigns/CD002",
@@ -152,6 +159,15 @@ def test_no_utc_times_in_responses(api: TestClient, standard: dict[str, Any]) ->
     camp = ok(api.get(f"{V1}/campaigns/CD002", headers=VIEWER))["data"]
     assert camp["recommendation"]["data_as_of"].endswith("+07:00")
     assert camp["recommendation"]["created_at"].endswith("+07:00")
+    got = ok(api.get(f"{V1}/scenarios/{sid}", headers=VIEWER))["data"]
+    original = json.loads(stored)["sources"]["forecasts"]
+    displayed = got["calculation_trace"]["sources"]["forecasts"]
+    for source, view in zip(original, displayed, strict=True):
+        before = source["model_selection"]["forecast_origin"]
+        after = view["model_selection"]["forecast_origin"]
+        assert after.endswith("+07:00")
+        assert datetime.fromisoformat(before) == datetime.fromisoformat(after)
+    assert conn.execute(query, [sid]).fetchone()[0] == stored
 
 
 def test_violation_details_in_vietnam_time(standard: dict[str, Any]) -> None:

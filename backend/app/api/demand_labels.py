@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.api.demand_view import demand_view
 from app.api.deps import Conn, Operator, Viewer, audit, publish
 from app.api.scenarios import live_write_lock
 from app.api.schemas import Envelope, Meta
@@ -58,7 +59,10 @@ class DemandSync(BaseModel):
 def get_labels(conn: Conn, user: Viewer, request: Request) -> Envelope[dict[str, Any]]:
     with live_write_lock(request), RUN_LOCK:
         labels = active_labels(conn)
-    return Envelope(data={"version": 1, "labels": labels}, meta=Meta(computed_at=utcnow()))
+    return Envelope(
+        data={"version": 1, "labels": {sku: demand_view(label) for sku, label in labels.items()}},
+        meta=Meta(computed_at=utcnow()),
+    )
 
 
 @router.post("/demand-labels/sync", response_model=Envelope[dict[str, Any]])
