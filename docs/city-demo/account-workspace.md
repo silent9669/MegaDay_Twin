@@ -26,11 +26,22 @@ Import shop folder loads the six root files under `mock-data/out/demo`, excludin
 `live_11_11` and ground truth. The sanitized, compressed pack is generated during
 the build and served by authenticated `GET /api/studio/shop`; no folder picker,
 GitHub fetch or local filesystem access is needed. It replaces matching business
-tables and preserves unrelated tables. Replacing all replay sources stops the
-account playback clock in the same save transaction. Initial load creates an empty
+tables and preserves unrelated tables and loaded event rows. It does not restart
+an active event clock. Initial load creates an empty
 account workspace only if it does not exist. Older accounts remove exact repository
 defaults once (including only-derived labels); uploads and edits are preserved.
-Data Studio offers confirmed deletion of one table or all tables with revision checks.
+The shop baseline is stored in a separate `shop-sources` database document alongside
+the combined `sources` view used by the city. Existing account data is snapshotted
+once without replacing it with demo files. Event imports do not overwrite that
+snapshot. It persists across refreshes, sessions and Worker deployments.
+
+Data Studio has separate confirmed **Delete shop data** and **Delete event data**
+actions. `DELETE /api/workspace/sources` accepts `{scope: "shop" | "event", revision}`.
+Deleting an event restores the saved shop snapshot and stops playback atomically.
+Deleting the shop retains event rows and the clock; later event deletion cannot
+resurrect the deleted shop. Table deletion is available only for unmixed tables.
+Scoped baseline imports use `PUT /api/workspace/sources` with `scope: "shop"`.
+All saves/deletions retain revision checks and account authentication.
 
 CSV headers/JSON shape determine the source type. Uploads replace one matching
 business table; general tables are keyed by filename. ZIP analysis retains general

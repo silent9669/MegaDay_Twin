@@ -16,6 +16,23 @@ export function visibleSources(pack: SourcePack | null, hour: number): SourcePac
     return projectSource(source, { ...parsed, rows });
   }) };
 }
+/** Split persisted rows without applying the playback clock. -1 belongs to the shop. */
+export async function sourceLayer(files: Source[], layer: "shop" | "event") {
+  const result: Source[] = [];
+  for (const source of files) {
+    if (!source.replay) {
+      if (layer === "shop") result.push(source);
+      continue;
+    }
+    const parsed = inspect(source.name, sourceText(source));
+    const indexes = source.replay.hours.flatMap((hour, index) => (layer === "shop" ? hour < 0 : hour >= 0) ? [index] : []);
+    if (!indexes.length) continue;
+    const text = Papa.unparse({ fields: parsed.columns, data: indexes.map(index => parsed.rows[index]!) });
+    result.push({ ...source, encoding: undefined, ...encodeSource(text), hash: await hashText(text),
+      replay: layer === "event" ? { ...source.replay, hours: indexes.map(index => source.replay!.hours[index]!) } : undefined });
+  }
+  return result;
+}
 /** Keep the baseline, replace a previous event instead of appending duplicate event rows. */
 export async function mergeReplaySources(existing: Source[], incoming: Source[]) {
   const merged = new Map(existing.map(source => [sourceKey(source), source]));
