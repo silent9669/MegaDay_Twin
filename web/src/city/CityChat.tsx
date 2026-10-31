@@ -35,10 +35,10 @@ import { MiloAvatar } from "./MiloAvatar";
 import { Updates } from "./monitor/Updates";
 import type { WorkspaceUpdates } from "./monitor/useWorkspaceMonitor";
 import type { ChangeReference } from "./monitor/changes";
-import { miloContextSchema, type MiloContext, type MiloReply, type MiloReplyPlan } from "./milo-contract";
+import { miloContextSchema, type MiloContext, type MiloReply, type MiloReplyPlan, type MiloCampaignPlan } from "./milo-contract";
 import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
 const EMPTY_MESSAGES: ChatMessage[] = [];
-type SavedPlan = { plan: MiloReplyPlan; userMessageId: string };
+type SavedPlan = { plan?: MiloReplyPlan; campaignPlan?: MiloCampaignPlan; userMessageId: string };
 export function CityChat({
   launcherAnchor,
   updates,
@@ -78,7 +78,8 @@ export function CityChat({
     (s) => s.id === sessionId,
   );
   const messages = conversation?.messages ?? EMPTY_MESSAGES;
-  const plan = savedPlan && messages.at(-1)?.role === "assistant" && messages.at(-2)?.id === savedPlan.userMessageId ? savedPlan.plan : null;
+  const currentPlan = savedPlan && messages.at(-1)?.role === "assistant" && messages.at(-2)?.id === savedPlan.userMessageId ? savedPlan : null;
+  const plan = currentPlan?.plan, campaignPlan = currentPlan?.campaignPlan;
   const context = conversation?.context ?? selectedContext ?? screenContext;
   const visibleMessages =
     optimistic && !messages.some((m) => m.id === optimistic.id)
@@ -114,7 +115,7 @@ export function CityChat({
   useEffect(() => {
     const selectSku = (event: Event) => {
       const result = miloContextSchema.safeParse((event as CustomEvent).detail);
-      if (!result.success || (!result.data.sku && !result.data.scenarioId)) return;
+      if (!result.success || (!result.data.sku && !result.data.scenarioId && !result.data.campaignId)) return;
       operation.current++;
       controller.current?.abort();
       setPending(false);
@@ -245,6 +246,9 @@ export function CityChat({
         const received = { plan: result.plan, userMessageId: message.id };
         plans.current.set(session.id, received);
         setPlan(received);
+      } else if (!session.context?.sku && result.campaignPlan?.campaignId === session.context?.campaignId && result.campaignPlan) {
+        const received = { campaignPlan: result.campaignPlan, userMessageId: message.id };
+        plans.current.set(session.id, received); setPlan(received);
       }
       setChangeReference(undefined);
       await archive.reload();
@@ -309,6 +313,9 @@ export function CityChat({
         const received = { plan: result.plan, userMessageId: conversation.messages.at(-1)!.id };
         plans.current.set(conversation.id, received);
         setPlan(received);
+      } else if (!conversation.context?.sku && result.campaignPlan?.campaignId === conversation.context?.campaignId && result.campaignPlan) {
+        const received = { campaignPlan: result.campaignPlan, userMessageId: conversation.messages.at(-1)!.id };
+        plans.current.set(conversation.id, received); setPlan(received);
       }
     } catch (e) {
       if (sequence !== operation.current) return;
@@ -504,12 +511,12 @@ export function CityChat({
                       {conversation.title}
                     </div>
                   )}
-                  {(context?.sku || context?.scenarioId) && (
+                  {(context?.sku || context?.scenarioId || context?.campaignId) && (
                     <div className="milo-context" role="status">
                       <span>Đang trao đổi về <strong>{context.sku ?? context.campaignId}</strong>{context.scenarioId && <small> · Mô phỏng {context.scenarioId}</small>}</span>
                       <button type="button" disabled={pending} onClick={() => {
                         newChat(); setSelectedContext(screenContext?.sku ? { screen: screenContext.screen } : screenContext);
-                      }}>Bỏ chọn {context.scenarioId ? "phương án" : "SKU"}</button>
+                      }}>Bỏ chọn {context.scenarioId ? "phương án" : context.sku ? "SKU" : "chiến dịch"}</button>
                     </div>
                   )}
                   <div
@@ -583,15 +590,17 @@ export function CityChat({
                         </article>
                       ))
                     )}
-                    {plan && !pending && !draft.trim() && (
+                    {(plan || campaignPlan) && !pending && !draft.trim() && (
                       <section className="milo-goal-handoff" aria-label="Bản nháp mục tiêu">
                         <p>Milo đã ghi nhận mục tiêu. Bạn có thể kiểm tra và chỉnh thông số trước khi tính phương án.</p>
                         <button type="button" onClick={() => { setReview((value) => !value); setExpanded(true); }}>
                           {review ? "Thu gọn bản nháp" : "Kiểm tra mục tiêu"}
                         </button>
-                        {review && <SaleGoalPlanner key={`${sessionId}-${messages.at(-1)?.id}`} embedded
+                        {review && plan && <SaleGoalPlanner key={`${sessionId}-${messages.at(-1)?.id}`} embedded
                           initialInterpretation={plan.interpretation} focusSku={plan.context.sku.sku}
                           campaignIds={plan.context.campaigns.map((campaign) => campaign.id)} allowRun={plan.context.canPlan} />}
+                        {review && campaignPlan && <SaleGoalPlanner key={`${sessionId}-${messages.at(-1)?.id}`} embedded
+                          initialInterpretation={campaignPlan.interpretation} campaignIds={[campaignPlan.campaignId]} />}
                       </section>
                     )}
                     {pending && (

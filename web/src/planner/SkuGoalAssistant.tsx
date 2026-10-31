@@ -17,7 +17,7 @@ async function request<T>(path: string, signal: AbortSignal, body?: unknown): Pr
 const number = (value: number | null, money = false) => value == null ? 'Chưa có dữ liệu' : `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(value)}${money ? ' ₫' : ''}`;
 const date = (value: string | null) => value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : 'Chưa cung cấp';
 
-export function SkuGoalAssistant() {
+export function SkuGoalAssistant({ embedded = false }: { embedded?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
   const sku = params.get('sku') ?? '';
   const [query, setQuery] = useState('');
@@ -37,7 +37,7 @@ export function SkuGoalAssistant() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query, reload]);
   return <div className="sale-planner sku-assistant" id="sku-assistant">
-    <header className="planner-heading"><div><span className="planner-eyebrow">MEGADAY HQ / TRỢ LÝ THEO SẢN PHẨM</span><h1><MessageCircle aria-hidden size={27} /> Mục tiêu cho SKU</h1><p>Chọn sản phẩm, nói điều bạn muốn đạt. Trợ lý làm rõ yêu cầu; bạn kiểm tra trước khi hệ thống tính phương án.</p></div><Link to="/city-demo?district=hq">Về HQ <ArrowRight aria-hidden size={16} /></Link></header>
+    {!embedded && <header className="planner-heading"><div><span className="planner-eyebrow">MEGADAY HQ / LẬP KẾ HOẠCH SALE</span><h1><MessageCircle aria-hidden size={27} /> Mục tiêu cho SKU</h1><p>Chọn sản phẩm, nói điều bạn muốn đạt. Trợ lý làm rõ yêu cầu; bạn mô phỏng thử trước khi quyết định áp dụng.</p></div><Link to="/sale-planner">Về kế hoạch sale <ArrowRight aria-hidden size={16} /></Link></header>}
     <div className="sku-assistant-layout">
       <aside className="planner-card sku-picker" aria-labelledby="sku-picker-title"><h2 id="sku-picker-title">Chọn sản phẩm</h2><label htmlFor="assistant-search"><Search aria-hidden size={16} /> Tìm SKU</label><input id="assistant-search" type="search" maxLength={150} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Mã SKU hoặc tên sản phẩm" /><p className="planner-help">Danh sách từ backend đã kết nối. Dữ liệu đến: {date(list?.dataAsOf ?? null)}.</p>
         {loading && <p role="status">Đang tìm sản phẩm…</p>}

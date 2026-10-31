@@ -262,18 +262,28 @@ For an actual archive, set `LIVE_ARCHIVE_PATH` and run
 Neighborhood, Warehouse and responsive layouts against the local Worker.
 Archive contents stay local and are never committed.
 
-## Mục tiêu buổi sale (Task 1)
+## Lập kế hoạch sale: mô phỏng thử và áp dụng
 
-Mở `/sale-planner` từ sidebar hoặc MegaDay HQ. Nhập mong muốn, phân tích,
-chỉnh thông số và chọn chiến dịch, sau đó xác nhận để lưu mục tiêu đang áp dụng
-và chạy mô phỏng. Bản đầu hỗ trợ **một chiến dịch, 1–72 giờ tròn**; bốn mục tiêu
-là lợi nhuận, số lượng bán, xả hàng và hiệu quả chi. Ngân sách là tổng cho cả kỳ.
-Thao tác này không thực thi thay đổi quảng cáo. Sửa thông số hủy xác nhận và
-ẩn kết quả cũ. Nếu đã lưu mục tiêu nhưng mô phỏng lỗi, nút thử lại dùng mục tiêu đó.
+Mở **Lập kế hoạch sale** (`/sale-planner`) từ sidebar hoặc MegaDay HQ, chọn cả
+chiến dịch hoặc một SKU. Cả hai phạm vi có thể trao đổi với Milo rồi kiểm tra
+bản nháp. Giao diện hiển thị mục tiêu đang áp dụng và phiên bản của nó.
+**Mô phỏng thử** chỉ lưu bản nháp không hoạt động và kết quả what-if; không thay
+mục tiêu hoặc đề xuất hiện tại. Sau khi xem kết quả và bảng thay đổi, người dùng
+xác nhận riêng **Áp dụng mục tiêu**. Bản đầu hỗ trợ một chiến dịch, một SKU trọng
+tâm mỗi lần và 1–72 giờ tròn. Đây không phải lệnh thực thi quảng cáo.
+
+SKU kế thừa giới hạn ngân sách/lỗ chặt hơn từ mục tiêu chiến dịch. Thay đổi ưu
+tiên không tương thích được nêu rõ và chặn áp dụng; cần sửa kế hoạch chung trước.
+Chưa cộng gộp hay tối ưu đồng thời nhiều SKU. Sửa bản nháp/phạm vi hủy kết quả
+thử và xác nhận cũ. Nếu mục tiêu hoặc dữ liệu/mô hình thay đổi sau lúc tính,
+backend trả 409, yêu cầu đối chiếu và mô phỏng lại. Lỗi mạng lúc áp dụng giữ mã
+bản thử để thử lại an toàn; không kích hoạt hai lần. Kiểm tra dữ liệu hiện dùng
+dấu vết toàn warehouse, nên thay đổi ngoài SKU đang xét cũng có thể yêu cầu tính lại.
 
 Gateway dùng `DATA_BACKEND_URL` (gốc API, ví dụ `https://backend.example/api/v1/`),
-`DATA_BACKEND_USER`, `DATA_BACKEND_ROLE=lead` như kết nối Data Studio. Backend
-phải có `/goal-planner/capabilities` phiên bản 1 và dữ liệu đã ingest. Chỉ dùng
+`DATA_BACKEND_USER`, `DATA_BACKEND_ROLE` như kết nối Data Studio. Operator có thể
+mô phỏng; lead mới được áp dụng. Backend cần migration 6, capability `preview_apply`
+trong `/goal-planner/capabilities` phiên bản 1 và dữ liệu đã ingest. Chỉ dùng
 backend trên mạng tin cậy theo mô hình xác thực hiện có. Frontend gọi trực tiếp
 gateway cùng origin; không dùng fixture để thay kết quả thật. Backend chưa nối,
 chưa nâng cấp hoặc không đủ quyền sẽ có thông báo và không cho chạy.
@@ -289,11 +299,14 @@ Kiểm chứng: `npm.cmd run check`; chạy Vite cổng 5186 rồi
 `node qa/studio/sale-planner.mjs` (Windows có thể đặt `STUDIO_QA_CHANNEL=msedge`).
 Browser QA dùng API giả lập; ảnh/kết quả ở `qa/runs/sale-planner/`.
 Ảnh review (số minh họa từ API giả lập): [desktop](../docs/images/sale-planner-desktop.png),
-[mobile](../docs/images/sale-planner-mobile.png).
+[mobile](../docs/images/sale-planner-mobile.png),
+[đối chiếu trước khi áp dụng](../docs/images/sale-plan-apply-desktop.png),
+[đối chiếu trên mobile](../docs/images/sale-plan-apply-mobile.png).
 
 ## Trợ lý mục tiêu theo SKU và minh bạch con số
 
-Từ HQ chọn **Lập mục tiêu** của một SKU, hoặc mở `/sku-assistant?sku=...`.
+Từ HQ chọn **Lập kế hoạch sale → Một sản phẩm**. Liên kết cũ
+`/sku-assistant?sku=...` chuyển đến luồng chung và giữ SKU đã chọn.
 Danh sách và ngữ cảnh được đọc từ backend thật. SKU được chuyển vào **Milo**,
 dùng chung hội thoại và lịch sử lưu trong tài khoản. Milo nhận dữ liệu SKU,
 lịch sử bán gần đây, nguồn/mốc dữ liệu và chiến dịch liên quan. Mục tiêu được
@@ -314,7 +327,7 @@ vốn/phí và giả định từng SKU. Snapshot cũ không bị thay bằng d�
 quả trước khi có trace hiển thị thiếu bằng chứng; không dựng lời giải thích giả.
 Nguồn chưa truy vết được tới từng dòng CSV được nêu rõ trong giới hạn.
 
-Cần backend có migration 5 và capability `focus_sku`, `calculation_trace`, cùng
+Cần backend có migration 6 và capability `focus_sku`, `calculation_trace`, `preview_apply`, cùng
 cấu hình kết nối/lead của planner. Chạy migration theo quy trình backend trước
 khi dùng; gateway từ chối chạy theo SKU trên backend cũ. AI diễn giải vẫn dùng
 cấu hình Milo (`OPENAI_API_KEY`, model đã chọn trong tài khoản) và có fallback

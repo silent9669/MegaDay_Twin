@@ -642,3 +642,14 @@ không có snapshot vẫn đọc được, trả `calculation_trace=null`; khôn
 dữ liệu hiện tại. Tham chiếu batch chỉ gồm các bản ghi nguồn liên quan có thể
 xác định được; chưa có liên kết batch chính xác cho mọi giá vốn/cam kết sale.
 Không lưu nội dung CSV hoặc dữ liệu cá nhân vào trace.
+
+## Bản mô phỏng kế hoạch sale (migration 6)
+
+`sale_plan_previews` lưu mã bản thử, chiến dịch, mục tiêu nháp không hoạt động,
+scenario, snapshot mục tiêu gốc/mục tiêu hiệu lực và mốc áp dụng. Snapshot giữ
+phiên bản gốc để phát hiện sửa đồng thời; dấu vết scenario vẫn thuộc migration 5.
+Mô phỏng thử không thay mục tiêu/đề xuất đang áp dụng. Chỉ thao tác apply có xác
+nhận mới kích hoạt mục tiêu, tăng phiên bản và ghi nhận apply trong cùng transaction.
+Mô phỏng lỗi có thể để lại mục tiêu nháp không hoạt động, nhưng không thay mục tiêu cũ.
+Khả năng áp dụng được kiểm tra lại với phiên bản mục tiêu và dấu vết dữ liệu/mô hình;
+thử lại apply cùng bản không kích hoạt hoặc tăng phiên bản lần nữa.

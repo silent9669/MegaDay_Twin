@@ -2,11 +2,12 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CityChat } from "./CityChat";
 import type { ChatArchive, Doc } from "../studio/workspace-types";
-import { openMilo, openMiloForSku, type MiloReplyPlan } from "./milo-contract";
+import { openMilo, openMiloForSku, type MiloReplyPlan, type MiloCampaignPlan } from "./milo-contract";
 
 let document: Doc<ChatArchive>;
 let failSave = false;
 let replyPlan: MiloReplyPlan | null = null;
+let replyCampaignPlan: MiloCampaignPlan | null = null;
 let waitForReply: (() => Promise<void>) | undefined;
 beforeEach(() => {
   vi.stubGlobal('matchMedia', vi.fn(query => ({matches:false, media:query, addEventListener:vi.fn(),removeEventListener:vi.fn()})));
@@ -17,6 +18,7 @@ beforeEach(() => {
   };
   failSave = false;
   replyPlan = null;
+  replyCampaignPlan = null;
   waitForReply = undefined;
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
@@ -59,9 +61,10 @@ beforeEach(() => {
           content: "Review the **source timestamps**.",
         });
         document.revision++;
-        return Response.json({ reply: "Review the **source timestamps**.", plan: replyPlan });
+        return Response.json({ reply: "Review the **source timestamps**.", plan: replyPlan, campaignPlan: replyCampaignPlan });
       }
-      if (path === "/api/sale-planner/context") return Response.json({ backendConfigured: true, canCreateGoals: true, referenceTime: '2026-11-11T00:00:00Z', dataAsOf: '2026-11-11T00:00:00Z', notice: null, campaigns: [{ id: 'C1', name: 'Sale test' }] });
+      if (path === "/api/sale-planner/context") return Response.json({ backendConfigured: true, canCreateGoals: true, canPreview: true, canApply: true, referenceTime: '2026-11-11T00:00:00Z', dataAsOf: '2026-11-11T00:00:00Z', notice: null, campaigns: [{ id: 'C1', name: 'Sale test' }] });
+      if (String(path).includes('/api/sale-planner/active?')) return Response.json({ campaignId: 'C1', activeGoal: null, baseGoal: null });
       throw Error(`Unexpected path ${path}`);
     }),
   );
@@ -80,6 +83,23 @@ async function open() {
   );
 }
 describe("account chat", () => {
+  it("reviews a campaign-only Milo draft without inventing a SKU and invalidates it on edits", async () => {
+    replyCampaignPlan = { campaignId: "C1", name: "Sale test", interpretation: { method: "ai", notices: [], draft: {
+      text: "Tối ưu lợi nhuận, ngân sách 2 triệu", kind: "profit", targetUnits: null, maxSpendVnd: 2000000,
+      maxLossVnd: 0, start: "2026-11-11T01:00:00Z", deadline: "2026-11-11T05:00:00Z", sellTargetProbability: null, minMarginalReturn: null, unresolved: [],
+    } } };
+    render(<CityChat />); await open();
+    act(() => openMilo({ screen: "sale-planner", campaignId: "C1" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message Milo" }), { target: { value: replyCampaignPlan.interpretation.draft.text } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Kiểm tra mục tiêu" }));
+    await waitFor(() => expect(screen.getByLabelText("Chiến dịch")).toHaveValue("C1"));
+    expect(document.data.sessions[0]!.context).toEqual({ screen: "sale-planner", campaignId: "C1" });
+    expect(screen.getByRole("button", { name: "Mô phỏng thử" })).toBeDisabled();
+    expect(screen.queryByText(/Mục tiêu gắn với SKU/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Message Milo" }), { target: { value: "Đổi ngân sách" } });
+    expect(screen.queryByRole("button", { name: "Mô phỏng thử" })).not.toBeInTheDocument();
+  });
   it("keeps SKU identifiers with the saved conversation and reviews before any simulation", async () => {
     replyPlan = { context: { sku: { sku: 'SKU-A', name: 'Product A', variant: '', stockAvailable: 200, soldTodayUnits: 20, priceEffectiveVnd: 50000, contributionPerUnitVnd: 10000, demandGroup: 'normal' }, campaigns: [{ id: 'C1', name: 'Sale test', skus: ['SKU-A'] }], dataAsOf: '2026-11-11T00:00:00Z', source: null, canPlan: true, notices: [], opening: 'Your goal?' }, interpretation: { method: 'ai', notices: [], draft: { text: 'Sell 100 units', kind: 'sell_target', targetUnits: 100, maxSpendVnd: 2000000, maxLossVnd: null, start: '2026-11-11T01:00:00Z', deadline: '2026-11-11T05:00:00Z', sellTargetProbability: null, minMarginalReturn: null, unresolved: [] } } };
     render(<CityChat />); await open();
@@ -92,10 +112,10 @@ describe("account chat", () => {
     expect(JSON.parse(String(call[1]?.body)).context).toEqual({ screen: 'hq', sku: 'SKU-A' });
     await waitFor(() => expect(screen.getByLabelText('Chiến dịch')).toHaveValue('C1'));
     expect(screen.getByLabelText('Số sản phẩm mục tiêu')).toHaveValue(100);
-    expect(screen.getByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Mô phỏng thử' })).toBeDisabled();
     expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/run'))).toBe(false);
     fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Actually 150' } });
-    expect(screen.queryByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mô phỏng thử' })).not.toBeInTheDocument();
     let finish!: () => void;
     waitForReply = () => new Promise((resolve) => { finish = resolve; });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));

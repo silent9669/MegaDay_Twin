@@ -6,7 +6,7 @@ import type { Dist, ScenarioRun } from "../api/types";
 import { viText } from "../lib/i18n";
 import { sameAction, violationLabel } from "../pages/compare/compareLogic";
 import { goalInterpretResponseSchema, type GoalDraft, type GoalKind, type GoalInterpretResponse } from "./goal-contract";
-import type { PlannerContext, PlannerRunError, PlannerRunRequest, PlannerRunResponse } from "./planner-api";
+import type { PlannerContext, PlannerRunError, PlannerRunRequest, PlannerRunResponse, PlannerActiveContext, PlannerApplyResponse, PlannerGoal } from "./planner-api";
 import { ActionCalculation, CalculationEvidence } from "./CalculationEvidence";
 import "./planner.css";
 
@@ -36,7 +36,7 @@ function blankDraft(text: string): GoalDraft {
     minMarginalReturn: null, unresolved: [] };
 }
 class PlannerError extends Error {
-  constructor(message: string, readonly payload?: Partial<PlannerRunError>) { super(message); }
+  constructor(message: string, readonly payload?: Partial<PlannerRunError>, readonly status?: number) { super(message); }
 }
 async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   // Intentionally bypasses the fixture-aware API client: results must be from the backend.
@@ -45,7 +45,7 @@ async function request<T>(path: string, body?: unknown, signal?: AbortSignal): P
     ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new PlannerError(payload?.error?.message || `Không thể hoàn thành yêu cầu (${response.status}).`, payload ?? undefined);
+  if (!response.ok) throw new PlannerError(payload?.error?.message || `Không thể hoàn thành yêu cầu (${response.status}).`, payload ?? undefined, response.status);
   if (!payload) throw new PlannerError("Máy chủ trả về dữ liệu không hợp lệ.");
   return payload as T;
 }
@@ -76,9 +76,10 @@ type PlannerProps = {
   campaignIds?: string[];
   embedded?: boolean;
   allowRun?: boolean;
+  hideHeading?: boolean;
 };
 // The assistant remounts this review on a new interpretation or SKU, clearing approval/results.
-export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true }: PlannerProps = {}) {
+export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true, hideHeading = false }: PlannerProps = {}) {
   const [context, setContext] = useState<PlannerContext | null>(null);
   const [contextError, setContextError] = useState("");
   const [reload, setReload] = useState(0);
@@ -90,11 +91,16 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
   const [campaignId, setCampaignId] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
-  const [busy, setBusy] = useState<"interpret" | "run" | null>(null);
+  const [busy, setBusy] = useState<"interpret" | "run" | "apply" | null>(null);
   const [error, setError] = useState("");
   const [errorDetails, setErrorDetails] = useState<Record<string, unknown> | null>(null);
-  const [goalId, setGoalId] = useState<string | null>(null);
   const [result, setResult] = useState<PlannerRunResponse | null>(null);
+  const [active, setActive] = useState<PlannerActiveContext | null>(null);
+  const [activeError, setActiveError] = useState("");
+  const [activeLoading, setActiveLoading] = useState(false);
+  const [activeReload, setActiveReload] = useState(0);
+  const [applyConfirmed, setApplyConfirmed] = useState(false);
+  const [applied, setApplied] = useState<PlannerApplyResponse | null>(null);
   const review = useRef<HTMLElement>(null), results = useRef<HTMLElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const campaignScope = campaignIds?.join("\u0000");
@@ -106,15 +112,31 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
         const ids = campaignScope?.split("\u0000");
         const scoped = ids ? { ...value, campaigns: value.campaigns.filter((campaign) => ids.includes(campaign.id)) } : value;
         setContext(scoped); setContextError("");
-        if (focusSku && scoped.campaigns.length === 1) setCampaignId(scoped.campaigns[0]!.id);
+        if (campaignScope && scoped.campaigns.length === 1) {
+          setActive(null); setActiveError(""); setActiveLoading(true); setActiveReload((n) => n + 1);
+          setCampaignId(scoped.campaigns[0]!.id);
+        }
       }
     }).catch((e: unknown) => {
       if (!controller.signal.aborted) { setContext(null); setContextError(e instanceof Error ? e.message : "Không tải được chiến dịch."); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [reload, campaignScope, focusSku]);
+  useEffect(() => {
+    const controller = new AbortController();
+    if (campaignId) void request<PlannerActiveContext>(`active?campaignId=${encodeURIComponent(campaignId)}`, undefined, controller.signal)
+      .then((value) => {
+        if (value.campaignId !== campaignId) throw Error("Mục tiêu trả về không khớp chiến dịch đang chọn.");
+        if (!controller.signal.aborted) setActive(value);
+      }).catch((e: unknown) => { if (!controller.signal.aborted) setActiveError(e instanceof Error ? e.message : "Chưa tải được mục tiêu đang áp dụng."); })
+      .finally(() => { if (!controller.signal.aborted) setActiveLoading(false); });
+    return () => controller.abort();
+  }, [campaignId, activeReload]);
+  function reloadActive() {
+    setActive(null); setActiveError(""); setActiveLoading(!!campaignId); setActiveReload((n) => n + 1);
+  }
   function invalidate() {
-    setConfirmed(false); setGoalId(null); setResult(null); setError(""); setErrorDetails(null);
+    setConfirmed(false); setResult(null); setApplyConfirmed(false); setApplied(null); setError(""); setErrorDetails(null);
   }
   function changeText(value: string) {
     invalidate(); setAcknowledged(false); setText(value); setDraft(null); setNotices([]);
@@ -136,46 +158,79 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
   const issues = draft ? draftIssues(draft) : [];
   const selected = context?.campaigns.find((c) => c.id === campaignId);
   const canConfirm = !!draft && !issues.length && (!draft.unresolved.length || acknowledged);
-  const canRun = allowRun && canConfirm && confirmed && !!selected && !!context?.backendConfigured && context.canCreateGoals && !busy && !loading;
+  const canRun = allowRun && canConfirm && confirmed && !!selected && !!context?.backendConfigured && context.canPreview === true && !!active && !activeLoading && !busy && !loading;
   async function run() {
     if (!canRun || !draft) return;
     setBusy("run"); setError(""); setErrorDetails(null);
     const controller = new AbortController(); activeRequest.current = controller;
     try {
-      const body: PlannerRunRequest = { campaignId, draft, confirmed: true, acknowledgedUnresolved: acknowledged, ...(goalId ? { goalId } : {}), ...(focusSku ? { focusSku } : {}) };
+      const body: PlannerRunRequest = { campaignId, draft, confirmed: true, acknowledgedUnresolved: acknowledged, expectedGoal: active!.baseGoal, ...(focusSku ? { focusSku } : {}) };
       const response = await request<PlannerRunResponse>("run", body, controller.signal);
       if (controller.signal.aborted) return;
-      setGoalId(response.goalId); setResult(response);
+      setResult(response); setApplyConfirmed(false); setApplied(null);
       requestAnimationFrame(() => results.current?.focus());
     } catch (e) {
       if (controller.signal.aborted) return;
       if (e instanceof PlannerError) {
-        if (e.payload?.goalId) setGoalId(e.payload.goalId);
         setErrorDetails(e.payload?.error?.details ?? null);
+        if (e.status === 409) {
+          setResult(null); setConfirmed(false); reloadActive();
+        }
       }
       setError(e instanceof Error ? e.message : "Mô phỏng chưa hoàn thành.");
+    } finally { if (!controller.signal.aborted) setBusy(null); }
+  }
+  async function apply() {
+    if (!result?.canApply || !applyConfirmed || applied || busy || context?.canApply !== true) return;
+    setBusy("apply"); setError(""); setErrorDetails(null);
+    const controller = new AbortController(); activeRequest.current = controller;
+    try {
+      const response = await request<PlannerApplyResponse>("apply", { previewId: result.previewId, confirmed: true,
+        expectedGoal: result.baseGoal ? { goal_id: result.baseGoal.goal_id, version: result.baseGoal.version } : null }, controller.signal);
+      if (controller.signal.aborted) return;
+      setApplied(response); setApplyConfirmed(false); reloadActive();
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      setError(e instanceof Error ? e.message : "Chưa áp dụng được mục tiêu.");
+      if (e instanceof PlannerError) {
+        setErrorDetails(e.payload?.error?.details ?? null);
+        if (e.status === 409) {
+          setResult(null); setConfirmed(false); setApplyConfirmed(false); reloadActive();
+        }
+      }
     } finally { if (!controller.signal.aborted) setBusy(null); }
   }
   return (
     <div className={`sale-planner ${embedded ? "planner-embedded" : ""}`}>
       {!embedded && <>
+      {!hideHeading &&
       <header className="planner-heading">
-        <div><span className="planner-eyebrow">MEGADAY HQ / LẬP PHƯƠNG ÁN</span><h1><Target aria-hidden size={26} /> Mục tiêu buổi sale</h1>
+        <div><span className="planner-eyebrow">MEGADAY HQ / LẬP PHƯƠNG ÁN</span><h1><Target aria-hidden size={26} /> Lập kế hoạch sale</h1>
           <p>Nói điều bạn muốn đạt. Kiểm tra mục tiêu, rồi so sánh phương án dựa trên dữ liệu của chiến dịch.</p></div>
         <Link to="/mock-data">Kiểm tra dữ liệu <ArrowRight aria-hidden size={16} /></Link>
-      </header>
+      </header>}
       <ol className="planner-steps" aria-label="Các bước lập phương án">
         <li aria-current={!draft ? "step" : undefined}><span>1</span> Nhập mục tiêu</li>
         <li aria-current={draft && !result ? "step" : undefined}><span>2</span> Kiểm tra & xác nhận</li>
-        <li aria-current={result ? "step" : undefined}><span>3</span> So sánh phương án</li>
+        <li aria-current={result && !applied ? "step" : undefined}><span>3</span> Mô phỏng thử</li>
+        <li aria-current={applied ? "step" : undefined}><span>4</span> Áp dụng mục tiêu</li>
       </ol>
       </>}
       <section className="planner-context" aria-label="Kết nối dữ liệu">
         <div role="status"><strong>{loading ? "Đang kiểm tra dữ liệu…" : context?.backendConfigured ? "Chiến dịch từ backend" : "Chưa kết nối backend tính toán"}</strong>
           <p>{contextError || context?.notice || (context?.backendConfigured ? `Dữ liệu đến: ${dateText(context.dataAsOf)} (giờ Việt Nam).` : "Bạn vẫn có thể soạn và kiểm tra mục tiêu. Cần kết nối backend để chạy mô phỏng.")}</p>
-          {context?.backendConfigured && !context.canCreateGoals && <p>Tài khoản hiện tại chưa có quyền tạo mục tiêu và chạy mô phỏng.</p>}
+          {context?.backendConfigured && !context.canPreview && <p>Chưa có quyền hoặc khả năng mô phỏng thử an toàn. Cần cập nhật kết nối backend.</p>}
           {context?.backendConfigured && !context.campaigns.length && <p>Chưa có chiến dịch. Import và gửi dữ liệu từ Data Studio sang backend trước.</p>}</div>
-        <button type="button" disabled={loading || !!busy} onClick={() => { invalidate(); setLoading(true); setReload((n) => n + 1); }}><RefreshCw aria-hidden size={16} /> Kiểm tra lại</button>
+        <button type="button" disabled={loading || !!busy} onClick={() => { invalidate(); setLoading(true); setReload((n) => n + 1); reloadActive(); }}><RefreshCw aria-hidden size={16} /> Kiểm tra lại</button>
+      </section>
+      <section className="planner-card planner-campaign-selection">
+              <label htmlFor="sale-campaign">Chiến dịch</label><select disabled={loading || !!busy} id="sale-campaign" value={campaignId} onChange={(e) => { invalidate(); setActive(null); setActiveError(""); setActiveLoading(!!e.target.value); setCampaignId(e.target.value); }}><option value="">Chọn chiến dịch từ backend</option>{context?.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              {campaignId && <section className="planner-active-goal" aria-label="Mục tiêu đang áp dụng">
+                <h3>Mục tiêu đang áp dụng</h3>
+                {activeLoading ? <p role="status">Đang đối chiếu mục tiêu của chiến dịch…</p> : activeError ? <><p role="alert">{activeError}</p><button type="button" onClick={reloadActive}>Tải lại mục tiêu hiện tại</button></> : active ? <GoalSummary goal={active.activeGoal} /> : <p>Chưa xác minh được mục tiêu hiện tại.</p>}
+                <p className="planner-help">Mô phỏng thử giữ nguyên mục tiêu này. {focusSku ? "Mục tiêu SKU phải tuân theo các giới hạn của chiến dịch; ràng buộc chặt hơn sẽ được giữ lại." : "Bạn sẽ xem phần thay đổi trước khi quyết định áp dụng."}</p>
+                {!embedded && !focusSku && <button type="button" onClick={() => openMilo({ screen: "sale-planner", campaignId })}>Trao đổi kế hoạch chiến dịch với Milo</button>}
+              </section>}
       </section>
       <div className={`planner-layout ${embedded ? "planner-review-only" : ""}`}>
         {!embedded &&
@@ -199,7 +254,6 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
             {!!notices.length && <ul className="planner-notices">{notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
             <fieldset disabled={!!busy}>
               {focusSku && <div className="planner-warning"><strong>Mục tiêu gắn với SKU {focusSku}</strong><p>Số lượng bán/xả hàng được tính riêng cho SKU này. Lợi nhuận J, ngân sách, mức lỗ và hiệu quả chi được tính cho toàn bộ chiến dịch đã chọn; thay đổi quảng cáo có thể ảnh hưởng các SKU khác.</p><p>Xác nhận bên dưới đồng nghĩa bạn đã kiểm tra phạm vi này. Đây chưa phải phép tính lợi nhuận riêng cho SKU.</p></div>}
-              <label htmlFor="sale-campaign">Chiến dịch</label><select id="sale-campaign" value={campaignId} onChange={(e) => { invalidate(); setCampaignId(e.target.value); }}><option value="">Chọn chiến dịch từ backend</option>{context?.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <label htmlFor="sale-kind">Mục tiêu chính</label><select id="sale-kind" value={draft.kind ?? ""} onChange={(e) => edit({ kind: (e.target.value || null) as GoalKind | null })}><option value="">Chọn mục tiêu</option>{Object.entries(kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
               <div className="planner-fields">
                 <label>Bắt đầu (giờ Việt Nam)<input type="datetime-local" step={3600} value={localDate(draft.start)} onChange={(e) => edit({ start: isoDate(e.target.value) })} /></label>
@@ -213,18 +267,52 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
               <label>Hiệu quả biên tối thiểu<input type="number" min={0} step="any" value={draft.minMarginalReturn ?? ""} placeholder="Theo cấu hình hệ thống" onChange={(e) => edit({ minMarginalReturn: e.target.value ? Number(e.target.value) : null })} /><span className="planner-help">Chỉ áp dụng cho Tối ưu hiệu quả chi; để trống dùng cấu hình backend. Mục tiêu khác cần để trống trường này.</span></label>
               {draft.unresolved.length > 0 && <div className="planner-warning"><strong>Các yêu cầu cần làm rõ hoặc chưa được mô hình hỗ trợ</strong><ul>{draft.unresolved.map((item, i) => <li key={i}>{item}</li>)}</ul><p>Chỉnh mô tả rồi phân tích lại, hoặc xác nhận chỉ dùng những thông số đã kiểm tra ở trên.</p><label className="planner-check"><input type="checkbox" checked={acknowledged} onChange={(e) => { invalidate(); setAcknowledged(e.target.checked); }} /><span>Tôi đã kiểm tra và đồng ý loại các yêu cầu chưa được thể hiện trong thông số khỏi lần mô phỏng này.</span></label></div>}
               {!!issues.length && <ul className="planner-validation" aria-label="Thông tin cần bổ sung">{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
-              <div className="planner-confirm"><label className="planner-check"><input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(e) => setConfirmed(e.target.checked)} /><span>Tôi xác nhận các thông số trên. Khi chạy, hệ thống sẽ lưu mục tiêu mới đang áp dụng cho chiến dịch và tạo mô phỏng.</span></label><p>Mỗi lần chỉnh sửa cần xác nhận lại. Lệnh này chưa thực thi thay đổi quảng cáo.</p></div>
-              {goalId && !result && <p className="planner-saved" role="status"><Check aria-hidden size={16} /> Đã lưu mục tiêu {goalId}. Thử lại sẽ tiếp tục mô phỏng với mục tiêu này.</p>}
-              <button className="planner-primary planner-run" type="button" disabled={!canRun} onClick={() => void run()}>{busy === "run" ? "Đang chạy mô phỏng…" : goalId && !result ? "Thử lại mô phỏng" : "Lưu mục tiêu và chạy mô phỏng"}<ArrowRight aria-hidden size={16} /></button>
+              <div className="planner-confirm"><label className="planner-check"><input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(e) => setConfirmed(e.target.checked)} /><span>Tôi xác nhận các thông số để mô phỏng thử. Mục tiêu đang áp dụng và đề xuất đang hoạt động được giữ nguyên.</span></label><p>Mỗi lần chỉnh sửa cần xác nhận lại. Mô phỏng chưa áp dụng mục tiêu hoặc thực thi quảng cáo.</p></div>
+              <button className="planner-primary planner-run" type="button" disabled={!canRun} onClick={() => void run()}>{busy === "run" ? "Đang mô phỏng thử…" : "Mô phỏng thử"}<ArrowRight aria-hidden size={16} /></button>
               {!selected && <p className="planner-help">Cần chọn một chiến dịch đã có trên backend để chạy.</p>}
             </fieldset>
           </>}
         </section>
       </div>
-      {error && <div className="planner-error" role="alert"><strong>{error}</strong>{errorDetails && <details><summary>Chi tiết dữ liệu cần kiểm tra</summary><pre>{JSON.stringify(errorDetails, null, 2)}</pre></details>}{goalId && <p>Mục tiêu đã được lưu; bạn có thể thử lại mô phỏng.</p>}</div>}
-      {result && <section ref={results} tabIndex={-1} className="planner-card planner-results" aria-labelledby="planner-results-title"><PlannerResults result={result} campaignName={selected?.name ?? campaignId} /></section>}
+      {error && <div className="planner-error" role="alert"><strong>{error}</strong>{errorDetails && <details><summary>Chi tiết dữ liệu cần kiểm tra</summary><pre>{JSON.stringify(errorDetails, null, 2)}</pre></details>}</div>}
+      {result && <section ref={results} tabIndex={-1} className="planner-card planner-results" aria-labelledby="planner-results-title">
+        <PlannerResults result={result} campaignName={selected?.name ?? campaignId} />
+        <section className="planner-apply" aria-labelledby="planner-apply-title"><span className="planner-eyebrow">BƯỚC 4 / CHỈ ÁP DỤNG KHI BẠN XÁC NHẬN</span><h2 id="planner-apply-title">Đối chiếu trước khi áp dụng</h2>
+          <div className="planner-goal-comparison"><div><h3>Đang áp dụng khi mô phỏng</h3><GoalSummary goal={result.baseGoal} /></div><div><h3>Mục tiêu dùng trong mô phỏng thử</h3><GoalSummary goal={result.effectiveGoal} /></div></div>
+          {result.changes.length > 0 ? <div className="planner-change-table"><table role="table"><caption>Các thay đổi được đề xuất</caption><thead role="rowgroup"><tr role="row"><th scope="col">Thông số</th><th scope="col">Trước</th><th scope="col">Sau</th></tr></thead><tbody role="rowgroup">{result.changes.map((change, i) => <tr role="row" key={`${change.field}-${i}`}><th scope="row" role="rowheader">{changeLabel(change.field)}</th>{([['Trước', change.before], ['Sau', change.after]] as const).map(([label, value]) => <td role="cell" key={label}><span className="planner-change-mobile-label" aria-hidden="true">{label}</span><span className={typeof value === 'number' ? 'planner-change-number' : undefined}>{changeValue(change.field, value)}</span></td>)}</tr>)}</tbody></table></div> : <p>Không có thay đổi thông số được báo cáo so với mục tiêu nền.</p>}
+          {!!result.notices.length && <ul className="planner-notices">{result.notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
+          {applied ? <p className="planner-saved" role="status"><Check aria-hidden size={16} /> Đã áp dụng mục tiêu {applied.goal.goal_id}. Đây chưa phải lệnh thực thi quảng cáo.</p> : <>
+            {!result.canApply && <p className="planner-warning">Chưa thể áp dụng bản mô phỏng này. Hãy xem điều kiện chưa đạt và chỉnh mục tiêu để mô phỏng lại.</p>}
+            {context?.canApply !== true && <p className="planner-warning">Tài khoản hiện tại chưa có quyền áp dụng mục tiêu.</p>}
+            <label className="planner-check"><input type="checkbox" checked={applyConfirmed} disabled={!result.canApply || context?.canApply !== true || !!busy} onChange={(e) => setApplyConfirmed(e.target.checked)} /><span>Tôi đã đối chiếu và muốn áp dụng mục tiêu này thay cho mục tiêu hiện tại của chiến dịch.</span></label>
+            <button type="button" className="planner-primary" disabled={!result.canApply || !applyConfirmed || context?.canApply !== true || !!busy} onClick={() => void apply()}>{busy === "apply" ? "Đang áp dụng mục tiêu…" : "Áp dụng mục tiêu"}</button>
+            <p className="planner-help">Nếu mục tiêu đã được người khác sửa, hệ thống sẽ yêu cầu bạn đối chiếu và mô phỏng lại. Các kết quả thử không cộng dồn thành ngân sách chung.</p>
+          </>}
+        </section>
+      </section>}
     </div>
   );
+}
+
+function changeLabel(field: string): string {
+  const key = field.replace(/^params\./, "");
+  return ({ kind: "Ưu tiên", target_units: "Số lượng mục tiêu", deadline: "Hạn kết thúc", max_spend_vnd: "Ngân sách tối đa", max_loss_vnd: "Lỗ kỳ vọng tối đa", sell_target_prob: "Xác suất đạt tối thiểu", min_marginal_return: "Hiệu quả chi tối thiểu", focus_sku: "Sản phẩm tập trung", planner_start: "Bắt đầu", parent_goal_id: "Mục tiêu chiến dịch nền" } as Record<string, string>)[key] ?? key.replaceAll("_", " ");
+}
+function changeValue(field: string, value: unknown): string {
+  if (value == null) return "Chưa đặt";
+  if (field.endsWith("kind") && typeof value === "string") return kinds[value as GoalKind] ?? value;
+  if (typeof value === "number") return field.endsWith("_vnd") ? money(value) : field.endsWith("_prob") ? `${number(value * 100)}%` : number(value);
+  if (typeof value === "string") return field === "deadline" || field.endsWith("planner_start") ? dateText(value) : value;
+  return JSON.stringify(value);
+}
+function GoalSummary({ goal }: { goal: PlannerGoal | null }) {
+  if (!goal) return <p>Chưa có mục tiêu đang áp dụng.</p>;
+  return <dl className="planner-goal-summary"><dt>Ưu tiên</dt><dd>{goal.label ?? kinds[goal.kind as GoalKind] ?? goal.kind}</dd>
+    {goal.target_units !== null && <><dt>Số lượng mục tiêu</dt><dd>{number(goal.target_units)} sản phẩm</dd></>}
+    <dt>Hạn kết thúc</dt><dd>{dateText(goal.deadline)}</dd>
+    {(["focus_sku", "max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"] as const).map((key) => goal.params[key] != null ? <div className="planner-goal-line" key={key}><dt>{changeLabel(key)}</dt><dd>{changeValue(key, goal.params[key])}</dd></div> : null)}
+    <dt>Phiên bản</dt><dd>{goal.version}</dd>
+  </dl>;
 }
 
 function Metric({ title, dist, currency = false, field }: { title: string; dist: Dist; currency?: boolean; field: string }) {

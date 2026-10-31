@@ -14,7 +14,7 @@ const skuData = z.object({
     tool: z.string().nullable().optional(), href: z.string().nullable().optional() }).nullable().optional(),
 });
 const campaignData = z.array(z.object({ campaign_id: z.string(), name: z.string(), skus: z.array(z.string()) }));
-const requiredCapabilities = ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return", "focus_sku", "calculation_trace"];
+const requiredCapabilities = ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return", "focus_sku", "calculation_trace", "preview_apply"];
 const noStore = { "Cache-Control": "no-store" };
 function failed(error: unknown): Response {
   if (error instanceof BackendFailure) return Response.json({ error: { code: error.code, message: error.message } }, { status: error.status, headers: noStore });
@@ -72,14 +72,16 @@ export async function loadContext(sku: string, env: PlannerEnv, signal?: AbortSi
     const caps = capability.data as { version?: unknown; constraints?: string[] } | undefined;
     const user = me.data as { can_edit_goals?: boolean; can_run_scenarios?: boolean } | undefined;
     const supported = caps?.version === 1 && requiredCapabilities.every((key) => caps.constraints?.includes(key));
-    canPlan = !!supported && user?.can_edit_goals === true && user.can_run_scenarios === true && campaigns.length > 0 && complete;
-    if (!supported) notices.push("Backend cần cập nhật mục tiêu theo SKU và dấu vết tính toán trước khi mô phỏng.");
-    if (!user?.can_edit_goals || !user.can_run_scenarios) notices.push("Tài khoản backend cần quyền lead để lưu mục tiêu và chạy mô phỏng.");
+    canPlan = !!supported && user?.can_run_scenarios === true && campaigns.length > 0 && complete;
+    if (!supported) notices.push("Backend cần hỗ trợ mô phỏng thử tách biệt với áp dụng mục tiêu, cùng dấu vết tính toán, trước khi lập kế hoạch.");
+    if (!user?.can_run_scenarios) notices.push("Tài khoản backend chưa có quyền mô phỏng thử.");
+    else if (!user.can_edit_goals) notices.push("Bạn có thể mô phỏng thử; áp dụng mục tiêu cần tài khoản có quyền lead.");
   } catch { notices.push("Chưa xác nhận được khả năng mô phỏng và quyền của backend. Bạn có thể trao đổi mục tiêu nhưng chưa chạy được."); }
   if (!campaigns.length) notices.push("SKU chưa thuộc chiến dịch nào. Cần liên kết dữ liệu chiến dịch trước khi chạy phương án quảng cáo.");
   if (campaigns.length > 1) notices.push("SKU thuộc nhiều chiến dịch. Bạn cần chọn một chiến dịch cụ thể; hệ thống không tự chọn hoặc tối ưu chung các chiến dịch.");
   if (campaigns.some((campaign) => campaign.skus.length > 1)) notices.push("Có chiến dịch chứa nhiều SKU. Thay đổi quảng cáo tác động toàn chiến dịch; ngân sách, mức lỗ và chỉ số J không phải số riêng của sản phẩm này.");
   notices.push("Mục tiêu số lượng/xả hàng dùng số bán của SKU đã chọn. Lợi nhuận, hiệu quả chi, ngân sách và giới hạn lỗ vẫn ở phạm vi toàn chiến dịch.");
+  notices.push("Mô phỏng thử giữ nguyên mục tiêu đang áp dụng. Ràng buộc chung được kiểm tra trong bản xem trước; chỉ bước áp dụng riêng mới thay đổi kế hoạch.");
   return {
     sku: { sku: row.sku, name: row.name, variant: row.variant, stockAvailable: row.stock_available ?? null,
       soldTodayUnits: row.sold_today_units ?? null, priceEffectiveVnd: row.price_effective_vnd ?? null,

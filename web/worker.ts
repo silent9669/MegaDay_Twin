@@ -12,7 +12,7 @@ import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
 import { savedChat } from "./server/chat-store";
 import type { StudioModelEnv } from "./server/model-json";
-import { plannerContext, runSalePlan } from "./server/sale-planner";
+import { plannerContext, runSalePlan, activeSalePlan, applySalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
 import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
@@ -108,6 +108,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/sale-planner/context" && request.method === "GET")
       return plannerContext(env);
+    if (path === "/api/sale-planner/active" && request.method === "GET")
+      return activeSalePlan(request, env);
+    if (path === "/api/sale-planner/apply" && request.method === "POST")
+      return applySalePlan(request, env);
     if (path === "/api/sale-planner/interpret" && request.method === "POST") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
         return fail(429, "Vui lòng thử lại sau ít phút.");

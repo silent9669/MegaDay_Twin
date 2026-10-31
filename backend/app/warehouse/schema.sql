@@ -384,6 +384,17 @@ CREATE TABLE IF NOT EXISTS scenario_calculation_traces (
   results     JSON NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS sale_plan_previews (
+  preview_id VARCHAR PRIMARY KEY,
+  campaign_id VARCHAR NOT NULL,
+  goal_id VARCHAR NOT NULL,
+  scenario_id VARCHAR NOT NULL,
+  snapshot JSON NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  applied_goal_id VARCHAR,
+  applied_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS recommendations (
   recommendation_id VARCHAR PRIMARY KEY,
   scenario_id   VARCHAR NOT NULL REFERENCES scenarios(scenario_id),
