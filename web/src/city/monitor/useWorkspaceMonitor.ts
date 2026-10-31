@@ -49,6 +49,11 @@ export function useWorkspaceMonitor(
     unread: notices.filter((n) => !read.has(n.id)).length,
     dismissToast: () => setToast(null),
     markRead,
+    readAll: () => {
+      setRead(new Set());
+      setNotices([]);
+      setToast(null);
+    },
     dismiss: (id: string) => {
       setNotices((old) => old.filter((n) => n.id !== id));
       setToast((old) => (old?.id === id ? null : old));
