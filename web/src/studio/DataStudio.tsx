@@ -50,6 +50,14 @@ function download(name: string, text: string) {
 }
 export function DataStudio() {
   const cloud = useAccountDocument<SourcePack>("sources");
+  const [canRestock, setCanRestock] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void requestJSON<{ authenticated: boolean; account: string | null }>("/api/auth/session")
+      .then(session => { if (active) setCanRestock(session.authenticated && /^admin[1-4]?$/.test(session.account ?? "")); })
+      .catch(() => { if (active) setCanRestock(false); });
+    return () => { active = false; };
+  }, []);
   const saveCloud = cloud.save;
   const [draft, setDraft] = useState<SourcePack | null>(null),
     [base, setBase] = useState(0),
@@ -344,9 +352,9 @@ export function DataStudio() {
               "Loading sources…"
             )}
           </span>
-          <button onClick={() => void restock()} disabled={busy || dirty || saving || conflict || !cloud.document || !files.some(file => file.kind === "inventory")}>
+          {canRestock && <button onClick={() => void restock()} disabled={busy || dirty || saving || conflict || !cloud.document || !files.some(file => file.kind === "inventory")}>
             <PackagePlus size={16} /> {restockPending ? "Retry restock sync" : "Restock GD0003 +10"}
-          </button>
+          </button>}
           <button onClick={() => void importShop()} disabled={busy || dirty || saving || conflict || !cloud.document}>
             <FolderOpen size={16} />
             {importingShop ? "Importing shop…" : "Import shop folder"}

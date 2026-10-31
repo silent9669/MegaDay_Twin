@@ -101,6 +101,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     if (path === "/api/studio/shop" && request.method === "GET")
       return env.ASSETS.fetch(new Request(new URL("/shop-baseline.json", url)));
     if (path === "/api/studio/restock") {
+      if (!/^admin[1-4]?$/.test(account ?? "")) return fail(403, "Only admins can restock inventory.", "FORBIDDEN");
       if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
       return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
         new Request(new URL("/internal/studio/restock", url), request));
