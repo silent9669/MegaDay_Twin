@@ -26,12 +26,15 @@ costs, campaign structure and sale rules are their three parent reference files.
 Sources are fetched server-side from this GitHub repository at one resolved main
 commit. Paths are fixed, not user-controlled. A sanitized build-time pack from
 the same repository is the offline GitHub fallback. Initial load creates an empty
-account workspace only if it does not exist. Existing saved sources are preserved. Refreshing repository sources is
-explicit and uses the current revision, never overwrites a saved upload silently.
+account workspace only if it does not exist. Older accounts remove exact repository
+defaults once (including only-derived labels); uploads and edits are preserved.
+Data Studio offers confirmed deletion of one table or all tables with revision checks.
 
 CSV headers/JSON shape determine the source type. Uploads replace one matching
 business table; general tables are keyed by filename. ZIP analysis retains general
-CSV/JSON tables and uses the configured import model to map unambiguous headers.
+CSV/JSON tables and uses one configured model call to map unambiguous headers
+and review each schema with bounded samples. Sample review results are advisory;
+deterministic format checks still inspect all records.
 Duplicate business source types in one batch require selection. Shop-folder imports prefer
 the live observation files and parent references, excluding history, ground truth
 and replay metadata. Canonical six-file packs round-trip. Contact columns/keys
@@ -47,7 +50,8 @@ revisioned documents. Writes require a signed HttpOnly session and same-origin
 request, validate input server-side and use compare-and-swap revisions. A stale
 write returns 409. Sources are chunked below SQLite's row limit and committed in
 one transaction with the `studio_tables` catalog and `studio_rows` records.
-Maximum source transport is 20 MiB.
+Unchanged table rows are retained on saves. ZIP loading saves immediately; cell
+edits keep autosave. Maximum source transport is 20 MiB.
 
 Authenticated WebSockets broadcast revision notifications immediately. Other
 devices refetch the changed document. An open editor with local changes keeps its
@@ -88,7 +92,10 @@ and existing API fixtures honestly; no live ingestion or causal iROAS is claimed
 ## Verification
 
 Warehouse's **Label data** action uses the existing OpenAI secret and a separately
-configured Luna decision model. It classifies imported inventory into Trendy,
+configured Luna decision model. Warehouse and the decision model include only
+products with positive latest stock. Search and Label data remain visible;
+assessment/evidence live in collapsed Label settings. Identical completed or
+partial runs are reused; new evidence starts a new run. It classifies inventory into Trendy,
 Seasonal or Normal using market, date and supplied evidence. Insufficient evidence
 leaves the item unclassified and displays the missing evidence. Successful/partial
 runs atomically persist a read-only `Demand label` column into the inventory table

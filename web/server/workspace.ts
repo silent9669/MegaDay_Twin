@@ -12,12 +12,23 @@ import {
 } from "../src/studio/workspace-types";
 import Papa from "papaparse";
 import { validatePack, MAX_BYTES, inspect, sourceKey, hashText, normalize, DEMAND_COLUMN, withoutDemandLabels } from "../src/studio/sources";
-import type { SourcePack } from "../src/studio/sources";
+import type { Source, SourcePack } from "../src/studio/sources";
 import {
   labelRunSchema, sourceFingerprint, type LabelRun,
 } from "../src/studio/product-labels";
 import { LABEL_LEASE_MS } from "./product-label-provider";
 import { fail } from "./auth";
+import repositoryPack from "./repository-sources.json";
+function isUntouchedDemo(source: Source) {
+  if (!source.commit) return false;
+  const demo = repositoryPack.files.find(file => file.name === source.name);
+  if (!demo) return false;
+  if (source.hash === demo.hash) return true;
+  if (source.kind !== "inventory") return false;
+  const parsed = inspect(source.name, source.text);
+  return parsed.columns.includes(DEMAND_COLUMN) &&
+    Papa.unparse({ fields: parsed.columns.filter(column => column !== DEMAND_COLUMN), data: parsed.rows }) === demo.text;
+}
 declare const WebSocketPair: { new (): { 0: WorkerSocket; 1: WorkerSocket } };
 export class AccountWorkspace {
   private ctx: DurableObjectState;
@@ -31,6 +42,19 @@ export class AccountWorkspace {
     );
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_tables (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, columns_json TEXT NOT NULL, source_revision INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS studio_rows (table_id TEXT NOT NULL, position INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY(table_id, position))");
+    // One-time cleanup of exact, untouched repository defaults. Uploaded/edited tables survive.
+    if (!this.read("empty-studio-v1")) this.ctx.storage.transactionSync(() => {
+      const sources = this.read("sources");
+      if (sources) {
+        const pack = sources.data as SourcePack;
+        const files = pack.files.filter(source => !isUntouchedDemo(source));
+        if (files.length !== pack.files.length) {
+          this.writeDocument("sources", { ...pack, files }, sources.revision);
+          this.removeDocument("product-labels");
+        }
+      }
+      this.writeDocument("empty-studio-v1", { done: true }, 0);
+    });
   }
   private read(name: string) {
     const meta = this.ctx.storage.sql
@@ -60,6 +84,7 @@ export class AccountWorkspace {
       )
       .toArray()[0];
     if ((old?.revision ?? 0) !== expected) return null;
+    const previous = name === "sources" ? this.read(name)?.data as SourcePack | undefined : undefined;
     const revision = expected + 1,
       updatedAt = new Date().toISOString(),
       text = JSON.stringify(data);
@@ -77,18 +102,32 @@ export class AccountWorkspace {
       revision,
       updatedAt,
     );
-    if (name === "sources") this.materialize(data as SourcePack, revision);
+    if (name === "sources") {
+      this.materialize(data as SourcePack, revision, previous);
+      if (!(data as SourcePack).files.some(source => source.kind === "inventory")) this.removeDocument("product-labels");
+    }
     return { revision, updatedAt, data };
   }
   private write(name: string, data: unknown, expected: number) {
     return this.ctx.storage.transactionSync(() => this.writeDocument(name, data, expected));
   }
-  private materialize(pack: SourcePack, revision: number) {
-    this.ctx.storage.sql.exec("DELETE FROM studio_rows");
-    this.ctx.storage.sql.exec("DELETE FROM studio_tables");
+  private removeDocument(name: string) {
+    this.ctx.storage.sql.exec("DELETE FROM chunks WHERE name = ?", name);
+    this.ctx.storage.sql.exec("DELETE FROM documents WHERE name = ?", name);
+  }
+  private materialize(pack: SourcePack, revision: number, previous?: SourcePack) {
+    const catalog = this.ctx.storage.sql.exec<{ id: string }>("SELECT id FROM studio_tables").toArray();
+    const keys = new Set(pack.files.map(sourceKey));
+    for (const { id } of catalog) if (!keys.has(id)) {
+      this.ctx.storage.sql.exec("DELETE FROM studio_rows WHERE table_id = ?", id);
+      this.ctx.storage.sql.exec("DELETE FROM studio_tables WHERE id = ?", id);
+    }
     for (const source of pack.files) {
-      const parsed = inspect(source.name, source.text), id = sourceKey(source);
-      this.ctx.storage.sql.exec("INSERT INTO studio_tables VALUES (?, ?, ?, ?, ?)", id, source.name, source.kind, JSON.stringify(parsed.columns), revision);
+      const id = sourceKey(source);
+      if (catalog.some(table => table.id === id) && previous?.files.some(old => sourceKey(old) === id && old.hash === source.hash)) continue;
+      const parsed = inspect(source.name, source.text);
+      this.ctx.storage.sql.exec("DELETE FROM studio_rows WHERE table_id = ?", id);
+      this.ctx.storage.sql.exec("INSERT INTO studio_tables VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, columns_json=excluded.columns_json, source_revision=excluded.source_revision", id, source.name, source.kind, JSON.stringify(parsed.columns), revision);
       parsed.rows.forEach((row, index) => this.ctx.storage.sql.exec("INSERT INTO studio_rows VALUES (?, ?, ?)", id, index, JSON.stringify(row)));
     }
   }
@@ -124,7 +163,7 @@ export class AccountWorkspace {
       return fail(422, "Invalid labeling run.");
     }
     const fingerprint = await sourceFingerprint(sources.data as SourcePack);
-    // No awaits after this check: source comparison and run write share one DO turn.
+    // Validate before claiming; finish rechecks again after asynchronous hashing.
     if (this.read("sources")?.revision !== sources.revision ||
         candidate.sourceRevision !== sources.revision || candidate.sourceFingerprint !== fingerprint)
       return fail(409, "Sources changed. Save and label the latest sources.", "LABEL_SOURCES_CHANGED");
@@ -136,7 +175,7 @@ export class AccountWorkspace {
       if (previous?.sourceRevision === sources.revision && previous.sourceFingerprint === fingerprint) {
         if (previous.status === "running" && Date.parse(previous.startedAt) + LABEL_LEASE_MS > Date.now())
           return fail(409, "Labeling is already running. Refresh its status shortly.", "LABEL_RUN_ACTIVE");
-        if (previous.status === "completed" && previous.provider === candidate.provider && JSON.stringify(previous.context) === JSON.stringify(candidate.context))
+        if (["completed", "partial"].includes(previous.status) && previous.provider === candidate.provider && JSON.stringify(previous.context) === JSON.stringify(candidate.context))
           return Response.json({ acquired: false, run: previous });
       }
       // Start time comes from this object, not from the caller's clock.
