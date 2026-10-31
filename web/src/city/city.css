@@ -1519,14 +1519,14 @@
   --bg: #142426; --fg: #e0e9e2; --muted: #a7b9b0; --border: #354a46;
   color-scheme: dark; background: var(--city-paper); color: var(--city-ink);
 }
-[data-city-appearance="night"] :is(.city-scene-title h1, .city-sidebar a, .city-sidebar button,
+[data-city-appearance="night"] :is(.city-topbar, .city-scene-title h1, .city-sidebar a, .city-sidebar button,
   .city-stats strong, .chat-composer textarea, .chat-history-list > button, .chat-search input, .chat-welcome button,
   .chat-session-title, .chat-form select, .workspace-tabs button) {color:var(--city-ink);}
 [data-city-appearance="night"] :is(.city-scene-title > span, .city-stats span, .city-footer,
   .chat-role, .chat-form footer, .chat-history-list small, .chat-history-list time,
   .chat-identity span, .chat-thinking, .district-workspace-body > p) {color:var(--city-muted);}
 [data-city-appearance="night"] :is(.city-stats, .city-stats > a,
-  .city-loading, .city-chat > header, .chat-composer, .chat-form select,
+  .city-loading, .city-chat > header, .district-workspace > header, .chat-composer, .chat-form select,
   .platform-card, .city-district-actions button, .city-settings select) {
   background:var(--city-paper); border-color:var(--city-line);
 }
