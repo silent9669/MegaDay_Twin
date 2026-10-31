@@ -1,6 +1,6 @@
 import * as T from "three";
 import type { District } from "./world";
-export type Landmark = "river" | "bitexco" | "landmark81";
+export type Landmark = "river" | "bitexco" | "landmark81" | "benthanh";
 export type MapPlace = District | Landmark;
 const PLACES: {
   id: MapPlace;
@@ -11,6 +11,7 @@ const PLACES: {
   { id: "river", title: "Saigon River", position: [56.5, 6, 30] },
   { id: "landmark81", title: "Landmark 81", position: [77, 40, -9] },
   { id: "bitexco", title: "Bitexco", position: [40, 23, -19] },
+  { id: "benthanh", title: "Ben Thanh Market", position: [20, 11, 20] },
   { id: "warehouse", title: "Warehouse", position: [-20, 9, 18] },
   { id: "ads", title: "Ad platforms", position: [20, 12, -18] },
   { id: "homes", title: "Neighborhood", position: [-19, 12, 2] },
@@ -72,7 +73,7 @@ export function createMapLabels(
           y < height - 130 &&
           !(x < 360 && y < 150) &&
           (focused ||
-            (occupied.length < (width < 600 ? 3 : 7) &&
+            (occupied.length < (width < 600 ? 3 : PLACES.length) &&
               !occupied.some(
                 (p) => Math.abs(p.x - x) < 155 && Math.abs(p.y - y) < 52,
               )));

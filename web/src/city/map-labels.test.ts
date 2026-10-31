@@ -15,7 +15,9 @@ it("provides named map destinations and removes its controls on scene disposal",
     .querySelector<HTMLButtonElement>('[aria-label="Visit MegaDay Twin"]')!
     .click();
   expect(activate).toHaveBeenLastCalledWith("hq");
-  expect(host.querySelectorAll("button")).toHaveLength(7);
+  host.querySelector<HTMLButtonElement>('[aria-label="Visit Ben Thanh Market"]')!.click();
+  expect(activate).toHaveBeenLastCalledWith("benthanh");
+  expect(host.querySelectorAll("button")).toHaveLength(8);
   labels.dispose();
   expect(host.childElementCount).toBe(0);
 });
