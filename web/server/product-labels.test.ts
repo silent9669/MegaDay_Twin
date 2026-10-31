@@ -319,6 +319,8 @@ describe("label route boundaries", () => {
     expect(storage).toHaveBeenCalledTimes(account === "judges" ? 0 : 1);
   });
   it("requires auth and same-origin writes", async () => {
+    expect((await worker.fetch(new Request(origin + "/api/sale-planner/suggest", { method: "POST" }), base)).status).toBe(401);
+    expect((await worker.fetch(new Request(origin + "/api/sale-planner/suggest", { method: "POST", headers: { Cookie: cookie(), Origin: "https://other.test" } }), base)).status).toBe(403);
     expect((await worker.fetch(new Request(origin + "/api/studio/restock", { method: "POST" }), base)).status).toBe(401);
     expect((await worker.fetch(new Request(origin + "/api/studio/restock", { method: "POST", headers: { Cookie: cookie(), Origin: "https://other.test" } }), base)).status).toBe(403);
     expect((await worker.fetch(new Request(origin + "/api/workspace/sources", { method: "DELETE", body: JSON.stringify({ scope: "shop", revision: 1 }) }), base)).status).toBe(401);

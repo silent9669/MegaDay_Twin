@@ -470,12 +470,7 @@ export function CityApp({ studio = false, campaignHQ = false }: { studio?: boole
                   {tour !== null && <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />}
                   <div className="district-workspace-body">
                     {district === "hq" ? (
-                      <>
-                        <div className="workspace-tabs">
-                          <Link className="btn-secondary" to="/campaign-hq">CD002 · Analysis & recommendations <ArrowRight aria-hidden size={16} /></Link>
-                        </div>
-                        <HQWorkspace pack={visiblePack} revision={sources.document?.revision ?? 0} />
-                      </>
+                      <HQWorkspace pack={visiblePack} revision={sources.document?.revision ?? 0} />
                     ) : district === "warehouse" ? (
                       <>
                         <ProductLabels

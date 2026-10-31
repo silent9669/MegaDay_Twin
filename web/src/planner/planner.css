@@ -72,10 +72,6 @@
 .planner-warning { padding: 16px; }
 .planner-warning p { margin: 8px 0; }
 .sale-planner ul { padding-left: 22px; }
-.planner-confirm { border-top: 1px solid var(--city-line, #dce4dc); margin-top: 22px; padding-top: 4px; }
-.sale-planner .planner-check { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; cursor: pointer; }
-.planner-check input { margin-top: 4px; width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--city-green, #326752); }
-.planner-confirm p { font-size: 12px; color: var(--planner-muted); margin-left: 30px; }
 .planner-run { width: 100%; margin-top: 20px; }
 .planner-saved { display: flex; gap: 8px; align-items: start; margin-top: 16px !important; font-size: 13px; overflow-wrap: anywhere; }
 .planner-error { max-width: 1440px; margin: 24px auto; padding: 20px; color: var(--planner-error); border: 1px solid #d5a496; border-radius: 10px; background: #fff5f0; }

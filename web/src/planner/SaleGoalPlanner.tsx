@@ -5,7 +5,7 @@ import { ArrowRight, Check, RefreshCw, Target } from "lucide-react";
 import type { Dist, ScenarioRun } from "../api/types";
 import { viText } from "../lib/i18n";
 import { sameAction, violationLabel } from "../pages/compare/compareLogic";
-import { goalInterpretResponseSchema, type GoalDraft, type GoalKind, type GoalInterpretResponse } from "./goal-contract";
+import { goalInterpretResponseSchema, draftIssues, type GoalDraft, type GoalKind, type GoalInterpretResponse } from "./goal-contract";
 import type { PlannerContext, PlannerRunError, PlannerRunRequest, PlannerRunResponse, PlannerActiveContext, PlannerApplyResponse, PlannerGoal } from "./planner-api";
 import { ActionCalculation, CalculationEvidence } from "./CalculationEvidence";
 import "./planner.css";
@@ -49,26 +49,6 @@ async function request<T>(path: string, body?: unknown, signal?: AbortSignal): P
   if (!payload) throw new PlannerError("The server returned invalid data.");
   return payload as T;
 }
-function draftIssues(draft: GoalDraft): string[] {
-  const issues: string[] = [];
-  if (!draft.text.trim()) issues.push("Describe your goal before confirming.");
-  if (!draft.kind) issues.push("Choose the campaign's primary goal.");
-  if (draft.kind === "sell_target" && (!draft.targetUnits || !Number.isSafeInteger(draft.targetUnits) || draft.targetUnits < 1))
-    issues.push("Target units must be a positive integer.");
-  if (draft.kind !== "sell_target" && (draft.targetUnits !== null || draft.sellTargetProbability !== null))
-    issues.push("Units and target probability only apply to Reach sales target. Change the goal or clear these fields.");
-  if (draft.kind !== "efficiency" && draft.minMarginalReturn !== null)
-    issues.push("Marginal return only applies to Improve ad efficiency. Change the goal or clear this field.");
-  const start = Date.parse(draft.start ?? ""), end = Date.parse(draft.deadline ?? "");
-  if (!Number.isFinite(start) || !Number.isFinite(end)) issues.push("Choose a start and end time.");
-  else if (start % 3_600_000 || end % 3_600_000 || end <= start || end - start > 72 * 3_600_000)
-    issues.push("Use whole hours and a duration of 1 to 72 hours.");
-  if ([draft.maxSpendVnd, draft.maxLossVnd, draft.minMarginalReturn].some((v) => v !== null && (!Number.isFinite(v) || v < 0)))
-    issues.push("Budget, loss limit and marginal return must be zero or greater.");
-  if (draft.sellTargetProbability !== null && (!Number.isFinite(draft.sellTargetProbability) || draft.sellTargetProbability <= 0 || draft.sellTargetProbability > 1))
-    issues.push("Target probability must be above 0% and at most 100%.");
-  return issues;
-}
 
 type PlannerProps = {
   initialInterpretation?: GoalInterpretResponse;
@@ -77,9 +57,10 @@ type PlannerProps = {
   embedded?: boolean;
   allowRun?: boolean;
   hideHeading?: boolean;
+  suggestAndPreview?: boolean;
 };
-// The assistant remounts this review on a new interpretation or SKU, clearing approval/results.
-export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true, hideHeading = false }: PlannerProps = {}) {
+// A new interpretation or SKU remounts this review and clears previous results.
+export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true, hideHeading = false, suggestAndPreview = false }: PlannerProps = {}) {
   const id = useId();
   const [context, setContext] = useState<PlannerContext | null>(null);
   const [contextError, setContextError] = useState("");
@@ -90,9 +71,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
   const [method, setMethod] = useState<"ai" | "rules" | "manual">(initialInterpretation?.method ?? "manual");
   const [notices, setNotices] = useState<string[]>(initialInterpretation?.notices ?? []);
   const [campaignId, setCampaignId] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [busy, setBusy] = useState<"interpret" | "run" | "apply" | null>(null);
+  const [busy, setBusy] = useState<"interpret" | "suggest" | "run" | "apply" | null>(null);
   const [error, setError] = useState("");
   const [errorDetails, setErrorDetails] = useState<Record<string, unknown> | null>(null);
   const [result, setResult] = useState<PlannerRunResponse | null>(null);
@@ -100,7 +79,6 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
   const [activeError, setActiveError] = useState("");
   const [activeLoading, setActiveLoading] = useState(false);
   const [activeReload, setActiveReload] = useState(0);
-  const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [applied, setApplied] = useState<PlannerApplyResponse | null>(null);
   const review = useRef<HTMLElement>(null), results = useRef<HTMLElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
@@ -138,17 +116,17 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
     setActive(null); setActiveError(""); setActiveLoading(!!campaignId); setActiveReload((n) => n + 1);
   }
   function invalidate() {
-    setConfirmed(false); setResult(null); setApplyConfirmed(false); setApplied(null); setError(""); setErrorDetails(null);
+    setResult(null); setApplied(null); setError(""); setErrorDetails(null);
   }
   function changeText(value: string) {
-    invalidate(); setAcknowledged(false); setText(value); setDraft(null); setNotices([]);
+    invalidate(); setText(value); setDraft(null); setNotices([]);
   }
   function edit(patch: Partial<GoalDraft>) {
-    invalidate(); setAcknowledged(false); setDraft((old) => old ? { ...old, ...patch } : old);
+    invalidate(); setDraft((old) => old ? { ...old, ...patch } : old);
   }
   function openReview() { requestAnimationFrame(() => review.current?.focus()); }
   async function interpret() {
-    invalidate(); setAcknowledged(false); setBusy("interpret"); setDraft(null);
+    invalidate(); setBusy("interpret"); setDraft(null);
     const controller = new AbortController(); activeRequest.current = controller;
     try {
       const interpreted = goalInterpretResponseSchema.parse(await request("interpret", { text }, controller.signal));
@@ -157,40 +135,53 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
     } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Could not interpret the goal. You can enter it manually."); }
     finally { if (!controller.signal.aborted) setBusy(null); }
   }
+  async function suggest() {
+    if (!campaignId || busy) return;
+    invalidate(); setBusy("suggest");
+    const controller = new AbortController(); activeRequest.current = controller;
+    try {
+      const input = draft ?? blankDraft(text.trim() || "Suggest a goal for this campaign.");
+      const suggested = goalInterpretResponseSchema.parse(await request("suggest", { campaignId, draft: input, ...(focusSku ? { focusSku } : {}) }, controller.signal));
+      if (controller.signal.aborted) return;
+      setDraft(suggested.draft); setText(suggested.draft.text); setMethod(suggested.method); setNotices(suggested.notices); openReview();
+      if (suggestAndPreview) await run(suggested.draft);
+    } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Could not suggest parameters."); }
+    finally { if (!controller.signal.aborted) setBusy(null); }
+  }
   const issues = draft ? draftIssues(draft) : [];
   const selected = context?.campaigns.find((c) => c.id === campaignId);
-  const canConfirm = !!draft && !issues.length && (!draft.unresolved.length || acknowledged);
-  const canRun = allowRun && canConfirm && confirmed && !!selected && !!context?.backendConfigured && context.canPreview === true && !!active && !activeLoading && !busy && !loading;
-  async function run() {
-    if (!canRun || !draft) return;
+  const validDraft = !!draft && !issues.length;
+  const canRun = allowRun && validDraft && !!selected && !!context?.backendConfigured && context.canPreview === true && !!active && !activeLoading && !busy && !loading;
+  async function run(parameters = draft) {
+    if (!parameters || draftIssues(parameters).length || !allowRun || !selected || !context?.backendConfigured || context.canPreview !== true || !active || activeLoading || loading) return;
     setBusy("run"); setError(""); setErrorDetails(null);
     const controller = new AbortController(); activeRequest.current = controller;
     try {
-      const body: PlannerRunRequest = { campaignId, draft, confirmed: true, acknowledgedUnresolved: acknowledged, expectedGoal: active!.baseGoal, ...(focusSku ? { focusSku } : {}) };
+      const body: PlannerRunRequest = { campaignId, draft: parameters, confirmed: true, acknowledgedUnresolved: true, expectedGoal: active!.baseGoal, ...(focusSku ? { focusSku } : {}) };
       const response = await request<PlannerRunResponse>("run", body, controller.signal);
       if (controller.signal.aborted) return;
-      setResult(response); setApplyConfirmed(false); setApplied(null);
+      setResult(response); setApplied(null);
       requestAnimationFrame(() => results.current?.focus());
     } catch (e) {
       if (controller.signal.aborted) return;
       if (e instanceof PlannerError) {
         setErrorDetails(e.payload?.error?.details ?? null);
         if (e.status === 409) {
-          setResult(null); setConfirmed(false); reloadActive();
+          setResult(null); reloadActive();
         }
       }
       setError(e instanceof Error ? e.message : "Simulation did not complete.");
     } finally { if (!controller.signal.aborted) setBusy(null); }
   }
   async function apply() {
-    if (!result?.canApply || !applyConfirmed || applied || busy || context?.canApply !== true) return;
+    if (!result?.canApply || applied || busy || context?.canApply !== true) return;
     setBusy("apply"); setError(""); setErrorDetails(null);
     const controller = new AbortController(); activeRequest.current = controller;
     try {
       const response = await request<PlannerApplyResponse>("apply", { previewId: result.previewId, confirmed: true,
         expectedGoal: result.baseGoal ? { goal_id: result.baseGoal.goal_id, version: result.baseGoal.version } : null }, controller.signal);
       if (controller.signal.aborted) return;
-      setApplied(response); setApplyConfirmed(false); reloadActive();
+      setApplied(response); reloadActive();
       window.dispatchEvent(new CustomEvent("workspace:backend-refresh", { detail: { reason: "goal-applied" } }));
     } catch (e) {
       if (controller.signal.aborted) return;
@@ -198,7 +189,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
       if (e instanceof PlannerError) {
         setErrorDetails(e.payload?.error?.details ?? null);
         if (e.status === 409) {
-          setResult(null); setConfirmed(false); setApplyConfirmed(false); reloadActive();
+          setResult(null); reloadActive();
         }
       }
     } finally { if (!controller.signal.aborted) setBusy(null); }
@@ -214,7 +205,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
       </header>}
       <ol className="planner-steps" aria-label="Planning steps">
         <li aria-current={!draft ? "step" : undefined}><span>1</span> Describe goal</li>
-        <li aria-current={draft && !result ? "step" : undefined}><span>2</span> Review & confirm</li>
+        <li aria-current={draft && !result ? "step" : undefined}><span>2</span> Review parameters</li>
         <li aria-current={result && !applied ? "step" : undefined}><span>3</span> Preview simulation</li>
         <li aria-current={applied ? "step" : undefined}><span>4</span> Apply goal</li>
       </ol>
@@ -245,18 +236,19 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
             <p id={`${id}-sale-goal-text-hint`} className="planner-help">Include your priority, time window, budget and risk limit. {text.length}/4,000 characters.</p>
             <div className="planner-templates" aria-label="Goal templates">{templates.map(([label, value]) => <button type="button" key={label} onClick={() => changeText(value)}>{label}</button>)}</div>
             <div className="planner-actions"><button className="planner-primary" type="button" disabled={!text.trim()} onClick={() => void interpret()}>{busy === "interpret" ? "Interpreting…" : "Interpret goal"}<ArrowRight aria-hidden size={16} /></button>
-              <button type="button" disabled={!text.trim()} onClick={() => { invalidate(); setAcknowledged(false); setDraft(blankDraft(text)); setMethod("manual"); setNotices([]); openReview(); }}>Enter parameters manually</button></div>
+              <button type="button" disabled={!text.trim()} onClick={() => { invalidate(); setDraft(blankDraft(text)); setMethod("manual"); setNotices([]); openReview(); }}>Enter parameters manually</button></div>
           </fieldset>
           <aside className="planner-scope"><strong>Planning scope</strong><p>One campaign, over 1–72 hours. Compare continuing, pausing, reducing budget and scheduling ads.</p><p>Does not optimize budgets across campaigns or execute price, voucher or ad changes.</p></aside>
         </section>}
         <section ref={review} tabIndex={-1} className="planner-card planner-review" aria-labelledby={`${id}-planner-review-title`}>
           <span className="planner-eyebrow">STEP 2</span><h2 id={`${id}-planner-review-title`}>Review parameters</h2>
-          {!draft ? <div className="planner-empty"><Target aria-hidden size={30} /><p>Interpret a goal to review and edit its parameters.</p></div> : <>
+          <button type="button" disabled={!selected || !context?.backendConfigured || !!busy || loading || (suggestAndPreview && (!allowRun || context.canPreview !== true || !active || activeLoading))} onClick={() => void suggest()}>{busy === "suggest" ? "Suggesting…" : "Suggest"}</button>
+          {!draft ? <div className="planner-empty"><Target aria-hidden size={30} /><p>Describe a goal or choose Suggest.</p></div> : <>
             <p className="planner-help">{method === "ai" ? "AI-interpreted draft" : method === "rules" ? "Rule-based draft" : "Manual draft"}. These parameters will be used for the calculation.</p>
             {embedded && <details><summary>Interpreted goal</summary><pre>{draft.text}</pre></details>}
             {!!notices.length && <ul className="planner-notices">{notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
             <fieldset disabled={!!busy}>
-              {focusSku && <div className="planner-warning"><strong>Goal for SKU {focusSku}</strong><p>Sales and clearance quantities apply to this SKU. Economic value J, budget, expected loss and ad efficiency apply to the whole selected campaign; ad changes can affect other SKUs.</p><p>Confirm that you have reviewed this scope. This is not a SKU-only profit calculation.</p></div>}
+              {focusSku && <div className="planner-warning"><strong>Goal for SKU {focusSku}</strong><p>Sales and clearance quantities apply to this SKU. Economic value J, budget, expected loss and ad efficiency apply to the whole selected campaign; ad changes can affect other SKUs.</p></div>}
               <label htmlFor={`${id}-sale-kind`}>Primary goal</label><select id={`${id}-sale-kind`} value={draft.kind ?? ""} onChange={(e) => edit({ kind: (e.target.value || null) as GoalKind | null })}><option value="">Choose a goal</option>{Object.entries(kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
               <div className="planner-fields">
                 <label>Start (Vietnam time)<input type="datetime-local" step={3600} value={localDate(draft.start)} onChange={(e) => edit({ start: isoDate(e.target.value) })} /></label>
@@ -268,9 +260,8 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
               <div className="planner-fields"><label>Maximum ad budget (₫)<input type="number" min={0} step="any" value={draft.maxSpendVnd ?? ""} placeholder="No additional limit" onChange={(e) => edit({ maxSpendVnd: e.target.value ? Number(e.target.value) : null })} /></label><label>Maximum expected loss (₫)<input type="number" min={0} step="any" value={draft.maxLossVnd ?? ""} placeholder={draft.kind === "clear_stock" ? "Backend default" : "No additional limit"} onChange={(e) => edit({ maxLossVnd: e.target.value ? Number(e.target.value) : null })} /></label></div>
               <p className="planner-help">Budget covers the full simulation window. The loss limit applies to expected J; it does not guarantee every outcome stays within the limit.</p>
               <label>Minimum marginal return<input type="number" min={0} step="any" value={draft.minMarginalReturn ?? ""} placeholder="Backend default" onChange={(e) => edit({ minMarginalReturn: e.target.value ? Number(e.target.value) : null })} /><span className="planner-help">Only applies to Improve ad efficiency. Leave blank for the backend default, or for any other goal.</span></label>
-              {draft.unresolved.length > 0 && <div className="planner-warning"><strong>Unresolved or unsupported requirements</strong><ul>{draft.unresolved.map((item, i) => <li key={i}>{item}</li>)}</ul><p>Revise and reinterpret the goal, or confirm only the reviewed parameters.</p><label className="planner-check"><input type="checkbox" checked={acknowledged} onChange={(e) => { invalidate(); setAcknowledged(e.target.checked); }} /><span>I have reviewed and agree to exclude requirements not represented by these parameters from this simulation.</span></label></div>}
+              {draft.unresolved.length > 0 && <div className="planner-warning"><strong>Excluded from this preview</strong><ul>{draft.unresolved.map((item, i) => <li key={i}>{item}</li>)}</ul><p>Preview simulation uses the parameters above and excludes these requirements.</p></div>}
               {!!issues.length && <ul className="planner-validation" aria-label="Required information">{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
-              <div className="planner-confirm"><label className="planner-check"><input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(e) => setConfirmed(e.target.checked)} /><span>I confirm these parameters for a preview. The active goal and recommendation remain unchanged.</span></label><p>Edits require confirmation again. Previewing does not apply a goal or execute ads.</p></div>
               <button className="planner-primary planner-run" type="button" disabled={!canRun} onClick={() => void run()}>{busy === "run" ? "Previewing…" : "Preview simulation"}<ArrowRight aria-hidden size={16} /></button>
               {!selected && <p className="planner-help">Choose a connected campaign to run.</p>}
             </fieldset>
@@ -287,8 +278,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
           {applied ? <p className="planner-saved" role="status"><Check aria-hidden size={16} /> Applied goal {applied.goal.goal_id}. This does not execute ads.</p> : <>
             {!result.canApply && <p className="planner-warning">This preview cannot be applied. Review unmet conditions, revise the goal and preview again.</p>}
             {context?.canApply !== true && <p className="planner-warning">This account cannot apply goals.</p>}
-            <label className="planner-check"><input type="checkbox" checked={applyConfirmed} disabled={!result.canApply || context?.canApply !== true || !!busy} onChange={(e) => setApplyConfirmed(e.target.checked)} /><span>I have reviewed the changes and want to replace the active campaign goal with this goal.</span></label>
-            <button type="button" className="planner-primary" disabled={!result.canApply || !applyConfirmed || context?.canApply !== true || !!busy} onClick={() => void apply()}>{busy === "apply" ? "Applying goal…" : "Apply goal"}</button>
+            <button type="button" className="planner-primary" disabled={!result.canApply || context?.canApply !== true || !!busy} onClick={() => void apply()}>{busy === "apply" ? "Applying goal…" : "Apply goal"}</button>
             <p className="planner-help">If someone changes the active goal, review and preview again. Separate previews do not reserve shares of a common budget.</p>
           </>}
         </section>

@@ -42,6 +42,7 @@ beforeEach(() => {
   fetchMock.mockImplementation(async (url, options) => {
     if (String(url).endsWith("/context")) return json(currentContext);
     if (String(url).includes("/active?")) return json({ campaignId: new URL(String(url), "https://test").searchParams.get("campaignId"), activeGoal, baseGoal: activeGoal ? { goal_id: activeGoal.goal_id, version: activeGoal.version } : null });
+    if (String(url).endsWith("/suggest")) return json({ draft: currentDraft, method: "ai", notices: ["Proposed 12-hour window from shop data."] });
     if (String(url).endsWith("/interpret")) return json({ draft: currentDraft, method: "rules", notices: [] });
     if (String(url).endsWith("/run")) {
       runAttempts.push(JSON.parse(options!.body as string));
@@ -61,7 +62,6 @@ async function review() {
   await screen.findByLabelText("Primary goal");
 }
 async function selectCampaign(id = "campaign-real") { fireEvent.change(screen.getByLabelText("Campaign"), { target: { value: id } }); await waitFor(() => expect(screen.queryByText("Checking the campaign goal…")).not.toBeInTheDocument()); }
-const confirm = () => screen.getByRole("checkbox", { name: /I confirm these parameters for a preview/ });
 const run = () => screen.getByRole("button", { name: "Preview simulation" });
 
 describe("sale goal review and real simulation", () => {
@@ -78,38 +78,33 @@ describe("sale goal review and real simulation", () => {
     currentContext = { ...context, backendConfigured: false, canCreateGoals: false, campaigns: [] };
     await review();
     expect(screen.getByText("Decision backend not connected")).toBeInTheDocument();
-    fireEvent.click(confirm());
     expect(run()).toBeDisabled();
     expect(runAttempts).toHaveLength(0);
     expect(screen.queryByText(/BACKEND RESULTS/)).not.toBeInTheDocument();
   });
-  it("requires explicit confirmation and invalidates it after amount or campaign edits", async () => {
+  it("previews only on click and uses the latest edits without checkboxes", async () => {
     await review(); await selectCampaign();
-    expect(run()).toBeDisabled(); expect(runAttempts).toHaveLength(0);
-    fireEvent.click(confirm()); expect(run()).toBeEnabled();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(run()).toBeEnabled(); expect(runAttempts).toHaveLength(0);
     fireEvent.change(screen.getByLabelText("Maximum ad budget (₫)"), { target: { value: "0" } });
-    expect(confirm()).not.toBeChecked(); expect(run()).toBeDisabled();
-    fireEvent.click(confirm()); await selectCampaign("campaign-other");
-    expect(confirm()).not.toBeChecked();
-    fireEvent.click(confirm()); fireEvent.click(run());
+    await selectCampaign("campaign-other");
+    fireEvent.click(run());
     await screen.findByText("Options for Chiến dịch khác");
     expect(runAttempts[0]).toMatchObject({ campaignId: "campaign-other", confirmed: true, draft: { text: draft.text, maxSpendVnd: 0 } });
   });
-  it("requires review of unsupported requirements and clears acknowledgement on edits", async () => {
+  it("shows excluded requirements before the explicit preview action", async () => {
     currentDraft.unresolved = ["Tự tạo voucher chưa được hỗ trợ"];
     await review(); await selectCampaign();
-    expect(confirm()).toBeDisabled();
     expect(screen.getByText("Tự tạo voucher chưa được hỗ trợ")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: /I have reviewed and agree/ }));
-    fireEvent.click(confirm()); expect(run()).toBeEnabled();
-    fireEvent.change(screen.getByLabelText("Maximum expected loss (₫)"), { target: { value: "0" } });
-    expect(confirm()).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: /I have reviewed and agree/ })).not.toBeChecked();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(runAttempts).toHaveLength(0);
+    fireEvent.click(run());
+    await screen.findByText("Options for Chiến dịch thực");
+    expect(runAttempts[0]).toMatchObject({ acknowledgedUnresolved: true, draft: { unresolved: currentDraft.unresolved } });
   });
   it("retries failed previews without saving an active goal and clears results after edits", async () => {
     runResponse = (attempt) => attempt === 1 ? json({ goalId: null, stage: "preview", error: { code: "BLOCKING_DATA_ISSUE", message: "Thiếu dữ liệu tồn kho", details: { missing: ["inventory"] } } }, 422) : json(result);
-    await review(); await selectCampaign(); fireEvent.click(confirm()); fireEvent.click(run());
+    await review(); await selectCampaign(); fireEvent.click(run());
     await screen.findByText("Thiếu dữ liệu tồn kho");
     expect(runAttempts).toHaveLength(1);
     expect(runAttempts[0]).not.toHaveProperty("goalId");
@@ -120,12 +115,12 @@ describe("sale goal review and real simulation", () => {
     expect(applyAttempts).toHaveLength(0);
     fireEvent.change(screen.getByLabelText("Maximum ad budget (₫)"), { target: { value: "500000" } });
     expect(screen.queryByText("Options for Chiến dịch thực")).not.toBeInTheDocument();
-    fireEvent.click(confirm()); fireEvent.click(run());
+    fireEvent.click(run());
     await waitFor(() => expect(runAttempts).toHaveLength(3));
     expect(runAttempts[2]).not.toHaveProperty("goalId");
   });
   it("renders actual returned values with quantiles and calculation provenance", async () => {
-    await review(); await selectCampaign(); fireEvent.click(confirm()); fireEvent.click(run());
+    await review(); await selectCampaign(); fireEvent.click(run());
     await screen.findByText("Options for Chiến dịch thực");
     expect(screen.getAllByText("12,345 ₫")).toHaveLength(3);
     expect(screen.getByText("2,345 ₫")).toBeInTheDocument();
@@ -136,37 +131,33 @@ describe("sale goal review and real simulation", () => {
     expect(screen.getByText("No recommendation returned")).toBeInTheDocument();
     expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith("/api/sale-planner/"))).toBe(true);
   });
-  it("shows current versus proposed goals and requires separate confirmation to apply", async () => {
+  it("shows current versus proposed goals and applies only on an explicit button click", async () => {
     activeGoal = { ...goal, goal_id: "active-1", active: true, version: 7, params: { max_spend_vnd: 5000000, max_loss_vnd: 0 } };
     runResponse = () => json({ ...result, baseGoal: activeGoal, notices: ["Giữ giới hạn lỗ của kế hoạch chung"], changes: [{ field: "max_spend_vnd", before: 5000000, after: 2000000 }] });
-    await review(); await selectCampaign(); fireEvent.click(confirm()); fireEvent.click(run());
+    await review(); await selectCampaign(); fireEvent.click(run());
     await screen.findByText("Options for Chiến dịch thực");
     expect(runAttempts[0]).toMatchObject({ expectedGoal: { goal_id: "active-1", version: 7 } });
     expect(applyAttempts).toHaveLength(0);
-    expect(screen.getByRole("button", { name: "Apply goal" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply goal" })).toBeEnabled();
     expect(screen.getByText("Giữ giới hạn lỗ của kế hoạch chung")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: /I have reviewed the changes/ }));
     fireEvent.click(screen.getByRole("button", { name: "Apply goal" }));
     await screen.findByText(/Applied goal goal-preview/);
     expect(applyAttempts).toEqual([{ previewId: "preview-1", confirmed: true, expectedGoal: { goal_id: "active-1", version: 7 } }]);
   });
   it("discards a stale preview on apply conflict and requires a fresh comparison", async () => {
     applyResponse = () => json({ error: { code: "GOAL_CHANGED", message: "Mục tiêu đã đổi, hãy mô phỏng lại" } }, 409);
-    await review(); await selectCampaign(); fireEvent.click(confirm()); fireEvent.click(run());
+    await review(); await selectCampaign(); fireEvent.click(run());
     await screen.findByText("Options for Chiến dịch thực");
-    fireEvent.click(screen.getByRole("checkbox", { name: /I have reviewed the changes/ }));
     fireEvent.click(screen.getByRole("button", { name: "Apply goal" }));
     await screen.findByText("Mục tiêu đã đổi, hãy mô phỏng lại");
     expect(screen.queryByRole("button", { name: "Apply goal" })).not.toBeInTheDocument();
-    expect(confirm()).not.toBeChecked();
-    expect(run()).toBeDisabled();
+    await waitFor(() => expect(run()).toBeEnabled());
     expect(fetchMock.mock.calls.filter(([path]) => String(path).includes("/active?"))).toHaveLength(2);
   });
   it("retains immutable preview on uncertain apply failure so retry cannot create another goal", async () => {
     applyResponse = () => applyAttempts.length === 1 ? json({ error: { code: "BACKEND_UNAVAILABLE", message: "Mất phản hồi" } }, 502) : json({ previewId: result.previewId, goal: { ...goal, active: true }, alreadyApplied: true });
-    await review(); await selectCampaign(); fireEvent.click(confirm()); fireEvent.click(run());
+    await review(); await selectCampaign(); fireEvent.click(run());
     await screen.findByText("Options for Chiến dịch thực");
-    fireEvent.click(screen.getByRole("checkbox", { name: /I have reviewed the changes/ }));
     fireEvent.click(screen.getByRole("button", { name: "Apply goal" }));
     await screen.findByText("Mất phản hồi");
     fireEvent.click(screen.getByRole("button", { name: "Apply goal" }));
@@ -176,31 +167,30 @@ describe("sale goal review and real simulation", () => {
   });
   it("never offers apply for an ineligible preview and removes it when the draft changes", async () => {
     runResponse = () => json({ ...result, canApply: false });
-    await review(); await selectCampaign(); fireEvent.click(confirm()); fireEvent.click(run());
+    await review(); await selectCampaign(); fireEvent.click(run());
     await screen.findByText("Options for Chiến dịch thực");
-    expect(screen.getByRole("checkbox", { name: /I have reviewed the changes/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Apply goal" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Maximum ad budget (₫)"), { target: { value: "500000" } });
     expect(screen.queryByRole("button", { name: "Apply goal" })).not.toBeInTheDocument();
     expect(applyAttempts).toHaveLength(0);
   });
-  it("keeps unsupported goal fields visible and blocks confirmation until corrected", async () => {
+  it("keeps unsupported goal fields visible and blocks preview until corrected", async () => {
     currentDraft.targetUnits = 100;
     currentDraft.start = "2026-11-11T08:30:00+07:00";
     await review(); await selectCampaign();
     expect(screen.getByLabelText("Target units")).toHaveValue(100);
     expect(screen.getByText(/Units and target probability only apply/)).toBeInTheDocument();
     expect(screen.getByText("Use whole hours and a duration of 1 to 72 hours.")).toBeInTheDocument();
-    expect(confirm()).toBeDisabled();
+    expect(run()).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Primary goal"), { target: { value: "sell_target" } });
     fireEvent.change(screen.getByLabelText("Start (Vietnam time)"), { target: { value: "2026-11-11T08:00" } });
-    expect(confirm()).toBeEnabled();
+    expect(run()).toBeEnabled();
   });
   it("disables the run when backend capability or permission is missing", async () => {
     currentContext.canCreateGoals = false;
     currentContext.canPreview = false;
     currentContext.notice = "Backend cần nâng cấp";
-    await review(); await selectCampaign(); fireEvent.click(confirm());
+    await review(); await selectCampaign();
     expect(screen.getByText("Backend cần nâng cấp")).toBeInTheDocument();
     expect(run()).toBeDisabled(); expect(runAttempts).toHaveLength(0);
   });
@@ -221,7 +211,7 @@ describe("sale goal review and real simulation", () => {
 });
 
 
-it("offers goal entry inside HQ and requires confirmation for a supplied Milo preview", async () => {
+it("offers goal entry inside HQ and never automatically runs a supplied Milo preview", async () => {
   const view = render(<MemoryRouter><SaleGoalPlanner embedded focusSku="SKU-A" /></MemoryRouter>);
   await screen.findByText("Connected campaigns");
   fireEvent.change(screen.getByLabelText("Goal description"), { target: { value: "Sell 100 units" } });
@@ -233,4 +223,71 @@ it("offers goal entry inside HQ and requires confirmation for a supplied Milo pr
   expect(screen.queryByLabelText("Goal description")).not.toBeInTheDocument();
   expect(run()).toBeDisabled();
   expect(runAttempts).toHaveLength(0);
+});
+
+
+it("suggests an editable goal, previews it and applies only through separate button clicks", async () => {
+  mount(); await screen.findByText("Connected campaigns");
+  expect(screen.getByRole("button", { name: "Suggest" })).toBeDisabled();
+  await selectCampaign();
+  fireEvent.click(screen.getByRole("button", { name: "Suggest" }));
+  await screen.findByText("Proposed 12-hour window from shop data.");
+  expect(screen.getByLabelText("Primary goal")).toHaveValue("profit");
+  expect(screen.getByLabelText("Start (Vietnam time)")).toHaveValue("2026-11-11T08:00");
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  expect(runAttempts).toHaveLength(0); expect(applyAttempts).toHaveLength(0);
+  fireEvent.click(run());
+  await screen.findByText("Options for Chiến dịch thực");
+  expect(runAttempts[0]).toMatchObject({ campaignId: "campaign-real", draft: currentDraft, confirmed: true });
+  expect(applyAttempts).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Apply goal" }));
+  await screen.findByText(/Applied goal goal-preview/);
+});
+it("sends edited values and the selected SKU to Suggest, and retains fields on failure", async () => {
+  render(<MemoryRouter><SaleGoalPlanner embedded focusSku="SKU-A" initialInterpretation={{ draft, method: "ai", notices: [] }} /></MemoryRouter>);
+  await screen.findByText("Connected campaigns"); await selectCampaign();
+  fireEvent.change(screen.getByLabelText("Maximum ad budget (₫)"), { target: { value: "0" } });
+  fetchMock.mockImplementationOnce(async (url, options) => {
+    expect(String(url)).toBe("/api/sale-planner/suggest");
+    expect(JSON.parse(String(options?.body))).toMatchObject({ campaignId: "campaign-real", focusSku: "SKU-A", draft: { maxSpendVnd: 0 } });
+    return json({ error: { message: "Decision model unavailable" } }, 503);
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Suggest" }));
+  await screen.findByText("Decision model unavailable");
+  expect(screen.getByLabelText("Maximum ad budget (₫)")).toHaveValue(0);
+  expect(runAttempts).toHaveLength(0);
+});
+it("clears stale preview results and locks fields while requesting a new suggestion", async () => {
+  await review(); await selectCampaign(); fireEvent.click(run());
+  await screen.findByText("Options for Chiến dịch thực");
+  let finish!: (response: Response) => void;
+  fetchMock.mockImplementationOnce(async () => new Promise(resolve => { finish = resolve; }));
+  fireEvent.click(screen.getByRole("button", { name: "Suggest" }));
+  expect(screen.queryByRole("button", { name: "Apply goal" })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Campaign")).toBeDisabled();
+  expect(screen.getByLabelText("Maximum ad budget (₫)")).toBeDisabled();
+  await act(async () => finish(json({ draft, method: "ai", notices: ["Suggested"] })));
+  expect(await screen.findByText("Suggested")).toBeInTheDocument();
+  expect(applyAttempts).toHaveLength(0);
+});
+
+it("fills and generates a focused scenario from one Suggest click in SKU Details", async () => {
+  currentContext.campaigns = [{ id: "campaign-real", name: "Chiến dịch thực", skus: ["NOICHIEN2L"] }];
+  render(<MemoryRouter><SaleGoalPlanner embedded focusSku="NOICHIEN2L" campaignIds={["campaign-real"]} suggestAndPreview /></MemoryRouter>);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Suggest" })).toBeEnabled());
+  expect(runAttempts).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Suggest" }));
+  await screen.findByText("Options for Chiến dịch thực");
+  expect(screen.getByLabelText("Maximum ad budget (₫)")).toHaveValue(2000000);
+  expect(runAttempts).toEqual([expect.objectContaining({ focusSku: "NOICHIEN2L", campaignId: "campaign-real", draft: currentDraft, confirmed: true, expectedGoal: null })]);
+  expect(applyAttempts).toHaveLength(0);
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+});
+it("does not generate a scenario when the suggestion fails", async () => {
+  render(<MemoryRouter><SaleGoalPlanner embedded focusSku="SKU-A" suggestAndPreview /></MemoryRouter>);
+  await screen.findByText("Connected campaigns"); await selectCampaign();
+  fetchMock.mockImplementationOnce(async () => json({ error: { message: "Suggestion failed" } }, 502));
+  fireEvent.click(screen.getByRole("button", { name: "Suggest" }));
+  await screen.findByText("Suggestion failed");
+  expect(runAttempts).toHaveLength(0); expect(applyAttempts).toHaveLength(0);
 });
