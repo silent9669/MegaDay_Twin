@@ -1,3 +1,4 @@
+import { sourceText } from "../src/studio/source-text";
 import Papa from "papaparse";
 import { inspect, makeSource, normalize, SOURCE_DEFS, type Source } from "../src/studio/sources";
 import { previewVnd } from "../src/studio/money-preview";
@@ -5,7 +6,7 @@ import { previewVnd } from "../src/studio/money-preview";
 const moneyColumns = ["giá vốn", "phí đóng gói", "Chi phí", "Tổng tiền hàng", "Giá gốc", "Giá ưu đãi"];
 /** Apply only contract-defined, deterministic repairs. Never fill missing business facts. */
 export async function repairSource(source: Source) {
-  const parsed = inspect(source.name, source.text);
+  const parsed = inspect(source.name, sourceText(source));
   const repairs: string[] = [];
   if (source.kind === "general" || parsed.payload !== undefined) return { source, repairs };
   const canonical = [...(SOURCE_DEFS.find(def => def.kind === source.kind)?.required ?? []),
@@ -30,5 +31,5 @@ export async function repairSource(source: Source) {
   if (amounts) repairs.push(`Normalized ${amounts} VND amounts using the existing money contract.`);
   if (!repairs.length) return { source, repairs };
   const repaired = await makeSource(source.name, Papa.unparse({ fields: columns, data: rows }), source.origin);
-  return { source: { ...source, text: repaired.text, hash: repaired.hash }, repairs };
+  return { source: { ...source, text: repaired.text, encoding: repaired.encoding, hash: repaired.hash }, repairs };
 }

@@ -122,7 +122,7 @@ describe("six-source workspace contract", () => {
       }),
     ).rejects.toThrow("Duplicate");
   });
-  it("chooses live observations and excludes replay/history/oracle files", () => {
+  it("chooses root shop history and excludes nested replay/oracle files", () => {
     const names = [
       "don_hang_seller_center.csv",
       "bao_cao_ads.csv",
@@ -143,7 +143,7 @@ describe("six-source workspace contract", () => {
       (i) => files[i]!.webkitRelativePath,
     );
     expect(selected).toHaveLength(6);
-    expect(selected.filter((p) => p.includes("/live_11_11/"))).toHaveLength(3);
+    expect(selected.filter((p) => p.includes("/live_11_11/"))).toHaveLength(0);
     expect(selected.some((p) => /replay|ground_truth/.test(p))).toBe(false);
   });
   it("rejects multiple shop folders instead of guessing", () => {

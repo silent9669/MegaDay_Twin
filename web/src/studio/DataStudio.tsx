@@ -1,3 +1,5 @@
+import { readSource } from "./read-source";
+import { sourceText, MAX_SOURCE_BYTES } from "./source-text";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
@@ -18,15 +20,14 @@ import { useSearchParams } from "react-router";
 import { useAccountDocument, requestJSON } from "./account";
 import {
   SOURCE_DEFS,
-  inspect,
   makeSource,
   selectUploads,
   validatePack,
-  MAX_BYTES,
   sourceKey, mergeSources, DEMAND_COLUMN,
   type Source,
   type SourcePack,
 } from "./sources";
+import { mergeReplaySources } from "./replay";
 import { SandboxControl } from "./SandboxControl";
 import { SourceDiagnostics } from "./SourceDiagnostics";
 import { ArchiveImport, type ArchiveImportHandle } from "./ArchiveImport";
@@ -85,7 +86,7 @@ export function DataStudio() {
   }, [draft, base, dirty]);
   const current = files.find((f) => sourceKey(f) === selected) ?? files[0];
   const parsed = useMemo(
-    () => files.map((f) => ({ source: f, parsed: inspect(f.name, f.text) })),
+    () => files.map((f) => ({ source: f, parsed: readSource(f) })),
     [files],
   );
   const currentParsed = parsed.find(
@@ -162,8 +163,8 @@ export function DataStudio() {
       if (incoming.length > 24)
         throw Error(`Selected ${incoming.length} files; choose at most 24 tables. Nothing was imported; existing sources are unchanged.`);
       const bytes = incoming.reduce((sum, f) => sum + f.size, 0);
-      if (bytes > MAX_BYTES)
-        throw Error(`Selected files total ${(bytes / 1024 / 1024).toFixed(1)} MiB; the limit is 20 MiB. Nothing was imported; existing sources are unchanged.`);
+      if (bytes > MAX_SOURCE_BYTES)
+        throw Error(`Selected files total ${(bytes / 1024 / 1024).toFixed(1)} MiB; the limit is 48 MiB. Nothing was imported; existing sources are unchanged.`);
       const imported: Source[] = [];
       if (incoming.length === 1 && incoming[0]!.name.endsWith(".json")) {
         const text = await incoming[0]!.text();
@@ -357,13 +358,13 @@ export function DataStudio() {
         onLoad={async (incoming, replace) => {
           setBusy(true);
           try {
-            await saveCloud({ schema: "hackathon.sources.v1", files: replace ? incoming : mergeSources(files, incoming) }, revision);
+            await saveCloud({ schema: "hackathon.sources.v1", files: replace ? incoming : await mergeReplaySources(files, incoming) }, revision);
             setDraft(null); setDirty(false);
             setSelected(sourceKey(incoming[0]!));
             setPage(0); setQuery(""); setFocusRow(null); setTab("records"); setMessage("");
           } finally { setBusy(false); }
         }} />
-      {demoCount > 0 && <SandboxControl />}
+      {(demoCount > 0 || files.some(file => file.replay)) && <SandboxControl />}
       {!files.length && cloud.document && <p className="source-empty">No tables yet.</p>}
       {!!files.length && <>
       <section className="studio-body" aria-label="Source files">
@@ -444,7 +445,7 @@ export function DataStudio() {
             </button>
             <button
               disabled={!current}
-              onClick={() => current && download(current.name, current.text)}
+              onClick={() => current && download(current.name, sourceText(current))}
             >
               <Download size={15} />
               Export file
@@ -669,7 +670,7 @@ export function DataStudio() {
                   change({
                     schema: "hackathon.sources.v1",
                     files: files.map((f) =>
-                      sourceKey(f) === sourceKey(current) ? source : f,
+                      sourceKey(f) === sourceKey(current) ? { ...source, replay: current.replay } : f,
                     ),
                   });
                   setCell(null);

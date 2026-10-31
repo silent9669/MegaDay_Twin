@@ -1,5 +1,8 @@
+import { visibleSources, playbackHour } from "../src/studio/replay";
+import type { Sandbox } from "../src/studio/workspace-types";
+import { readSource } from "../src/studio/read-source";
 import { z } from "zod";
-import { inspect, type SourcePack } from "../src/studio/sources";
+import type { inspect, SourcePack } from "../src/studio/sources";
 import type { Doc } from "../src/studio/workspace-types";
 type Storage = { fetch(request: Request): Promise<Response> };
 const argsSchema = z.object({
@@ -48,7 +51,14 @@ export function workspaceReader(storage: Storage, url: string) {
         new Request(new URL("/api/workspace/sources", url)),
       );
       if (!response.ok) throw Error("Workspace sources unavailable.");
-      return response.json() as Promise<Doc<SourcePack>>;
+      const document = await response.json() as Doc<SourcePack>;
+      if (document.data.files.some(file => file.replay)) {
+        const clock = await storage.fetch(new Request(new URL("/api/workspace/sandbox", url)));
+        if (!clock.ok) throw Error("Playback clock unavailable.");
+        const sandbox = await clock.json() as Doc<Sandbox>;
+        document.data = visibleSources(document.data, playbackHour(sandbox.data))!;
+      }
+      return document;
     })());
   return async (name: string, args: string): Promise<string> => {
     try {
@@ -56,7 +66,7 @@ export function workspaceReader(storage: Storage, url: string) {
       const parse = (file: SourcePack["files"][number]) => {
         let result = parsed.get(file.name);
         if (!result) {
-          result = inspect(file.name, file.text);
+          result = readSource(file);
           parsed.set(file.name, result);
         }
         return result;

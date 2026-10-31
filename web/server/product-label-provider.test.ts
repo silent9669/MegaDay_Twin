@@ -18,7 +18,7 @@ it("requires a separate decision model and chooses a best-fit label without evid
   expect(body.instructions).toContain("11.11");
   expect(body.input).toContain("Vietnam");
   expect(body.text.format.schema.properties.labels.items.properties.group).toEqual({ type: "string", enum: ["Trendy", "Seasonal", "Normal"] });
-  expect(provider.id).toContain("demand-v3");
+  expect(provider.id).toContain("demand-v4");
 });
 it("rejects a null model label instead of silently leaving products unclassified", async () => {
   const input = await buildLabelInput({ schema: "hackathon.sources.v1", files: [await makeSource("stock.csv", "Mã nội bộ,Tồn thực tế,Tên hàng\nA,2,Cup", "upload")] }, 1);

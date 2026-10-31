@@ -1,6 +1,7 @@
+import { readSource } from "../studio/read-source";
 import { Button } from "../components/ui/button";
 import { useMemo, useState } from "react";
-import { inspect, type SourcePack } from "../studio/sources";
+import { type SourcePack } from "../studio/sources";
 import { analyzeWithAI } from "../city/analysis-context";
 import { useHQSelection } from "./selection";
 export function Campaigns({
@@ -19,7 +20,7 @@ export function Campaigns({
       pack?.files
         .filter((file) => file.kind === "campaigns")
         .flatMap((file) =>
-          inspect(file.name, file.text).rows.map((row, index) => ({
+          readSource(file).rows.map((row, index) => ({
             row,
             file: file.name,
             record: index + 1,

@@ -56,7 +56,7 @@ describe("backend archive investigation", () => {
   });
   it("rejects traversal and expansion bombs before producing tables", () => {
     expect(() => extractArchive(archive({ "../stock.csv": "a" }))).toThrow(/path/i);
-    expect(() => extractArchive(archive({ "stock.csv": "a".repeat(21 * 1024 * 1024) }))).toThrow(/limit/i);
+    expect(() => extractArchive(archive({ "stock.csv": "a".repeat(33 * 1024 * 1024) }))).toThrow(/limit/i);
   });
   it("uses validated LLM mappings while preserving values and removing contact columns", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ corrections: [], reviews: [{ file: "stock.csv", issues: [] }], tables: [{ file: "stock.csv", kind: "inventory", columns: [{ source: "sku", target: "Mã nội bộ" }, { source: "name", target: "Tên hàng" }, { source: "stock", target: "Tồn thực tế" }] }] }) }] }] }));
@@ -82,10 +82,12 @@ describe("backend archive investigation", () => {
   });
 });
 
-it("rejects replay ZIPs before importing future CSVs or calling AI", async () => {
+it("fast-imports recognized tables even when the AI connection fails", async () => {
   const fetch = vi.fn(async () => { throw Error("offline"); });
   vi.stubGlobal("fetch", fetch);
-  await expect(analyzeArchive(archive({ "live_11_11/stock.csv": "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,1", "live_11_11/_replay.json": '{"rows":[],"headers":[]}' }), { OPENAI_API_KEY: "test", OPENAI_MODEL_IMPORT: "test" }, false)).rejects.toThrow("Replay demo");
+  const result = await analyzeArchive(archive({ "live_11_11/stock.csv": "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,1" }), { OPENAI_API_KEY: "test", OPENAI_MODEL_IMPORT: "test" }, false);
+  expect(result.tables).toHaveLength(1);
+  expect(result.skipped).toHaveLength(0);
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -106,4 +108,9 @@ it("rejects AI patches for rows outside the reviewed samples", async () => {
     corrections: [{ file: "notes.csv", edits: [{ row: 2, column: "name", before: "Cupp", after: "Cup", reason: "Typo" }] }],
   }) }] }] })));
   await expect(analyzeArchive(archive({ "notes.csv": "name,value\nA,1\nB,2\nCupp,3" }), { OPENAI_API_KEY: "test", OPENAI_MODEL_IMPORT: "test" })).rejects.toThrow(/outside the reviewed samples/);
+});
+
+
+it("rejects malformed replay metadata instead of exposing all event rows", async () => {
+  await expect(analyzeArchive(archive({ "stock.csv": "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,1", "_replay.json": '{"rows":[]}' }), {}, false)).rejects.toThrow();
 });

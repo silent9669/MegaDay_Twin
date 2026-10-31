@@ -1,7 +1,8 @@
+import { readSource } from "./read-source";
 import { Button } from "../components/ui/button";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { inspect, normalize, type SourcePack } from "./sources";
+import { normalize, type SourcePack } from "./sources";
 import { sourceView } from "./source-view";
 import "./studio.css";
 
@@ -12,9 +13,9 @@ export function SourceWorkspace({ pack, district }: { pack: SourcePack | null; d
   const feed = useMemo(() => sourceView(pack, 24), [pack]);
   const orders = useMemo(() => {
     const source = pack?.files.find(file => file.kind === "orders");
-    return source ? inspect(source.name, source.text) : null;
+    return source ? readSource(source) : null;
   }, [pack]);
-  const tableCounts = useMemo(() => pack?.files.map(file => ({ name: file.name, kind: file.kind, count: inspect(file.name, file.text).rows.length })) ?? [], [pack]);
+  const tableCounts = useMemo(() => pack?.files.map(file => ({ name: file.name, kind: file.kind, count: readSource(file).rows.length })) ?? [], [pack]);
   const headers = ["Mã đơn hàng", "Ngày đặt hàng", "Tên sản phẩm", "Số lượng", "Trạng thái đơn hàng"];
   const column = (name: string) => orders?.columns.find(key => normalize(key) === normalize(name)) ?? name;
   const rows = (orders?.rows ?? []).filter(row => headers.some(header => String(row[column(header)] ?? "").toLowerCase().includes(search.toLowerCase())));

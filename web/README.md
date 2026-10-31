@@ -194,8 +194,23 @@ Cell edits retain revision-checked autosave. SQLite
 with the source document revision. Unchanged table rows are not rewritten; no
 user or model SQL is executed. The
 map uses saved inventory. HQ shows imported table, order, ad and stocked-product
-counts; Neighborhood shows searchable, paginated imported orders. The demo clock
-only filters repository demo data, not uploaded inventory or orders.
+counts; Neighborhood shows searchable, paginated imported orders.
+Folder import selects the root shop history before nested live exports. Large tables
+use lossless `gzip-base64` source text (48 MiB decoded per pack, 32 MiB per table,
+20 MiB transport). Consumers decode through `sourceText`/`readSource`; Python
+multipart ingestion still receives plain CSV/JSON. SQLite saves use bounded JSON
+batches and skip unchanged records.
+
+An event ZIP's `_replay.json` must match its uploaded CSV rows exactly. Import
+retains baseline rows, replaces any earlier event rows, and starts a persisted
+clock at hour zero, advancing one event hour every six seconds across navigation
+and reloads. Replay buckets are inclusive (hour h shows observations through h:59),
+with the manifest's ad lag. Data Studio retains all source rows for editing;
+Warehouse, HQ, ads, residents and Milo workspace tools see only observed rows.
+Pause, resume and seek use the same account clock. If the optional Python backend
+is configured, event import also stages the ZIP for its existing CD002 replay
+controls; the campaign backend retains its separate clock and analysis workflow. Reimporting the same event
+replaces event rows instead of accumulating duplicates.
 
 The authenticated gateway streams import and labeling requests to the existing
 AccountWorkspace Durable Object. Extraction, parsing, model calls and persistence
@@ -212,12 +227,13 @@ label saves must wait for the daily reset at 00:00 UTC or a Workers plan upgrade
 See [Cloudflare's Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 
 `POST /api/studio/import` accepts raw ZIP bytes and returns `{ tables, skipped,
-model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
+model }`. It does not save anything. Limits: 20 MiB upload, 48 MiB expanded total,
+32 MiB per table,
 100 archive entries, 24 CSV/JSON files. Paths with traversal are rejected;
-answer-key/hidden files, `_replay.json` playback metadata and unsupported types
-are excluded. Known contracts are parsed deterministically. With `?review=1`,
+answer-key/hidden files and unsupported types are excluded. `_replay.json`
+is validated as playback metadata and never imported as a business table. Known contracts are parsed deterministically. With `?review=1`,
 one model call reviews every table using its schema,
-diagnostic codes and at most two sample rows (12 columns, 80 characters per value,
+diagnostic codes and up to eight sample rows (12 columns, 2,000 characters per value,
 contact fields removed). The same call maps unknown flat CSV/JSON headers.
 Reviewed tables replace the saved set, and review findings appear in Import details. Missing model configuration is explicit.
 A sample review does not certify all records. Every mapping must use existing columns and satisfy a
@@ -226,8 +242,14 @@ supported (nested values remain JSON); spreadsheets are not supported. Existing 
 
 Map → **Warehouse** → **Open workspace** → **Label data** classifies saved
 products with positive latest stock only. The toolbar contains search by name/code
-and **Label data**. New runs default to Vietnam and today; retries retain their
-saved assessment context. The API continues to accept dated product evidence. Each model batch gets
+and **Label data**, plus demand filtering/sorting. Each demand cell is a dropdown;
+`PATCH /api/product-labels` saves a revision-checked manual choice, which survives
+later AI runs and event imports. New runs use Vietnam and the latest visible
+inventory date (today only when undated). Historical evidence includes recent daily
+order quantities and earlier weekly totals, excluding canceled orders, exact
+duplicates and future observations. Only a unique exact name plus variant match
+associates order evidence; this is not a confirmed SKU crosswalk. Ambiguous names
+receive no borrowed history. No class quotas are imposed. The API continues to accept dated product evidence. Each model batch gets
 only evidence for its products. No web search is performed; metadata and manual
 evidence do not imply measured demand. New model runs always choose the best-fit `Trendy`, `Seasonal` or `Normal` label,
 with no confidence cutoff. When evidence is weak, the model may infer likely use

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePlaybackHour } from "../../studio/use-playback-hour";
 import type { SourcePack } from "../../studio/sources";
 import type { Doc, Sandbox } from "../../studio/workspace-types";
 import { snapshot, WorkspaceMonitor, type ChangeNotice } from "./changes";
@@ -14,6 +15,7 @@ export function useWorkspaceMonitor(
   const [notices, setNotices] = useState<ChangeNotice[]>([]);
   const [read, setRead] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<ChangeNotice | null>(null);
+  const hour = usePlaybackHour(sandbox?.data);
   useEffect(() => {
     const changed = (event: Event) => {
       const detail = (event as CustomEvent<{ revision: string; dataAsOf: string | null }>).detail;
@@ -34,8 +36,8 @@ export function useWorkspaceMonitor(
     return () => window.removeEventListener("workspace:campaign-update", changed);
   }, []);
   const next = useMemo(
-    () => (sources && sandbox ? snapshot(sources, sandbox) : null),
-    [sources, sandbox],
+    () => (sources && sandbox ? snapshot(sources, { ...sandbox, data: { ...sandbox.data, hour } }) : null),
+    [sources, sandbox, hour],
   );
   useEffect(() => {
     if (wasConnected.current && !connected) interrupted.current = true;
