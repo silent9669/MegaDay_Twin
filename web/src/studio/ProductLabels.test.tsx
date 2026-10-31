@@ -12,6 +12,16 @@ const response: LabelResponse = {
 };
 beforeEach(() => request.mockReset());
 describe("warehouse demand labels", () => {
+  it("reveals a sold-out source explicitly selected from a Milo notification", async () => {
+    request.mockResolvedValue(response);
+    render(<ProductLabels sourceRevision={1} blocked={false} selectedCode="B" inventory={[
+      { code: "A", name: "Cup", stock: 2, asOf: "" },
+      { code: "B", name: "Sold out", stock: 0, asOf: "" },
+    ]} />);
+    expect(screen.getByText("Sold out").closest("tr")).toHaveClass("stock-highlight");
+    expect(screen.getByText("0")).toBeInTheDocument();
+    await waitFor(() => expect(request).toHaveBeenCalled());
+  });
   it("shows stocked products only and keeps label settings collapsed", async () => {
     request.mockResolvedValue(response);
     render(<ProductLabels sourceRevision={1} blocked={false} inventory={[
