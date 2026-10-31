@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CityChat } from "./CityChat";
+import * as imagePreparation from "./chat-evidence";
 import type { ChatArchive, Doc } from "../studio/workspace-types";
 import { openMilo, openMiloForSku, type MiloReplyPlan, type MiloCampaignPlan } from "./milo-contract";
 
@@ -83,6 +84,50 @@ async function open() {
   );
 }
 describe("account chat", () => {
+  it("pastes images without sending and rejects excess attachments", async () => {
+    vi.spyOn(imagePreparation,"prepareChatImage").mockResolvedValue({name:"pasted.png",dataUrl:"data:image/png;base64,iVBORw0KGgo="});
+    render(<CityChat />); await open();
+    const input=screen.getByRole("textbox",{name:"Message Milo"});
+    const file=new File(["image"],"pasted.png",{type:"image/png"});
+    const clipboard={items:[{kind:"file",type:"image/png",getAsFile:()=>file}],getData:()=>"Screenshot notes"};
+    fireEvent.paste(input,{clipboardData:clipboard});
+    await screen.findByRole("button",{name:"Remove pasted.png"});
+    expect(input).toHaveValue("Screenshot notes");
+    expect(vi.mocked(fetch).mock.calls.some(([path])=>path==="/api/pm/chat")).toBe(false);
+    fireEvent.paste(input,{clipboardData:{...clipboard,items:[...clipboard.items,...clipboard.items]}});
+    await screen.findByText("Attach up to two images per message.");
+    expect(imagePreparation.prepareChatImage).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button",{name:"Send message"}));
+    await screen.findByText("source timestamps");
+    expect(document.data.sessions[0]?.messages[0]?.attachments).toHaveLength(1);
+  });
+  it("discards an image that finishes decoding after switching products", async () => {
+    let finish!: (value: imagePreparation.ImageAttachment) => void;
+    vi.spyOn(imagePreparation,"prepareChatImage").mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+    render(<CityChat context={{screen:"hq",sku:"A"}} />); await open();
+    fireEvent.paste(screen.getByRole("textbox",{name:"Message Milo"}),{clipboardData:{items:[{kind:"file",type:"image/png",getAsFile:()=>new File(["image"],"A.png",{type:"image/png"})}],getData:()=>""}});
+    act(()=>openMiloForSku("B"));
+    await act(async()=>finish({name:"A.png",dataUrl:"data:image/png;base64,iVBORw0KGgo="}));
+    expect(screen.queryByRole("button",{name:"Remove A.png"})).not.toBeInTheDocument();
+    expect(screen.getByText("B",{exact:true})).toBeInTheDocument();
+  });
+  it("opens with the tracked product and preserves drafts when HQ selection changes", async () => {
+    const view=render(<CityChat context={{screen:"hq",sku:"SKU-A"}} />);
+    await open();
+    expect(screen.getByText("SKU-A",{exact:true})).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox",{name:"Message Milo"}),{target:{value:"Draft for A"}});
+    fireEvent.click(screen.getByRole("button",{name:"Close chat"}));
+    view.rerender(<CityChat context={{screen:"hq",sku:"SKU-B"}} />);
+    act(()=>window.dispatchEvent(new Event("workspace:chat")));
+    expect(screen.getByText("SKU-B",{exact:true})).toBeInTheDocument();
+    expect(screen.getByRole("textbox",{name:"Message Milo"})).toHaveValue("");
+    fireEvent.change(screen.getByRole("textbox",{name:"Message Milo"}),{target:{value:"Review B"}});
+    fireEvent.click(screen.getByRole("button",{name:"Send message"}));
+    await screen.findByText("source timestamps");
+    expect(document.data.sessions[0]?.context?.sku).toBe("SKU-B");
+    act(()=>openMiloForSku("SKU-A"));
+    expect(screen.getByRole("textbox",{name:"Message Milo"})).toHaveValue("Draft for A");
+  });
   it("reviews a campaign-only Milo draft without inventing a SKU and invalidates it on edits", async () => {
     replyCampaignPlan = { campaignId: "C1", name: "Sale test", interpretation: { method: "ai", notices: [], draft: {
       text: "Tối ưu lợi nhuận, ngân sách 2 triệu", kind: "profit", targetUnits: null, maxSpendVnd: 2000000,

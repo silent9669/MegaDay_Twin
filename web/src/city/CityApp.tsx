@@ -445,6 +445,8 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                     </SheetTitle>
                     <button className="city-icon panel-expand" aria-label={panel.expanded ? "Restore workspace" : "Expand workspace"}
                       onClick={() => panel.setExpanded(!panel.expanded)}>{panel.expanded ? <Minimize2 /> : <Maximize2 />}</button>
+                    <button className="city-icon" aria-label="Open PM assistant" title="Open PM assistant"
+                      onClick={() => window.dispatchEvent(new Event("workspace:chat"))}><MessageCircle /></button>
                     <button
                       className="city-icon"
                       aria-label="Close workspace"

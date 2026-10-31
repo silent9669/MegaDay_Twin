@@ -1,3 +1,4 @@
+import { Button } from "../components/ui/button";
 import { Goals } from "./Goals";
 import { Campaigns } from "./Campaigns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -78,6 +79,7 @@ export function HQWorkspace({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notes, setNotes] = useState<Record<string, string>>({});
+  const [activitySearch, setActivitySearch] = useState("");
   const [worksheetDrafts, setWorksheetDrafts] = useState<
     Record<string, Worksheet>
   >({});
@@ -210,6 +212,7 @@ export function HQWorkspace({
     Math.max(0, Math.ceil(products.length / 25) - 1),
   );
   const selectedStock = inventory.find((p) => p.code === active?.sku);
+  const activity = data.activity.filter(event => event.product === activeKey && `${event.action} ${event.detail}`.toLowerCase().includes(activitySearch.toLowerCase()));
   const saveWorksheet = (worksheet: Worksheet) =>
     void save(
       logged(
@@ -241,7 +244,7 @@ export function HQWorkspace({
               key={productKey(product)}
               data-active={productKey(product) === activeKey}
             >
-              <button
+              <Button variant="outline"
                 disabled={busy}
                 onClick={() =>
                   void save({ ...data, active: productKey(product) }).then(
@@ -251,33 +254,34 @@ export function HQWorkspace({
                   )
                 }
                 aria-label={`Select ${product.sku}`}
+                aria-pressed={productKey(product) === activeKey}
                 title={product.name}
               >
                 {product.sku}
                 <small>
                   {product.mode === "model" ? "Model" : "Workspace"}
                 </small>
-              </button>
-              <button
+              </Button>
+              <Button variant="outline"
                 disabled={busy}
                 aria-label={`Stop tracking ${product.sku}`}
                 onClick={() => remove(product)}
               >
                 <X size={14} />
-              </button>
+              </Button>
             </div>
           ))}
-          <button className="hq-add" onClick={() => changeTab("overview")}>
+          <Button variant="outline" className="hq-add" onClick={() => changeTab("overview")}>
             <Plus size={15} />
             Track product
-          </button>
+          </Button>
         </div>
         <Tabs
           value={tab}
           onValueChange={(value) => changeTab(value as HQTab)}
           className="hq-tabs"
         >
-          <TabsList variant="line" aria-label="HQ sections">
+          <TabsList aria-label="HQ sections">
             {tabs.map(([key, label]) => (
               <TabsTrigger key={key} value={key}>
                 {label}
@@ -360,8 +364,8 @@ export function HQWorkspace({
                               </td>
                               <td>{product.stock ?? "—"}</td>
                               <td>{product.asOf || "—"}</td>
-                              <td>
-                                <button
+                              <td><div className="hq-row-actions">
+                                <Button variant="outline"
                                   disabled={busy || !account.document}
                                   onClick={() =>
                                     track({
@@ -378,8 +382,8 @@ export function HQWorkspace({
                                   )
                                     ? "Open"
                                     : "Track product"}
-                                </button>
-                                <button
+                                </Button>
+                                <Button variant="outline"
                                   disabled={busy || !account.document}
                                   onClick={() =>
                                     track(
@@ -393,8 +397,8 @@ export function HQWorkspace({
                                   }
                                 >
                                   Compare
-                                </button>
-                              </td>
+                                </Button>
+                              </div></td>
                             </tr>
                           ))}
                       </tbody>
@@ -403,26 +407,26 @@ export function HQWorkspace({
                 )}
                 {products.length > 25 && (
                   <nav className="hq-pagination" aria-label="HQ product pages">
-                    <button
+                    <Button variant="outline"
                       disabled={currentPage === 0}
                       onClick={() => setPage(currentPage - 1)}
                     >
                       Previous
-                    </button>
+                    </Button>
                     <span>
                       {currentPage + 1} / {Math.ceil(products.length / 25)}
                     </span>
-                    <button
+                    <Button variant="outline"
                       disabled={(currentPage + 1) * 25 >= products.length}
                       onClick={() => setPage(currentPage + 1)}
                     >
                       Next
-                    </button>
+                    </Button>
                   </nav>
                 )}
                 <div className="hq-overview-links">
-                  <Link to="/mock-data">Data Studio</Link>
-                  <button onClick={() => changeTab("goals")}>Plan a goal</button>
+                  <Button variant="outline" render={<Link to="/mock-data" />}>Data Studio</Button>
+                  <Button variant="outline" onClick={() => changeTab("goals")}>Plan a goal</Button>
                 </div>
               </>
             )}
@@ -440,12 +444,11 @@ export function HQWorkspace({
               ) : !active ? (
                 <div className="hq-empty">
                   <h3>Choose a product to work on</h3>
-                  <button
-                    className="btn-primary"
+                  <Button variant="default"
                     onClick={() => changeTab("overview")}
                   >
                     Browse products
-                  </button>
+                  </Button>
                   {key === "comparisons" && <CompareIndexPage />}
                 </div>
               ) : (
@@ -506,8 +509,8 @@ export function HQWorkspace({
                     <section className="hq-activity">
                       <header>
                         <h3>Workspace activity</h3>
-                        <button
-                          className="btn-secondary"
+                        <input className="hq-activity-search" aria-label="Search activity" placeholder="Search activity" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
+                        <Button variant="outline"
                           onClick={() =>
                             analyzeWithAI(
                               {
@@ -525,7 +528,7 @@ export function HQWorkspace({
                           }
                         >
                           Analyze with AI
-                        </button>
+                        </Button>
                       </header>
                       <form
                         onSubmit={(e) => {
@@ -548,26 +551,28 @@ export function HQWorkspace({
                             rows={2}
                           />
                         </label>
-                        <button
-                          className="btn-secondary"
+                        <Button variant="outline"
+                          type="submit"
                           disabled={busy || !note.trim()}
                         >
                           Save note
-                        </button>
+                        </Button>
                       </form>
                       <ol>
-                        {data.activity
-                          .filter((event) => event.product === activeKey)
+                        {activity
                           .map((event) => (
                             <li key={event.id}>
                               <time>
                                 {new Date(event.at).toLocaleString("en-GB")}
                               </time>
                               <strong>{event.action}</strong>
-                              {event.detail && <p>{event.detail}</p>}
+                              {event.detail && (event.action === "Saved scenario assumptions"
+                                ? <details><summary>Saved assumptions</summary><pre>{event.detail}</pre></details>
+                                : <p>{event.detail}</p>)}
                             </li>
                           ))}
                       </ol>
+                      {!activity.length && <p className="hq-empty">{activitySearch ? "No matching activity." : "No activity for this product yet."}</p>}
                     </section>
                   )}
                 </>

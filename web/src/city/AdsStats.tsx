@@ -1,3 +1,4 @@
+import { Button } from "../components/ui/button";
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { inspect, normalize, type SourcePack } from "../studio/sources";
@@ -32,7 +33,7 @@ export function AdsStats({
     <section className="ads-source-stats">
       <header>
         <h3>Ad observations</h3>
-        <Link to="/city-demo?district=hq&hq=campaigns">Campaigns in HQ</Link>
+        <Button variant="outline" render={<Link to="/city-demo?district=hq&hq=campaigns" />}>Campaigns in HQ</Button>
       </header>
       <dl className="source-metrics">
         <div>
@@ -52,8 +53,7 @@ export function AdsStats({
         <p>No ad performance table imported.</p>
       ) : (
         <>
-          <button
-            className="btn-secondary"
+          <Button variant="outline"
             onClick={() =>
               analyzeWithAI(
                 {
@@ -74,7 +74,7 @@ export function AdsStats({
             }
           >
             Analyze with AI
-          </button>
+          </Button>
           {tables.map(({ file, parsed }) => (
             <details key={file.name}>
               <summary>

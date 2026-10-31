@@ -1,3 +1,4 @@
+import { Button } from "../components/ui/button";
 import { config } from "../lib/config";
 import { useMemo } from "react";
 import { useSku } from "../api/queries";
@@ -56,9 +57,8 @@ export function ProductDetails({
   return (
     <section className="hq-details">
       <header>
-        <h3>{product.name}</h3>
-        <button
-          className="btn-secondary"
+        <h3>Source records</h3>
+        <Button variant="outline"
           onClick={() =>
             analyzeWithAI(
               {
@@ -80,7 +80,7 @@ export function ProductDetails({
           }
         >
           Analyze with AI
-        </button>
+        </Button>
       </header>
       <dl className="source-metrics">
         <div>
@@ -161,8 +161,7 @@ function ModelDetails({ sku }: { sku: string }) {
     <section className="hq-details">
       <header>
         <h3>{item.name}</h3>
-        <button
-          className="btn-secondary"
+        <Button variant="outline"
           onClick={() =>
             analyzeWithAI(
               {
@@ -180,7 +179,7 @@ function ModelDetails({ sku }: { sku: string }) {
           }
         >
           Analyze with AI
-        </button>
+        </Button>
       </header>
       <dl className="source-metrics">
         {[

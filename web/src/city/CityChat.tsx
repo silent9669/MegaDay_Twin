@@ -1,6 +1,7 @@
 import { analysisContextSchema, type AnalysisContext } from "./analysis-context";
 import { prepareChatImage, type ImageAttachment } from "./chat-evidence";
 import { usePanelResize } from "./usePanelResize";
+import { useVoiceInput } from "./useVoiceInput";
 import {
   useCallback,
   useEffect,
@@ -11,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   ImagePlus,
+  Mic,
   ArrowUp,
   ArrowRight,
   Bell,
@@ -115,6 +117,10 @@ export function CityChat({
     controller = useRef<AbortController | null>(null),
     trigger = useRef<HTMLButtonElement>(null);
   const open = controlledOpen ?? localOpen;
+  const voice = useVoiceInput(open && !pending && !history && tab === "chat", draftKey, text => {
+    setDraft(previous => `${previous}${previous && !/\s$/.test(previous) ? " " : ""}${text}`.slice(0, 4000));
+    setReview(false);
+  });
   const setOpen = useCallback(
     (value: boolean) => {
       setLocalOpen(value);
@@ -129,6 +135,12 @@ export function CityChat({
   const drafts = useRef(new Map<string, string>());
   const references = useRef(new Map<string, ChangeReference | undefined>());
   const plans = useRef(new Map<string, SavedPlan>());
+  const boundContext = conversation?.context ?? selectedContext;
+  const boundScope = boundContext ? draftScope(boundContext) : null;
+  const openCurrentChat = useCallback(() => {
+    if (screenContext?.sku && boundScope !== draftScope(screenContext)) window.dispatchEvent(new CustomEvent("workspace:milo-sku", { detail: screenContext }));
+    else { setOpen(true); setTab("chat"); setHistory(false); }
+  }, [screenContext, boundScope, setOpen]);
   useEffect(() => {
     const selectSku = (event: Event) => {
       const result = miloContextSchema.safeParse((event as CustomEvent).detail);
@@ -158,6 +170,7 @@ export function CityChat({
   }, [archive.document, setOpen,draftKey,draft,analysis,attachments]);
   useEffect(() => {
     const show = (event: Event) => {
+      if (event.type === "workspace:chat") { openCurrentChat(); return; }
       setOpen(true);
       setTab(event.type === "workspace:updates" ? "updates" : "chat");
       setHistory(false);
@@ -170,8 +183,8 @@ export function CityChat({
         ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")
       ) {
         e.preventDefault();
-        if (!open) { setTab("chat"); setHistory(false); }
-        setOpen(!open);
+        if (!open) openCurrentChat();
+        else setOpen(false);
       }
       if (e.key === "Escape" && open) {
         setOpen(false);
@@ -184,7 +197,7 @@ export function CityChat({
       window.removeEventListener("workspace:chat", show);
       window.removeEventListener("workspace:updates", show);
     };
-  }, [open, setOpen]);
+  }, [open, setOpen, openCurrentChat]);
   useEffect(()=>{
     const analyze=(event:Event)=>{
       const detail=(event as CustomEvent).detail;
@@ -198,13 +211,18 @@ export function CityChat({
     window.addEventListener('workspace:analyze',analyze);
     return()=>window.removeEventListener('workspace:analyze',analyze);
   },[setOpen]);
-  async function attachImages(files:FileList|null) {
+  const imageOperation = useRef(0);
+  const imageBusy = useRef(false);
+  useEffect(() => { imageOperation.current++; }, [draftKey]);
+  async function attachImages(files:FileList|File[]|null) {
     if(!files?.length)return;
+    if(pending || imageBusy.current)return;
     if(files.length+attachments.length>2){setError('Attach up to two images per message.');return;}
-    setPreparingImage(true);setError('');
-    try{const images=await Promise.all(Array.from(files).map(prepareChatImage));setAttachments(previous=>[...previous,...images]);}
-    catch(e){setError(e instanceof Error?e.message:'Could not prepare image.');}
-    finally{setPreparingImage(false);if(imageInput.current)imageInput.current.value='';}
+    const sequence=imageOperation.current;
+    imageBusy.current=true;setPreparingImage(true);setError('');
+    try{const images=await Promise.all(Array.from(files).map(prepareChatImage));if(sequence===imageOperation.current)setAttachments(previous=>[...previous,...images]);}
+    catch(e){if(sequence===imageOperation.current)setError(e instanceof Error?e.message:'Could not prepare image.');}
+    finally{imageBusy.current=false;setPreparingImage(false);if(imageInput.current)imageInput.current.value='';}
   }
   function rememberEvidence(){evidence.current.set(draftKey,{analysis,attachments});}
   function restoreEvidence(id:string){const saved=evidence.current.get(id);setAnalysis(saved?.analysis);setAttachments(saved?.attachments??[]);}
@@ -245,6 +263,7 @@ export function CityChat({
   async function send(e: FormEvent) {
     e.preventDefault();
     if ((!draft.trim()&&!attachments.length) || pending || preparingImage || !model) return;
+    voice.cancel();
     const content = draft.trim() || "Analyze the attached image in the workspace context.";
     const message: ChatMessage = {
       id: crypto.randomUUID(),
@@ -398,7 +417,7 @@ export function CityChat({
   const launcher = (
     <div className="pm-companion" data-speaking={speaking}>
       <button ref={trigger} className="pm-launcher" aria-label="Open PM assistant"
-        aria-expanded={open} aria-controls="city-pm-chat" onClick={() => { setTab("chat"); setHistory(false); setOpen(true); }}>
+        aria-expanded={open} aria-controls="city-pm-chat" onClick={openCurrentChat}>
         <span className="pm-avatar" aria-hidden="true"><img src="/assets/milo/avatar.png" alt="" /></span>
         {!!updates?.unread && <span className="pm-unread" aria-label={`${updates.unread} unread updates`}>{updates.unread}</span>}
         <span className="pm-preview" aria-hidden="true">
@@ -562,6 +581,9 @@ export function CityChat({
                       {conversation.title}
                     </div>
                   )}
+                  {screenContext?.sku && context?.sku !== screenContext.sku && (
+                    <button type="button" className="milo-follow-product" disabled={pending || preparingImage} onClick={openCurrentChat}>Discuss HQ product · {screenContext.sku}</button>
+                  )}
                   {(context?.sku || context?.scenarioId || context?.campaignId) && (
                     <div className="milo-context" role="status">
                       <span>Discussing <strong>{context.sku ?? context.campaignId}</strong>{context.scenarioId && <small> · Scenario {context.scenarioId}</small>}</span>
@@ -694,6 +716,8 @@ export function CityChat({
                   {analysis&&<div className="change-attached"><span>{analysis.title} · {analysis.source}</span><button type="button" aria-label="Remove analysis context" onClick={()=>setAnalysis(undefined)}><X size={14}/></button></div>}
                   {!!attachments.length&&<div className="chat-images chat-attachments">{attachments.map((image,i)=><figure key={i}><img src={image.dataUrl} alt={image.name}/><button aria-label={`Remove ${image.name}`} disabled={pending} onClick={()=>setAttachments(previous=>previous.filter((_,index)=>index!==i))}><X size={14}/></button></figure>)}</div>}
                   <form className="chat-form" onSubmit={(e) => void send(e)}>
+                    {voice.error && <p className="chat-input-status" role="alert">{voice.error}</p>}
+                    {voice.listening && <p className="chat-input-status" role="status">Listening… Your words stay in the draft until you send.</p>}
                     <div className="chat-composer">
                       <textarea
                         aria-label="Message Milo"
@@ -704,6 +728,14 @@ export function CityChat({
                         disabled={pending}
                         rows={2}
                         onChange={(e) => { setDraft(e.target.value); setReview(false); }}
+                        onPaste={e => {
+                          const files = Array.from(e.clipboardData.items).filter(item => item.kind === "file" && item.type.startsWith("image/")).map(item => item.getAsFile()).filter((file): file is File => !!file);
+                          if (!files.length) return;
+                          e.preventDefault();
+                          const text=e.clipboardData.getData("text/plain");
+                          if(text) { const start=e.currentTarget.selectionStart, end=e.currentTarget.selectionEnd; setDraft(previous=>(previous.slice(0,start)+text+previous.slice(end)).slice(0,4000)); }
+                          void attachImages(files);
+                        }}
                         onKeyDown={(e) => {
                           if (
                             e.key === "Enter" &&
@@ -740,6 +772,9 @@ export function CityChat({
                     <footer>
                       <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={e=>void attachImages(e.target.files)}/>
                       <button type="button" className="city-icon" aria-label="Attach images" title="Attach images" disabled={pending||preparingImage||attachments.length>=2} onClick={()=>imageInput.current?.click()}><ImagePlus size={18}/></button>
+                      <button type="button" className="city-icon chat-microphone" aria-label={voice.listening ? "Stop voice input" : "Start voice input"} aria-pressed={voice.listening}
+                        title={voice.supported ? "Dictate using your browser’s speech service" : "Voice input is not supported in this browser"}
+                        disabled={!voice.supported || pending} onClick={voice.toggle}>{voice.listening ? <Square size={18}/> : <Mic size={18}/>}</button>
                       <label>
                         <span className="sr-only">OpenAI model</span>
                         <select
