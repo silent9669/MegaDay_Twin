@@ -46,3 +46,14 @@ CPU throttling retains the host GPU. This is not a measurement on a physical low
 Build with `npm --prefix web run build:cloudflare`. Run the generated Worker/assets locally with the account Durable Object and D1 bindings, using local-only auth credentials. Then run `QA_BASE_URL=http://127.0.0.1:5179 QA_PASSWORD_FILE=/private/path/to/local-password node web/qa/saigon.mjs`. The script rejects non-local hosts, temporarily replaces only the local inventory fixture, restores it, and writes results/screenshots under ignored `qa/runs/saigon-city-milo/`.
 
 The default GitHub workflow is manual, as configured on main. These are local results, not a claim that hosted CI ran or that production was deployed.
+
+## City life and resizable workspaces (2026-10-31)
+
+- 249 tests across 34 files, deployment safeguards, lint, typechecked Cloudflare build and deployment dry run passed.
+- `QA_HEADED=1 node web/qa/workspaces.mjs` passed in WebKit and Chromium: automatic HQ/Ads/Warehouse panels, three-place tutorial, 980px desktop default, pointer/keyboard resizing, expand/restore, direct Milo Chat with retained drafts, and mobile tutorial/chat layout.
+- `QA_HEADED=1 node web/qa/saigon.mjs` passed at five viewports, including quiet two-tab notifications, source navigation, no automatic AI calls, and static reduced-motion screenshots in both appearances. The local inventory fixture was restored.
+- Overview: 143 draw calls, 205,504 rendered triangles, 120 FPS and 9.6 ms p95 frame interval on this Mac. Close HQ view in Chrome DevTools: 130 draw calls, approximately 214k triangles, 120 FPS. These are desktop hardware measurements, not low-end mobile guarantees.
+- `QA_HEADED=1 node web/qa/city-layout.mjs` passed Chromium and WebKit at five viewports: viewport containment, Ben Thanh navigation, wheel interactions, Milo, Warehouse and navigation/reload. Final Chrome DevTools console has no warnings or errors. All four ad platforms: 177 draw calls, 207,508 triangles.
+- Original procedural architecture/clothing/tire/paint detail retains the Blender AO UVs. Citizens and vehicles remain instanced. No downloaded assets, new dependencies, migrations or production secrets are included.
+
+Browser scripts accept `QA_HEADED=1` for a hardware-rendered local run. Screenshots/results remain under ignored `qa/runs/`; the earlier screenshots above document the previous release.

@@ -8,7 +8,7 @@ const password = await readFile(process.env.QA_PASSWORD_FILE || '/tmp/megaday-qa
 const out = new URL('../../qa/runs/city-layout/', import.meta.url).pathname;
 await mkdir(out, { recursive: true });
 for (const [name, engine] of Object.entries({ webkit, chromium })) {
-  const browser = await engine.launch();
+  const browser = await engine.launch({ headless: process.env.QA_HEADED !== "1" });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 830 }, deviceScaleFactor: 2, reducedMotion: 'reduce' });
     const errors = [];
@@ -20,6 +20,8 @@ for (const [name, engine] of Object.entries({ webkit, chromium })) {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.waitForURL('**/city-demo');
     await page.getByRole('button', { name: 'Close tutorial' }).click();
+    await page.getByRole('button', { name: 'Close workspace' }).click();
+    await page.getByRole('link', { name: 'View city', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.city-canvas')?.dataset.assets === 'ready');
     const assertLayout = async () => {
       const result = await page.evaluate(() => ({
@@ -53,7 +55,6 @@ for (const [name, engine] of Object.entries({ webkit, chromium })) {
       await page.getByRole('button', { name: 'Close chat' }).click();
       await assertLayout();
       await page.getByRole('button', { name: 'Warehouse', exact: true }).click();
-      await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
       await page.getByLabel('Search products', { exact: true }).fill('GD0001');
       await page.getByRole('button', { name: 'Close workspace' }).click();
       await page.getByRole('link', { name: 'View city', exact: true }).click();
