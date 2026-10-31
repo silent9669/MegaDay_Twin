@@ -12,10 +12,9 @@ import {
   Settings,
   Sun,
   Upload,
-  X,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { useAlerts, useFreshness } from '../api/queries';
 import { config } from '../lib/config';
@@ -136,55 +135,20 @@ function SideNav({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   );
 }
 
-function AssistantPanel({ onClose }: { onClose: () => void }) {
-  const t = viText.pages.assistant;
-  return (
-    <aside aria-label={t.panelTitle} className="hidden w-80 shrink-0 flex-col border-l border-border bg-surface lg:flex">
-      <div className="flex h-11 items-center justify-between border-b border-border px-3">
-        <span className="font-medium">{t.panelTitle}</span>
-        <button type="button" className="icon-btn" aria-label={t.close} onClick={onClose}>
-          <X aria-hidden className="size-4" />
-        </button>
-      </div>
-      <div className="flex-1 p-4 text-muted">
-        <p>{t.emptyBody}</p>
-        <Link to="/assistant" className="mt-3 inline-block text-accent hover:underline">
-          {t.openFull}
-        </Link>
-      </div>
-    </aside>
-  );
-}
-
 export function AppShell() {
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setAssistantOpen((v) => !v);
-      } else if (e.key === 'Escape') {
-        setAssistantOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   return (
     <div className="flex h-full flex-col">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-10 focus:rounded focus:bg-surface focus:px-3 focus:py-2">
         {viText.app.skipToContent}
       </a>
-      <TopBar onToggleAssistant={() => setAssistantOpen((v) => !v)} />
+      <TopBar onToggleAssistant={() => window.dispatchEvent(new Event('workspace:chat'))} />
       <div className="flex min-h-0 flex-1">
         <SideNav collapsed={navCollapsed} onToggle={() => setNavCollapsed((v) => !v)} />
         <main id="main" className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
           <Outlet />
         </main>
-        {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} /> : null}
       </div>
     </div>
   );

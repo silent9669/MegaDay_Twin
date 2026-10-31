@@ -8,7 +8,9 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { api, ApiError } from '../../api/client';
 import type { CampaignDetail, Recommendation, ScenarioResult, ScenarioRun, SimRequest } from '../../api/types';
 import { config } from '../../lib/config';
-import { routes } from '../../routes';
+import { ComparePage,CompareIndexPage } from './ComparePage';
+import { ShiftOverviewPage } from '../ShiftOverviewPage';
+const routes=[{path:'/',element:<ShiftOverviewPage/>},{path:'/compare',element:<CompareIndexPage/>},{path:'/campaign/:id/compare',element:<ComparePage/>},{path:'/sku/:sku/compare',element:<ComparePage/>}];
 
 const META = {
   data_as_of: '2026-11-11T00:00:00+07:00',
@@ -140,11 +142,11 @@ const CAMPAIGN: CampaignDetail = {
   ],
   price_max_vnd: 690_000,
   commitments: [{ kind: 'campaign_must_run', windows_local: [[0, 2]], text: 'Không tắt chiến dịch trong khung flash sale (đã cam kết với sàn)' }],
-  goal: { goal_id: 'goal-1', kind: 'profit', label: 'Lợi nhuận tới 00:00 12/11', deadline: '2026-11-12T00:00:00+07:00', target_units: null, confirmed_by: 'u-lead-1', version: 1 },
+  goal: { goal_id: 'goal-1', kind: 'profit', label: 'Profit through 00:00 12/11', deadline: '2026-11-12T00:00:00+07:00', target_units: null, confirmed_by: 'u-lead-1', version: 1 },
 };
 
 const ME = (lead: boolean) => ({
-  data: { id: lead ? 'u-lead-1' : 'u-ops-1', role: lead ? 'lead' : 'operator', role_label: lead ? 'Trưởng nhóm' : 'Vận hành', can_run_scenarios: true, can_edit_goals: lead },
+  data: { id: lead ? 'u-lead-1' : 'u-ops-1', role: lead ? 'lead' : 'operator', role_label: lead ? 'Lead' : 'Operator', can_run_scenarios: true, can_edit_goals: lead },
   meta: META,
 });
 
@@ -203,16 +205,16 @@ describe('Compare · real API', () => {
   it('loads campaign, active recommendation and scenario; explains the missing zone bar', async () => {
     const { gets } = stub({});
     renderAt('/campaign/CD002/compare');
-    expect(await screen.findByText('Chỉ chạy 0–2h, 12–14h. Lợi hơn giảm ngân sách 50% khoảng 1,5 triệu đ.')).toBeInTheDocument();
-    expect(screen.getByText(/Không vẽ thanh vùng vì giữ hàng lợi hơn bán ở giá sale/)).toBeInTheDocument();
-    expect(screen.getByText('Pause tốt hơn tiếp tục, nhưng không được tắt hẳn vì cam kết flash sale.')).toBeInTheDocument();
-    expect(screen.getByText('Mục tiêu: Lợi nhuận tới 00:00 12/11')).toBeInTheDocument();
-    expect(screen.getByText(/Chiến dịch: \[Tìm kiếm\] Nồi chiên mini \+ giấy lót/)).toBeInTheDocument();
+    expect(await screen.findByText('Run 0–2h, 12–14h. About 1.5 million VND better than reduce budget 50%.')).toBeInTheDocument();
+    expect(screen.getByText(/Holding stock is worth more than selling/)).toBeInTheDocument();
+    expect(screen.getByText('Pausing is financially better but blocked by a flash-sale commitment.')).toBeInTheDocument();
+    expect(screen.getByText('Goal: Profit through 00:00 12/11')).toBeInTheDocument();
+    expect(screen.getByText(/Campaign: \[Tìm kiếm\] Nồi chiên mini \+ giấy lót/)).toBeInTheDocument();
 
-    const cards = screen.getByRole('list', { name: 'Năm hành động' });
-    const pause = within(cards).getAllByRole('listitem').find((li) => li.textContent?.startsWith('Tạm dừng'));
-    expect(pause).toHaveTextContent('Không làm được');
-    expect(pause).toHaveTextContent('Nếu bỏ ràng buộc: 4,5 tr');
+    const cards = screen.getByRole('list', { name: 'Five actions' });
+    const pause = within(cards).getAllByRole('listitem').find((li) => li.textContent?.startsWith('Pause ads'));
+    expect(pause).toHaveTextContent('Not feasible');
+    expect(pause).toHaveTextContent('Without the constraint: 4.5 M');
 
     expect(gets).toEqual(
       expect.arrayContaining(['/campaigns/CD002', '/recommendations?campaign_id=CD002&active=true', '/recommendations/rec-REAL', '/scenarios/scn-REAL']),
@@ -222,9 +224,9 @@ describe('Compare · real API', () => {
   it('reason_sources become citation chips that link to the app route', async () => {
     stub({});
     renderAt('/campaign/CD002/compare');
-    await userEvent.click(await screen.findByRole('button', { name: 'Vì sao?' }));
-    await userEvent.click(screen.getByRole('button', { name: /531\.000đ/ }));
-    const dialog = screen.getByRole('dialog', { name: 'Nguồn: Giá bán, giá vốn, phí sàn của NOICHIEN2L' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Reasons & assumptions' }));
+    await userEvent.click(screen.getByRole('button', { name: /531,000 VND/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Source: Price, cost and platform fees for NOICHIEN2L' });
     expect(dialog).toHaveTextContent('get_sku_snapshot');
     expect(within(dialog).getByRole('link')).toHaveAttribute('href', '/sku/NOICHIEN2L');
   });
@@ -232,10 +234,10 @@ describe('Compare · real API', () => {
   it('slider: POST /scenarios/run with 300 samples while dragging, 1000 on release, echoed request', async () => {
     const { posts } = stub({});
     renderAt('/campaign/CD002/compare');
-    await userEvent.click(await screen.findByRole('button', { name: 'Vì sao?' }));
-    const slider = screen.getByLabelText(/1 sp còn lại sau hạn/);
+    await userEvent.click(await screen.findByRole('button', { name: 'Reasons & assumptions' }));
+    const slider = screen.getByLabelText(/Net leftover value per unit/);
     expect(slider).toHaveAttribute('max', '690000');
-    expect(screen.getByLabelText(/Hàng về trễ/)).toHaveAttribute('min', '-7');
+    expect(screen.getByLabelText(/Restock delay/)).toHaveAttribute('min', '-7');
 
     fireEvent.change(slider, { target: { value: '900000' } });
     await waitFor(() => expect(posts).toHaveLength(1));
@@ -251,17 +253,17 @@ describe('Compare · real API', () => {
   it('shows the API message when a re-run fails', async () => {
     stub({ post: () => new ApiError(400, 'PARAM_OUT_OF_RANGE', 'Giá trị hàng dư phải từ 0 đến 690.000đ.', { max: 690_000 }) });
     renderAt('/campaign/CD002/compare');
-    await userEvent.click(await screen.findByRole('button', { name: 'Vì sao?' }));
-    fireEvent.change(screen.getByLabelText(/Hàng về trễ/), { target: { value: '-1' } });
-    expect(await screen.findByText('Chưa chạy lại được: Giá trị hàng dư phải từ 0 đến 690.000đ.')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Reasons & assumptions' }));
+    fireEvent.change(screen.getByLabelText(/Restock delay/), { target: { value: '-1' } });
+    expect(await screen.findByText('Could not rerun: Giá trị hàng dư phải từ 0 đến 690.000đ.')).toBeInTheDocument();
   });
 
   it('no goal, operator: says a lead must set one; no form', async () => {
     stub({ campaign: { ...CAMPAIGN, campaign_id: 'CD006', goal: null }, recs: [] });
     renderAt('/campaign/CD006/compare');
-    expect(await screen.findByText('Chiến dịch CD006 chưa có mục tiêu')).toBeInTheDocument();
-    expect(await screen.findByText(/Nhờ trưởng nhóm đặt mục tiêu/)).toBeInTheDocument();
-    expect(screen.queryByRole('form', { name: 'Đặt mục tiêu' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Campaign CD006 needs a goal')).toBeInTheDocument();
+    expect(await screen.findByText(/Ask a lead to set the campaign goal/)).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Set goal' })).not.toBeInTheDocument();
   });
 
   it('no goal, lead: POST /goals then POST /scenarios/run, then opens the new recommendation', async () => {
@@ -275,8 +277,8 @@ describe('Compare · real API', () => {
           : undefined,
     });
     const router = renderAt('/campaign/CD006/compare');
-    const form = await screen.findByRole('form', { name: 'Đặt mục tiêu' });
-    await userEvent.click(within(form).getByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng' }));
+    const form = await screen.findByRole('form', { name: 'Set goal' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Save goal and simulate' }));
     await waitFor(() => expect(posts.map((p) => p.path)).toEqual(['/goals', '/scenarios/run']));
     expect(posts[0]?.body).toMatchObject({ scope: 'campaign', scope_id: 'CD006', kind: 'profit', deadline: '2026-11-12T00:00:00+07:00' });
     expect(posts[1]?.body).toMatchObject({ campaign_id: 'CD006', goal_id: 'goal-NEW', samples: 1000 });
@@ -292,8 +294,8 @@ describe('Compare · real API', () => {
         }),
     });
     renderAt('/campaign/CD002/compare');
-    await userEvent.click(await screen.findByRole('button', { name: 'Chạy mô phỏng (1.000 mẫu)' }));
-    expect(await screen.findByText('Chưa tính được vì thiếu dữ liệu')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Run simulation (1,000 samples)' }));
+    expect(await screen.findByText('Missing required data')).toBeInTheDocument();
     expect(screen.getByText('Thiếu giá vốn: THAM-XANH, TUIZIP5-G1')).toBeInTheDocument();
   });
 });

@@ -92,13 +92,13 @@ describe("account chat", () => {
     act(() => openMilo({ screen: "sale-planner", campaignId: "C1" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Message Milo" }), { target: { value: replyCampaignPlan.interpretation.draft.text } });
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Kiểm tra mục tiêu" }));
-    await waitFor(() => expect(screen.getByLabelText("Chiến dịch")).toHaveValue("C1"));
+    fireEvent.click(await screen.findByRole("button", { name: "Review goal" }));
+    await waitFor(() => expect(screen.getByLabelText("Campaign")).toHaveValue("C1"));
     expect(document.data.sessions[0]!.context).toEqual({ screen: "sale-planner", campaignId: "C1" });
-    expect(screen.getByRole("button", { name: "Mô phỏng thử" })).toBeDisabled();
-    expect(screen.queryByText(/Mục tiêu gắn với SKU/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview simulation" })).toBeDisabled();
+    expect(screen.queryByText(/Goal for SKU/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Message Milo" }), { target: { value: "Đổi ngân sách" } });
-    expect(screen.queryByRole("button", { name: "Mô phỏng thử" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Preview simulation" })).not.toBeInTheDocument();
   });
   it("keeps SKU identifiers with the saved conversation and reviews before any simulation", async () => {
     replyPlan = { context: { sku: { sku: 'SKU-A', name: 'Product A', variant: '', stockAvailable: 200, soldTodayUnits: 20, priceEffectiveVnd: 50000, contributionPerUnitVnd: 10000, demandGroup: 'normal' }, campaigns: [{ id: 'C1', name: 'Sale test', skus: ['SKU-A'] }], dataAsOf: '2026-11-11T00:00:00Z', source: null, canPlan: true, notices: [], opening: 'Your goal?' }, interpretation: { method: 'ai', notices: [], draft: { text: 'Sell 100 units', kind: 'sell_target', targetUnits: 100, maxSpendVnd: 2000000, maxLossVnd: null, start: '2026-11-11T01:00:00Z', deadline: '2026-11-11T05:00:00Z', sellTargetProbability: null, minMarginalReturn: null, unresolved: [] } } };
@@ -106,25 +106,25 @@ describe("account chat", () => {
     act(() => openMiloForSku('SKU-A'));
     fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Sell 100 units' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra mục tiêu' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review goal' }));
     expect(document.data.sessions[0]!.context).toEqual({ screen: 'hq', sku: 'SKU-A' });
     const call = vi.mocked(fetch).mock.calls.find(([path]) => path === '/api/pm/chat')!;
     expect(JSON.parse(String(call[1]?.body)).context).toEqual({ screen: 'hq', sku: 'SKU-A' });
-    await waitFor(() => expect(screen.getByLabelText('Chiến dịch')).toHaveValue('C1'));
-    expect(screen.getByLabelText('Số sản phẩm mục tiêu')).toHaveValue(100);
-    expect(screen.getByRole('button', { name: 'Mô phỏng thử' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('Campaign')).toHaveValue('C1'));
+    expect(screen.getByLabelText('Target units')).toHaveValue(100);
+    expect(screen.getByRole('button', { name: 'Preview simulation' })).toBeDisabled();
     expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/run'))).toBe(false);
     fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Actually 150' } });
-    expect(screen.queryByRole('button', { name: 'Mô phỏng thử' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview simulation' })).not.toBeInTheDocument();
     let finish!: () => void;
     waitForReply = () => new Promise((resolve) => { finish = resolve; });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([path]) => path === '/api/pm/chat')).toHaveLength(2));
     act(() => openMiloForSku('SKU-B'));
     act(() => openMiloForSku('SKU-A'));
-    expect(screen.queryByRole('button', { name: 'Kiểm tra mục tiêu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review goal' })).not.toBeInTheDocument();
     await act(async () => { finish(); });
-    expect(screen.queryByRole('button', { name: 'Kiểm tra mục tiêu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review goal' })).not.toBeInTheDocument();
   });
   it('opens a separate result context even when the SKU matches an existing goal chat', async () => {
     render(<CityChat />); await open();
@@ -154,7 +154,7 @@ describe("account chat", () => {
     await act(async () => { release(); });
     expect(screen.getByText('SKU-B', { exact: true })).toBeInTheDocument();
     expect(screen.queryByText('source timestamps')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Kiểm tra mục tiêu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review goal' })).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Message Milo' })).toHaveValue('');
   });
   it("replaces delete with history and persists a model preference", async () => {
@@ -275,4 +275,16 @@ it('opens Chat directly from the avatar and sidebar after viewing Updates', asyn
   fireEvent.click(screen.getByRole('tab', { name: /Updates/ }));
   fireEvent(window, new Event('workspace:chat'));
   expect(screen.getByRole('textbox', { name: 'Message Milo' })).toBeVisible();
+});
+
+it('opens contextual analysis without sending and persists the evidence with the user message',async()=>{
+ render(<CityChat/>);await open();
+ fireEvent.change(screen.getByRole('textbox',{name:'Message Milo'}),{target:{value:'My unsent question'}});
+ const analysis={title:'Comparison',source:'user-assumptions',data:'{"stock":83}'};
+ fireEvent(window,new CustomEvent('workspace:analyze',{detail:{context:analysis,prompt:'Explain this comparison'}}));
+ expect(screen.getByRole('textbox',{name:'Message Milo'})).toHaveValue('My unsent question');
+ expect(screen.getByRole('button',{name:'Remove analysis context'})).toBeVisible();
+ expect(vi.mocked(fetch).mock.calls.some(([path])=>path==='/api/pm/chat')).toBe(false);
+ fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('source timestamps');
+ expect(document.data.sessions[0]?.messages[0]?.analysis).toEqual(analysis);
 });

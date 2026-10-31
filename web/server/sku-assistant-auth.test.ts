@@ -37,3 +37,12 @@ describe("SKU assistant worker boundary", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+it('keeps HQ documents and Milo runtime behind authenticated, same-origin routes',async()=>{
+ const storage={fetch:vi.fn(async(request:Request)=>Response.json({ok:request.method==="POST"}))};
+ const workspace={idFromName:vi.fn(()=> 'account'),get:vi.fn(()=>storage)};
+ expect((await worker.fetch(new Request('https://app.test/api/workspace/hq'),{...env,WORKSPACE:workspace})).status).toBe(401);
+ expect((await worker.fetch(new Request('https://app.test/api/pm/chat',{method:'POST',headers:{cookie,Origin:'https://other.test'},body:'{}'}),{...env,WORKSPACE:workspace})).status).toBe(403);
+ expect(storage.fetch).not.toHaveBeenCalled();
+ expect((await worker.fetch(new Request('https://app.test/api/pm/chat',{method:'POST',headers:{cookie,Origin:'https://app.test'},body:'{}'}),{...env,WORKSPACE:workspace})).status).toBe(200);
+ expect(new URL(storage.fetch.mock.calls[0]![0].url).pathname).toBe('/internal/milo/chat');
+});

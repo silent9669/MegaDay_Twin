@@ -150,3 +150,14 @@ it("discards a late campaign response after the saved campaign scope changes", a
   expect((await savedChat(f.request(), {}, {}, f.storage)).status).toBe(409);
   expect(f.storage.fetch.mock.calls.every(([r]) => r.method === "GET")).toBe(true);
 });
+
+it('uses stored analysis and image evidence on retry instead of client replacements',async()=>{
+ const f=fixture();const message=f.document.data.sessions[0]!.messages[0]!;
+ message.analysis={title:'Comparison',source:'user-assumptions',data:'{"stock":83}'};
+ message.attachments=[{name:'chart.png',dataUrl:'data:image/png;base64,iVBORw0KGgo='}];
+ const response=await savedChat(f.request({analysis:{data:'invented'},attachments:[{dataUrl:'https://untrusted.test/a.png'}]}),{},{},f.storage);
+ expect(response.status).toBe(200);
+ const forwarded=await vi.mocked(pmChat).mock.calls[0]![0].json() as {messages:unknown[]};
+ expect(forwarded.messages[0]).toMatchObject({analysis:message.analysis,attachments:message.attachments});
+ expect(JSON.stringify(forwarded)).not.toContain('invented');expect(JSON.stringify(forwarded)).not.toContain('untrusted.test');
+});

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SkuGoalAssistant } from './SkuGoalAssistant';
@@ -22,7 +22,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
-function mount() { render(<MemoryRouter initialEntries={['/sku-assistant?sku=SKU-A']}><SkuGoalAssistant /></MemoryRouter>); }
+function mount() { return render(<MemoryRouter><SkuGoalAssistant key="SKU-A" sku="SKU-A" /></MemoryRouter>); }
 
 describe('SKU context and Milo handoff', () => {
   it('keeps actual facts and sources, opening Milo with identifiers only', async () => {
@@ -30,7 +30,9 @@ describe('SKU context and Milo handoff', () => {
     try {
       mount(); await screen.findByRole('heading', { name: 'Sản phẩm SKU-A' });
       expect(screen.getAllByText('Nguồn SKU đã nhập', { exact: false })).toHaveLength(4);
-      expect(screen.getByText(/Ngân sách, lỗ kỳ vọng và chỉ số kinh tế J luôn thuộc toàn chiến dịch/)).toBeInTheDocument();
+      expect(screen.getByText(/Budget, expected loss and economic value J always apply to the whole campaign/)).toBeInTheDocument();
+      expect(listener).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Discuss with Milo' }));
       expect(listener).toHaveBeenCalledOnce();
       expect((listener.mock.calls[0]![0] as CustomEvent).detail).toEqual({ sku: 'SKU-A', screen: 'hq' });
       expect(fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
@@ -40,10 +42,12 @@ describe('SKU context and Milo handoff', () => {
   it('switches Milo scope when selecting a different product', async () => {
     const listener = vi.fn(); window.addEventListener('workspace:milo-sku', listener);
     try {
-      mount(); await screen.findByRole('heading', { name: 'Sản phẩm SKU-A' });
-      fireEvent.click(await screen.findByRole('button', { name: 'Chọn SKU SKU-B' }));
+      const view = mount(); await screen.findByRole('heading', { name: 'Sản phẩm SKU-A' });
+      fireEvent.click(screen.getByRole('button', { name: 'Discuss with Milo' }));
+      view.rerender(<MemoryRouter><SkuGoalAssistant key="SKU-B" sku="SKU-B" /></MemoryRouter>);
       await screen.findByRole('heading', { name: 'Sản phẩm SKU-B' });
-      await waitFor(() => expect(listener).toHaveBeenCalledTimes(2));
+      fireEvent.click(screen.getByRole('button', { name: 'Discuss with Milo' }));
+      expect(listener).toHaveBeenCalledTimes(2);
       expect((listener.mock.calls[1]![0] as CustomEvent).detail.sku).toBe('SKU-B');
     } finally { window.removeEventListener('workspace:milo-sku', listener); }
   });
@@ -51,9 +55,9 @@ describe('SKU context and Milo handoff', () => {
     fetchMock.mockImplementation(async () => Response.json({ error: { message: 'Backend chưa kết nối' } }, { status: 503 }));
     const listener = vi.fn(); window.addEventListener('workspace:milo-sku', listener);
     try {
-      mount(); await screen.findByRole('heading', { name: 'Chưa đọc được SKU SKU-A' });
+      mount(); await screen.findByRole('heading', { name: 'Could not load SKU SKU-A' });
       expect(listener).not.toHaveBeenCalled();
-      expect(screen.queryByRole('button', { name: /Trao đổi với Milo/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Discuss with Milo/ })).not.toBeInTheDocument();
     } finally { window.removeEventListener('workspace:milo-sku', listener); }
   });
 });

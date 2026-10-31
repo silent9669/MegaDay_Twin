@@ -6,7 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { api, ApiError } from '../api/client';
 import type { SkuListItem } from '../api/types';
-import { routes } from '../routes';
+import { ShiftOverviewPage } from './ShiftOverviewPage';
+const routes=[{path:'/',element:<ShiftOverviewPage/>}];
 
 const META = { data_as_of: '2026-11-11T00:00:00+07:00', computed_at: '2026-10-30T15:10:47+07:00', compute_state: null, confidence: null, sources: [], cache_hit: null };
 
@@ -80,7 +81,7 @@ function renderAt(path: string) {
 }
 
 const common: Handler = (path) => {
-  if (path === '/me') return { data: { id: 'u-ops-1', role: 'operator', role_label: 'Vận hành', can_run_scenarios: true, can_edit_goals: false }, meta: META };
+  if (path === '/me') return { data: { id: 'u-ops-1', role: 'operator', role_label: 'Operator', can_run_scenarios: true, can_edit_goals: false }, meta: META };
   if (path === '/freshness')
     return {
       data: {
@@ -89,7 +90,7 @@ const common: Handler = (path) => {
         data_as_of: '2026-11-11T00:00:00+07:00',
         sources: [
           { source: 'orders', label: 'Đơn hàng', as_of: '2026-11-11T00:00:00+07:00', status: 'fresh', lag_minutes: 0, threshold_minutes: 30 },
-          { source: 'inventory', label: 'Tồn kho', as_of: '2026-11-10T20:00:00+07:00', status: 'stale', lag_minutes: 240, threshold_minutes: 60 },
+          { source: 'inventory', label: 'Inventory', as_of: '2026-11-10T20:00:00+07:00', status: 'stale', lag_minutes: 240, threshold_minutes: 60 },
         ],
       },
       meta: META,
@@ -114,26 +115,24 @@ describe('Tổng quan ca · real API shapes', () => {
     });
     renderAt('/');
 
-    const attention = await screen.findByRole('region', { name: /Cần xem ngay \(2\)/ });
+    const attention = await screen.findByRole('region', { name: /Needs attention \(2\)/ });
     const cards = within(attention).getAllByRole('listitem');
     expect(cards[0]).toHaveTextContent('Nồi chiên không dầu mini 2L');
-    expect(cards[0]).toHaveTextContent('Còn 83 sp · hết khoảng 17:00');
-    expect(within(cards[0] as HTMLElement).getByRole('link', { name: /^So sánh/ })).toHaveAttribute('href', '/sku/NOICHIEN2L/compare');
-    expect(within(cards[0] as HTMLElement).getByRole('link', { name: 'Lập mục tiêu NOICHIEN2L' })).toHaveAttribute('href', '/sku-assistant?sku=NOICHIEN2L');
-    expect(cards[1]).toHaveTextContent('Áo giữ nhiệt nam(2 phân loại)');
-    expect(within(cards[1] as HTMLElement).getByRole('link', { name: /^So sánh/ })).toHaveAttribute('href', '/sku/AOGIUNHIET-M/compare');
-    expect(within(cards[1] as HTMLElement).getByRole('link', { name: 'Lập mục tiêu AOGIUNHIET-M' })).toHaveAttribute('href', '/sku-assistant?sku=AOGIUNHIET-M');
+    expect(cards[0]).toHaveTextContent('83 units available · stockout around 17:00');
+    expect(within(cards[0] as HTMLElement).getByRole('link', {name:/^Compare/})).toHaveAttribute('href', '/sku/NOICHIEN2L/compare');
+    expect(cards[1]).toHaveTextContent('Áo giữ nhiệt nam(2 variants)');
+    expect(within(cards[1] as HTMLElement).getByRole('link', {name:/^Compare/})).toHaveAttribute('href', '/sku/AOGIUNHIET-M/compare');
     expect(within(attention).queryByText(/Câu đối/)).not.toBeInTheDocument();
 
-    expect(await screen.findByText('Vai trò: Vận hành (u-ops-1)')).toBeInTheDocument();
-    expect(screen.getByText(/Dữ liệu Tồn cũ hơn ngưỡng/)).toBeInTheDocument();
+    expect(await screen.findByText('Role: Operator (u-ops-1)')).toBeInTheDocument();
+    expect(screen.getByText(/Inventory data is stale/)).toBeInTheDocument();
 
     const table = await screen.findByRole('table');
     expect(within(table).getByText('CAUDOI-A')).toBeInTheDocument();
     expect(calls).toEqual(expect.arrayContaining(['/me', '/freshness', '/skus?sort=priority&limit=200', '/skus?sort=priority&limit=50']));
   });
 
-  it('"Tải thêm" follows next_cursor', async () => {
+  it('"Load more" follows next_cursor', async () => {
     const calls = stub((path) => {
       const c = common(path);
       if (c !== undefined) return c;
@@ -143,13 +142,13 @@ describe('Tổng quan ca · real API shapes', () => {
       throw new Error(`unexpected ${path}`);
     });
     renderAt('/');
-    await userEvent.click(await screen.findByRole('button', { name: 'Tải thêm' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Load more' }));
     expect(await screen.findByText('CAUDOI-A')).toBeInTheDocument();
-    expect(screen.getByText('2 mã')).toBeInTheDocument();
+    expect(screen.getByText('2 products')).toBeInTheDocument();
     expect(calls).toContain('/skus?sort=priority&limit=50&cursor=CUR1');
   });
 
-  it('meta.total → "Toàn bộ SKU (N)" and "Đã tải n/N mã"', async () => {
+  it('meta.total → "All products (N)" and "Đã tải n/N mã"', async () => {
     stub((path) => {
       const c = common(path);
       if (c !== undefined) return c;
@@ -158,22 +157,22 @@ describe('Tổng quan ca · real API shapes', () => {
       throw new Error(`unexpected ${path}`);
     });
     renderAt('/');
-    expect(await screen.findByRole('heading', { name: 'Toàn bộ SKU (2)' })).toBeInTheDocument();
-    expect(await screen.findByText('Đã tải 1/2 mã')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'All products (2)' })).toBeInTheDocument();
+    expect(await screen.findByText('1 of 2 products')).toBeInTheDocument();
   });
 
   it('empty: no SKU → import call to action', async () => {
     stub((path) => common(path) ?? { data: [], meta: META, next_cursor: null });
     renderAt('/');
-    expect(await screen.findByText('Chưa có dữ liệu SKU')).toBeInTheDocument();
-    const links = screen.getAllByRole('link', { name: 'Nhập dữ liệu' });
+    expect(await screen.findByText('No products yet')).toBeInTheDocument();
+    const links = screen.getAllByRole('link', { name: 'Data Studio' });
     expect(links.some((a) => a.className.includes('btn-primary') && a.getAttribute('href') === '/import')).toBe(true);
   });
 
   it('nothing to review: says when it was last computed', async () => {
     stub((path) => common(path) ?? { data: [stockedOut], meta: META, next_cursor: null });
     renderAt('/');
-    expect(await screen.findByText('Không có SKU nào cần xem ngay. Lần tính gần nhất lúc 14:47.')).toBeInTheDocument();
+    expect(await screen.findByText('No products need attention. Last computed at 14:47.')).toBeInTheDocument();
   });
 
   it('error: API failure shows what failed and a retry button', async () => {
@@ -181,7 +180,7 @@ describe('Tổng quan ca · real API shapes', () => {
     renderAt('/');
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Thiếu thông tin người dùng (X-User).');
-    expect(alert).toHaveTextContent('Mã lỗi: UNAUTHENTICATED');
-    expect(within(alert).getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+    expect(alert).toHaveTextContent('Error: UNAUTHENTICATED');
+    expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 });

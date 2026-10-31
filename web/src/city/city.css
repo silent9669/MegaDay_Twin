@@ -232,8 +232,7 @@
   margin-top: 18px;
   pointer-events: auto;
 }
-.city-district-actions button,
-.city-camera button {
+.city-district-actions button {
   background: #fbfcf5ed;
   border: 1px solid #d6dfd1;
   border-radius: 7px;
@@ -247,23 +246,6 @@
   background: #355f49;
   border: 1px solid #355f49;
   color: #fff;
-}
-.city-camera {
-  position: absolute;
-  right: 22px;
-  bottom: 24px;
-  display: flex;
-  gap: 6px;
-}
-.city-camera button {
-  width: 38px;
-  height: 38px;
-  justify-content: center;
-  padding: 0;
-}
-.city-camera svg {
-  width: 17px;
-  height: 17px;
 }
 .city-stats {
   position: absolute;
@@ -1256,15 +1238,6 @@
   .city-stats a span {
     max-width: none;
   }
-  .city-camera {
-    bottom: 12px;
-    right: 12px;
-    gap: 4px;
-  }
-  .city-camera button {
-    width: 34px;
-    height: 34px;
-  }
   .city-footer {
     padding: 0 10px 0 65px;
     font-size: 8px;
@@ -1546,14 +1519,14 @@
   --bg: #142426; --fg: #e0e9e2; --muted: #a7b9b0; --border: #354a46;
   color-scheme: dark; background: var(--city-paper); color: var(--city-ink);
 }
-[data-city-appearance="night"] :is(.city-scene-title h1, .city-sidebar a, .city-sidebar button,
-  .city-stats strong, .city-camera button, .chat-composer textarea, .chat-history-list > button, .chat-search input, .chat-welcome button,
+[data-city-appearance="night"] :is(.city-topbar, .city-scene-title h1, .city-sidebar a, .city-sidebar button,
+  .city-stats strong, .chat-composer textarea, .chat-history-list > button, .chat-search input, .chat-welcome button,
   .chat-session-title, .chat-form select, .workspace-tabs button) {color:var(--city-ink);}
 [data-city-appearance="night"] :is(.city-scene-title > span, .city-stats span, .city-footer,
   .chat-role, .chat-form footer, .chat-history-list small, .chat-history-list time,
   .chat-identity span, .chat-thinking, .district-workspace-body > p) {color:var(--city-muted);}
-[data-city-appearance="night"] :is(.city-stats, .city-stats > a, .city-camera, .city-camera button,
-  .city-loading, .city-chat > header, .chat-composer, .chat-form select,
+[data-city-appearance="night"] :is(.city-stats, .city-stats > a,
+  .city-loading, .city-chat > header, .district-workspace > header, .chat-composer, .chat-form select,
   .platform-card, .city-district-actions button, .city-settings select) {
   background:var(--city-paper); border-color:var(--city-line);
 }
@@ -1588,12 +1561,10 @@
 .city-map-pin[aria-current="true"] span {background:var(--city-soft);border-color:var(--city-green);}
 .city-map-pin:hover span,.city-map-pin:focus-visible span {transform:translateY(-4px);background:var(--city-soft);}
 .city-map-pin:active span {transform:translateY(-1px) scale(.97);}
-.city-camera select {max-width:110px;min-height:44px;border:1px solid var(--city-line);border-radius:8px;padding:0 8px;background:var(--city-paper);color:var(--city-ink);font:inherit;font-size:12px;}
-.city-camera button {min-width:44px;min-height:44px;}
-.city-sidebar :is(button,a),.city-camera button {transition:background-color 150ms ease,transform 150ms ease;}
-@media(hover:hover) and (prefers-reduced-motion:no-preference){.city-sidebar :is(button,a):hover{transform:translateX(2px);}.city-camera button:hover{transform:translateY(-2px);}}
+.city-sidebar :is(button,a) {transition:background-color 150ms ease,transform 150ms ease;}
+@media(hover:hover) and (prefers-reduced-motion:no-preference){.city-sidebar :is(button,a):hover{transform:translateX(2px);}}
 @media(prefers-reduced-motion:reduce){.city-map-pin:hover span,.city-map-pin:focus-visible span,.city-map-pin:active span{transform:none;}}
-@media(max-width:600px){.city-camera {gap:4px;}.city-camera select{max-width:92px;}.city-map-pin span{font-size:10px;padding:7px 10px;}}
+@media(max-width:600px){.city-map-pin span{font-size:10px;padding:7px 10px;}}
 
 .pm-companion {position:relative;pointer-events:auto;width:48px;height:48px;}
 .pm-companion .pm-avatar > img {width:48px;height:48px;max-width:none;object-fit:contain;margin:0;}
@@ -1636,3 +1607,21 @@
 .district-workspace>header>.panel-expand {margin-left:auto;}
 .city-chat[data-slot=sheet-content] {max-width:calc(100vw - 112px);}
 @media(max-width:899px){.panel-resize-grip,.panel-expand{display:none;}.district-workspace>header>.city-icon:last-child{margin-left:auto;}.city-chat[data-slot=sheet-content]{max-width:none;}}
+/* Milo shares the desktop with the workplace instead of replacing it. */
+.panel-resize-right{left:auto;right:0;}
+.city-chat[data-slot=sheet-content]{right:auto;left:94px;}
+.pm-global-launcher{position:fixed;left:88px;bottom:54px;z-index:45;}
+@media(max-width:1023px){
+ .panel-resize-grip,.panel-expand{display:none;}
+ .district-workspace[data-slot=sheet-content],.district-workspace.hq-workspace[data-slot=sheet-content],.city-chat[data-slot=sheet-content],.city-chat.chat-expanded[data-slot=sheet-content]{inset:12px;width:auto;max-width:none;height:auto;border-radius:16px;}
+}
+.chat-images { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+.chat-images img { max-width:160px; max-height:140px; object-fit:contain; border-radius:8px; }
+.chat-attachments { padding:0 14px; margin:0; }
+.chat-attachments figure { margin:0; position:relative; }
+.chat-attachments img { width:64px; height:64px; object-fit:cover; }
+.chat-attachments button { position:absolute; right:0; top:0; border-radius:50%; background:var(--city-panel); }
+.chat-context { font-size:11px; margin-bottom:8px; }
+.chat-context pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; }
+.change-attached { gap:8px; }
+.change-attached span { min-width:0; overflow-wrap:anywhere; }

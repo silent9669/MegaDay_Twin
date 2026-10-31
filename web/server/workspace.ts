@@ -1,3 +1,6 @@
+import { savedChat } from "./chat-store";
+import type { PlannerEnv } from "./sale-planner";
+import { hqSchema, defaultHQ } from "../src/hq/types";
 import type {
   DurableObjectState,
   WebSocket as WorkerSocket,
@@ -36,7 +39,7 @@ function isUntouchedDemo(source: Source) {
 declare const WebSocketPair: { new (): { 0: WorkerSocket; 1: WorkerSocket } };
 export class AccountWorkspace {
   private ctx: DurableObjectState;
-  constructor(ctx: DurableObjectState, private env: StudioModelEnv = {}) {
+  constructor(ctx: DurableObjectState, private env: StudioModelEnv & PlannerEnv = {}) {
     this.ctx = ctx;
     const existing = new Set(ctx.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'").toArray().map(table => table.name));
     // Avoid redundant schema writes; Cloudflare may still reject reads after quota exhaustion.
@@ -232,6 +235,7 @@ export class AccountWorkspace {
     const url = new URL(request.url),
       name = url.pathname.split("/").pop() ?? "";
     // Parse archives and inventory here, not in the gateway's 10 ms CPU budget.
+    if (url.pathname === "/internal/milo/chat") return savedChat(request,this.env,{decisionToolsConnected:!!this.env.DATA_BACKEND_URL},this);
     if (url.pathname === "/internal/studio/import") return studioImport(request, this.env);
     if (url.pathname === "/internal/product-labels") return productLabels(request, this, getProductLabelProvider(this.env));
     const labelOperation = /^\/internal\/product-labels\/(snapshot|claim|finish)$/.exec(url.pathname)?.[1];
@@ -254,7 +258,7 @@ export class AccountWorkspace {
         webSocket: pair[0],
       } as ResponseInit);
     }
-    if (!["sources", "settings", "sandbox", "chats"].includes(name))
+    if (!["sources", "settings", "sandbox", "chats", "hq"].includes(name))
       return fail(404, "Workspace document not found.");
     if (request.method === "GET") {
       let document = this.read(name);
@@ -262,7 +266,9 @@ export class AccountWorkspace {
         const data =
           name === "sources"
             ? { schema: "hackathon.sources.v1", files: [] }
-            : name === "settings"
+            : name === "hq"
+              ? defaultHQ
+              : name === "settings"
               ? defaultSettings
               : name === "chats"
                 ? defaultChatArchive
@@ -286,7 +292,9 @@ export class AccountWorkspace {
       const data =
         name === "sources"
           ? await withoutDemandLabels(await validatePack(body.data))
-          : name === "settings"
+          : name === "hq"
+            ? hqSchema.parse(body.data)
+            : name === "settings"
             ? settingsSchema.parse(body.data)
             : name === "chats"
               ? chatArchiveSchema.parse(body.data)
@@ -320,7 +328,8 @@ export class AccountWorkspace {
     else socket.send("pong");
   }
   webSocketClose(socket: WorkerSocket, code: number) {
-    socket.close(code, "");
+    // 1006 is reserved and cannot be sent in a close frame.
+    socket.close(code === 1006 ? 1000 : code, "");
   }
   webSocketError(socket: WorkerSocket) {
     socket.close(1011, "Reconnect");

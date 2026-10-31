@@ -10,7 +10,6 @@ import {
 import { workspaceQuotaFailure } from "./server/workspace-errors";
 import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
-import { savedChat } from "./server/chat-store";
 import type { StudioModelEnv } from "./server/model-json";
 import { plannerContext, runSalePlan, activeSalePlan, applySalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
@@ -82,7 +81,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return fail(403, "Request not allowed.");
     if (path.startsWith("/api/workspace/")) {
       // Internal labeling claims/results are never reachable through the browser proxy.
-      if (!/^\/api\/workspace\/(sources|settings|sandbox|chats|events)$/.test(path))
+      if (!/^\/api\/workspace\/(sources|settings|sandbox|chats|hq|events)$/.test(path))
         return fail(404, "Workspace document not found.");
       if (!env.WORKSPACE)
         return fail(503, "Account storage is not configured.");
@@ -145,14 +144,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
         !(await env.PM_LIMITER.limit({ key: "admin" })).success
       )
         return fail(429, "PM is busy. Try again in a minute.");
-      const context = { decisionToolsConnected: !!env.DATA_BACKEND_URL };
       if (!env.WORKSPACE)
         return fail(503, "Account storage is not configured.");
-      return savedChat(
-        request,
-        env,
-        context,
-        env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
+      return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
+        new Request(new URL('/internal/milo/chat',url),request),
       );
     }
     if (path === "/api/data-backend/status")

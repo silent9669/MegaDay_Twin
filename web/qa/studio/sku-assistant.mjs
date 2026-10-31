@@ -4,7 +4,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5186';
+const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5179';
+assert(['127.0.0.1','localhost'].includes(new URL(base).hostname),'Local QA only');
 const out = new URL('../../../qa/runs/sku-assistant/', import.meta.url);
 await mkdir(out, { recursive: true });
 const sources = JSON.parse(await readFile(new URL('../../server/repository-sources.json', import.meta.url), 'utf8'));
@@ -29,7 +30,7 @@ const trace = {
 const browser = await chromium.launch({ headless: true, channel: process.env.STUDIO_QA_CHANNEL });
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
-  const docs = { sources, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] }, sandbox: { hour: 1, event: 'observe' }, chats: { preferredModel: '', sessions: [] } };
+  const docs = { hq: {tracked:[],active:null,worksheets:{},activity:[]}, sources, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] }, sandbox: { hour: 1, event: 'observe' }, chats: { preferredModel: '', sessions: [] } };
   await context.route('**/api/workspace/*', (route) => {
     const key = new URL(route.request().url()).pathname.split('/').pop();
     if (route.request().method() === 'PUT') docs[key] = route.request().postDataJSON().data;
@@ -66,41 +67,45 @@ try {
       results: [{ key: 'continue', action: { kind: 'continue' }, feasible: true, goal_eligible: false, violations: [], objective: dist(20000), contribution: dist(50000), spend: dist(30000), units_sold: dist(103), goal_units_sold: dist(3), goal_sku: 'SKU1', leftover_units: dist(0), leftover_value: dist(0), p_target: 0 }], calculation_trace: trace,
     } } } });
   });
+  await context.addInitScript(()=>localStorage.setItem('megaday.city.tour.v4','complete'));
+  const login=await context.request.post(base+'/api/auth/login',{headers:{Origin:base},data:{username:'admin',password:(await readFile('/tmp/megaday-qa-password','utf8')).trim()}});assert(login.ok(),'Local login failed');
   const page = await context.newPage();
   await page.routeWebSocket('**/api/workspace/events', (socket) => socket.onMessage((message) => { if (message === 'ping') socket.send('pong'); }));
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/sku-assistant?sku=SKU1`);
-  await page.getByRole('heading', { name: 'Bình giữ nhiệt QA', exact: true }).waitFor();
-  assert.equal(new URL(page.url()).pathname, '/sale-planner');
-  assert.equal(new URL(page.url()).searchParams.get('sku'), 'SKU1');
+  await page.getByText('Product facts & Milo',{exact:true}).click();
+  await page.getByRole('heading',{name:'Bình giữ nhiệt QA',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Discuss with Milo',exact:true}).click();
+  assert.equal(new URL(page.url()).pathname, '/city-demo');
+  assert.equal(new URL(page.url()).searchParams.get('hq'), 'goals');
   assert.equal(runs.length, 0);
   await page.getByLabel('Message Milo', { exact: true }).fill('Bán 100 sản phẩm, ngân sách 2 triệu.');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await page.getByRole('button', { name: 'Kiểm tra mục tiêu', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Review goal', exact: true }).waitFor();
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.screenshot({ path: fileURLToPath(new URL(`milo-conversation-${width}.png`, out)) });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole('button', { name: 'Kiểm tra mục tiêu', exact: true }).click();
-  const campaign = page.getByLabel('Chiến dịch', { exact: true });
+  await page.getByRole('button', { name: 'Review goal', exact: true }).click();
+  const campaign = page.getByRole('dialog',{name:'Milo',exact:true}).getByLabel('Campaign', { exact: true });
   await campaign.waitFor();
   assert.equal(await campaign.inputValue(), '', 'Multiple campaign memberships must never auto-select');
   assert.equal(runs.length, 0);
   await campaign.selectOption('CD1');
-  await page.getByRole('checkbox', { name: /Tôi xác nhận các thông số để mô phỏng thử/ }).check();
-  await page.getByRole('button', { name: 'Mô phỏng thử', exact: true }).click();
-  await page.getByRole('heading', { name: 'Phương án cho Chiến dịch QA' }).waitFor();
+  await page.getByRole('checkbox', { name: /I confirm these parameters for a preview/ }).check();
+  await page.getByRole('button', { name: 'Preview simulation', exact: true }).click();
+  await page.getByRole('heading', { name: 'Options for Chiến dịch QA' }).waitFor();
   assert.equal(runs[0].focusSku, 'SKU1');
   assert.equal(runs[0].confirmed, true);
   assert.equal(runs[0].expectedGoal, null);
-  assert.equal(await page.getByRole('button', { name: 'Áp dụng mục tiêu', exact: true }).isDisabled(), true);
-  await page.getByText('Sản phẩm bán · SKU1 (kỳ vọng)', { exact: true }).waitFor();
-  await page.getByText('Sản phẩm bán · toàn chiến dịch (kỳ vọng)', { exact: true }).waitFor();
-  await page.getByText('Cách tính và đối chiếu con số', { exact: true }).click();
-  await page.getByText(/Sai lệch đối chiếu: 0 ₫/).waitFor();
-  await page.getByText('Dữ liệu và công thức đã dùng trong lần tính', { exact: true }).click();
-  await page.getByText('File nguồn và lần nhập dữ liệu', { exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: 'Apply goal', exact: true }).isDisabled(), true);
+  await page.getByText('Units sold · SKU1 (expected)', { exact: true }).waitFor();
+  await page.getByText('Units sold · whole campaign (expected)', { exact: true }).waitFor();
+  await page.getByText('Calculation and reconciliation', { exact: true }).click();
+  await page.getByText(/Reconciliation residual: 0 ₫/).waitFor();
+  await page.getByText('Saved inputs and formulas', { exact: true }).click();
+  await page.getByText('Source files and import batches', { exact: true }).click();
   await page.getByText('qa-orders.csv', { exact: true }).waitFor();
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -117,28 +122,20 @@ try {
   await page.getByRole('button', { name: 'Stop reply', exact: true }).waitFor();
   await page.waitForFunction(() => globalThis.document.querySelector('.milo-context')?.textContent?.includes('SKU1'));
   await page.evaluate(() => globalThis.window.dispatchEvent(new CustomEvent('workspace:milo-sku', { detail: { screen: 'hq', sku: 'SKU2' } })));
-  await page.getByText('Bạn muốn đạt điều gì với SKU2?', { exact: true }).waitFor();
+  await page.getByText('What would you like to achieve with SKU2?', { exact: true }).waitFor();
   const deadline = Date.now() + 5000;
   while (!delayedTurn && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
   assert.ok(delayedTurn, 'A saved Milo request should be pending before switching SKU');
   delayedTurn();
-  assert.equal(await page.getByRole('heading', { name: 'Phương án cho Chiến dịch QA' }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Kiểm tra mục tiêu', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('heading', { name: 'Options for Chiến dịch QA' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Review goal', exact: true }).count(), 0);
   backendMissing = true;
-  await page.reload(); await page.getByText('Backend chưa kết nối.', { exact: true }).first().waitFor();
-  assert.equal(await page.getByLabel('Message Milo', { exact: true }).count(), 0);
-  await page.goto(`${base}/city-demo?district=hq`);
-  const hq = page.getByRole('dialog', { name: 'MegaDay HQ', exact: true });
-  await hq.waitFor();
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 1000 });
-    const goalLink = hq.getByRole('link', { name: 'Lập kế hoạch sale', exact: true });
-    await goalLink.scrollIntoViewIfNeeded();
-    const box = await goalLink.boundingBox();
-    assert.ok(box && box.height >= 44 && box.x >= 0 && box.x + box.width <= width, `HQ goal link touch target at ${width}`);
-    assert.equal(await hq.getByRole('link', { name: 'Lập kế hoạch sale', exact: true }).count(), 1);
-    await page.screenshot({ path: fileURLToPath(new URL(`hq-goals-${width}.png`, out)) });
-  }
+  await page.getByRole('button',{name:'Close chat',exact:true}).click();
+  await page.reload();await page.getByText('Product facts & Milo',{exact:true}).click();
+  await page.getByText('Backend chưa kết nối.',{exact:true}).first().waitFor();
+  assert.equal(await page.getByRole('button',{name:'Discuss with Milo',exact:true}).count(),0);
+  const hq=page.getByRole('dialog',{name:'MegaDay HQ',exact:true});
+  for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await hq.getByRole('tab',{name:'Goals',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:fileURLToPath(new URL(`hq-goals-${width}.png`,out))});}
   assert.deepEqual(errors, []);
   const results = ['SKU-specific context; no auto-mutation', 'Multiple campaigns require explicit choice', 'Reviewed goal sends focusSku and confirmed=true', 'Selected-SKU units distinct from campaign aggregate', 'J numeric substitution and source evidence expand', 'Switching SKU cancels pending replies and clears old plan', 'No fake backend fallback, page errors or horizontal overflow at 1440/768/390/320px'];
   await writeFile(new URL('results.json', out), JSON.stringify({ mode: 'real browser with stub APIs', results }, null, 2));

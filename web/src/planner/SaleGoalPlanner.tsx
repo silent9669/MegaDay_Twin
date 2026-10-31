@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { openMilo } from "../city/milo-contract";
 import { Link } from "react-router";
 import { ArrowRight, Check, RefreshCw, Target } from "lucide-react";
@@ -11,19 +11,19 @@ import { ActionCalculation, CalculationEvidence } from "./CalculationEvidence";
 import "./planner.css";
 
 const kinds: Record<GoalKind, string> = {
-  profit: "Tối ưu lợi nhuận", sell_target: "Đạt số lượng bán",
-  clear_stock: "Ưu tiên xả hàng", efficiency: "Tối ưu hiệu quả chi",
+  profit: "Maximize profit", sell_target: "Reach sales target",
+  clear_stock: "Clear stock", efficiency: "Improve ad efficiency",
 };
 const templates = [
-  ["Lợi nhuận", "Tôi muốn tối ưu lợi nhuận của chiến dịch trong buổi sale."],
-  ["Số lượng bán", "Tôi muốn bán ít nhất 100 sản phẩm, ngân sách quảng cáo tối đa 2 triệu đồng."],
-  ["Xả hàng", "Tôi muốn xả hàng tồn, chấp nhận lỗ kỳ vọng tối đa 500 nghìn đồng."],
-  ["Hiệu quả chi", "Tôi muốn tối ưu hiệu quả chi quảng cáo của chiến dịch."],
+  ["Profit", "Maximize profit for this campaign during the sale."],
+  ["Sales volume", "Sell 100 units with budget 2 million VND."],
+  ["Clear stock", "Clear stock with maximum loss 500 thousand VND."],
+  ["Ad efficiency", "Optimize ad efficiency for this campaign."],
 ] as const;
-const number = (value: number) => new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(value);
+const number = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 const money = (value: number) => `${number(value)} ₫`;
 const dateText = (value?: string | null) => value
-  ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa có";
+  ? new Date(value).toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }) : "Not available";
 // The planning clock is always Vietnam time, regardless of the browser timezone.
 function localDate(value: string | null) {
   if (!value || !Number.isFinite(Date.parse(value))) return "";
@@ -45,28 +45,28 @@ async function request<T>(path: string, body?: unknown, signal?: AbortSignal): P
     ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new PlannerError(payload?.error?.message || `Không thể hoàn thành yêu cầu (${response.status}).`, payload ?? undefined, response.status);
-  if (!payload) throw new PlannerError("Máy chủ trả về dữ liệu không hợp lệ.");
+  if (!response.ok) throw new PlannerError(payload?.error?.message || `Could not complete request (${response.status}).`, payload ?? undefined, response.status);
+  if (!payload) throw new PlannerError("The server returned invalid data.");
   return payload as T;
 }
 function draftIssues(draft: GoalDraft): string[] {
   const issues: string[] = [];
-  if (!draft.text.trim()) issues.push("Nhập mô tả mục tiêu trước khi xác nhận.");
-  if (!draft.kind) issues.push("Chọn mục tiêu chính cho chiến dịch.");
+  if (!draft.text.trim()) issues.push("Describe your goal before confirming.");
+  if (!draft.kind) issues.push("Choose the campaign's primary goal.");
   if (draft.kind === "sell_target" && (!draft.targetUnits || !Number.isSafeInteger(draft.targetUnits) || draft.targetUnits < 1))
-    issues.push("Số lượng mục tiêu phải là số nguyên dương.");
+    issues.push("Target units must be a positive integer.");
   if (draft.kind !== "sell_target" && (draft.targetUnits !== null || draft.sellTargetProbability !== null))
-    issues.push("Số lượng và xác suất đạt chỉ áp dụng cho mục tiêu Đạt số lượng bán. Chọn lại mục tiêu hoặc xóa hai thông số này.");
+    issues.push("Units and target probability only apply to Reach sales target. Change the goal or clear these fields.");
   if (draft.kind !== "efficiency" && draft.minMarginalReturn !== null)
-    issues.push("Hiệu quả biên chỉ áp dụng cho mục tiêu Tối ưu hiệu quả chi. Chọn lại mục tiêu hoặc xóa thông số này.");
+    issues.push("Marginal return only applies to Improve ad efficiency. Change the goal or clear this field.");
   const start = Date.parse(draft.start ?? ""), end = Date.parse(draft.deadline ?? "");
-  if (!Number.isFinite(start) || !Number.isFinite(end)) issues.push("Chọn thời điểm bắt đầu và kết thúc.");
+  if (!Number.isFinite(start) || !Number.isFinite(end)) issues.push("Choose a start and end time.");
   else if (start % 3_600_000 || end % 3_600_000 || end <= start || end - start > 72 * 3_600_000)
-    issues.push("Chọn giờ tròn, thời lượng từ 1 đến 72 giờ.");
+    issues.push("Use whole hours and a duration of 1 to 72 hours.");
   if ([draft.maxSpendVnd, draft.maxLossVnd, draft.minMarginalReturn].some((v) => v !== null && (!Number.isFinite(v) || v < 0)))
-    issues.push("Ngân sách, mức lỗ và hiệu quả biên phải lớn hơn hoặc bằng 0.");
+    issues.push("Budget, loss limit and marginal return must be zero or greater.");
   if (draft.sellTargetProbability !== null && (!Number.isFinite(draft.sellTargetProbability) || draft.sellTargetProbability <= 0 || draft.sellTargetProbability > 1))
-    issues.push("Xác suất đạt mục tiêu phải lớn hơn 0% và không vượt quá 100%.");
+    issues.push("Target probability must be above 0% and at most 100%.");
   return issues;
 }
 
@@ -80,6 +80,7 @@ type PlannerProps = {
 };
 // The assistant remounts this review on a new interpretation or SKU, clearing approval/results.
 export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true, hideHeading = false }: PlannerProps = {}) {
+  const id = useId();
   const [context, setContext] = useState<PlannerContext | null>(null);
   const [contextError, setContextError] = useState("");
   const [reload, setReload] = useState(0);
@@ -118,7 +119,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
         }
       }
     }).catch((e: unknown) => {
-      if (!controller.signal.aborted) { setContext(null); setContextError(e instanceof Error ? e.message : "Không tải được chiến dịch."); }
+      if (!controller.signal.aborted) { setContext(null); setContextError(e instanceof Error ? e.message : "Could not load campaigns."); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [reload, campaignScope, focusSku]);
@@ -126,9 +127,9 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
     const controller = new AbortController();
     if (campaignId) void request<PlannerActiveContext>(`active?campaignId=${encodeURIComponent(campaignId)}`, undefined, controller.signal)
       .then((value) => {
-        if (value.campaignId !== campaignId) throw Error("Mục tiêu trả về không khớp chiến dịch đang chọn.");
+        if (value.campaignId !== campaignId) throw Error("Returned goal does not match the selected campaign.");
         if (!controller.signal.aborted) setActive(value);
-      }).catch((e: unknown) => { if (!controller.signal.aborted) setActiveError(e instanceof Error ? e.message : "Chưa tải được mục tiêu đang áp dụng."); })
+      }).catch((e: unknown) => { if (!controller.signal.aborted) setActiveError(e instanceof Error ? e.message : "Could not load the active goal."); })
       .finally(() => { if (!controller.signal.aborted) setActiveLoading(false); });
     return () => controller.abort();
   }, [campaignId, activeReload]);
@@ -152,7 +153,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
       const interpreted = goalInterpretResponseSchema.parse(await request("interpret", { text }, controller.signal));
       if (controller.signal.aborted) return;
       setDraft({ ...interpreted.draft, text }); setMethod(interpreted.method); setNotices(interpreted.notices); openReview();
-    } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Chưa phân tích được mục tiêu. Bạn có thể nhập thủ công."); }
+    } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Could not interpret the goal. You can enter it manually."); }
     finally { if (!controller.signal.aborted) setBusy(null); }
   }
   const issues = draft ? draftIssues(draft) : [];
@@ -177,7 +178,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
           setResult(null); setConfirmed(false); reloadActive();
         }
       }
-      setError(e instanceof Error ? e.message : "Mô phỏng chưa hoàn thành.");
+      setError(e instanceof Error ? e.message : "Simulation did not complete.");
     } finally { if (!controller.signal.aborted) setBusy(null); }
   }
   async function apply() {
@@ -191,7 +192,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
       setApplied(response); setApplyConfirmed(false); reloadActive();
     } catch (e) {
       if (controller.signal.aborted) return;
-      setError(e instanceof Error ? e.message : "Chưa áp dụng được mục tiêu.");
+      setError(e instanceof Error ? e.message : "Could not apply the goal.");
       if (e instanceof PlannerError) {
         setErrorDetails(e.payload?.error?.details ?? null);
         if (e.status === 409) {
@@ -205,88 +206,88 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
       {!embedded && <>
       {!hideHeading &&
       <header className="planner-heading">
-        <div><span className="planner-eyebrow">MEGADAY HQ / LẬP PHƯƠNG ÁN</span><h1><Target aria-hidden size={26} /> Lập kế hoạch sale</h1>
-          <p>Nói điều bạn muốn đạt. Kiểm tra mục tiêu, rồi so sánh phương án dựa trên dữ liệu của chiến dịch.</p></div>
-        <Link to="/mock-data">Kiểm tra dữ liệu <ArrowRight aria-hidden size={16} /></Link>
+        <div><span className="planner-eyebrow">MEGADAY HQ / PLANNING</span><h1><Target aria-hidden size={26} /> Sale planning</h1>
+          <p>Review your goal, then compare options using campaign data.</p></div>
+        <Link to="/mock-data">Check data <ArrowRight aria-hidden size={16} /></Link>
       </header>}
-      <ol className="planner-steps" aria-label="Các bước lập phương án">
-        <li aria-current={!draft ? "step" : undefined}><span>1</span> Nhập mục tiêu</li>
-        <li aria-current={draft && !result ? "step" : undefined}><span>2</span> Kiểm tra & xác nhận</li>
-        <li aria-current={result && !applied ? "step" : undefined}><span>3</span> Mô phỏng thử</li>
-        <li aria-current={applied ? "step" : undefined}><span>4</span> Áp dụng mục tiêu</li>
+      <ol className="planner-steps" aria-label="Planning steps">
+        <li aria-current={!draft ? "step" : undefined}><span>1</span> Describe goal</li>
+        <li aria-current={draft && !result ? "step" : undefined}><span>2</span> Review & confirm</li>
+        <li aria-current={result && !applied ? "step" : undefined}><span>3</span> Preview simulation</li>
+        <li aria-current={applied ? "step" : undefined}><span>4</span> Apply goal</li>
       </ol>
       </>}
-      <section className="planner-context" aria-label="Kết nối dữ liệu">
-        <div role="status"><strong>{loading ? "Đang kiểm tra dữ liệu…" : context?.backendConfigured ? "Chiến dịch từ backend" : "Chưa kết nối backend tính toán"}</strong>
-          <p>{contextError || context?.notice || (context?.backendConfigured ? `Dữ liệu đến: ${dateText(context.dataAsOf)} (giờ Việt Nam).` : "Bạn vẫn có thể soạn và kiểm tra mục tiêu. Cần kết nối backend để chạy mô phỏng.")}</p>
-          {context?.backendConfigured && !context.canPreview && <p>Chưa có quyền hoặc khả năng mô phỏng thử an toàn. Cần cập nhật kết nối backend.</p>}
-          {context?.backendConfigured && !context.campaigns.length && <p>Chưa có chiến dịch. Import và gửi dữ liệu từ Data Studio sang backend trước.</p>}</div>
-        <button type="button" disabled={loading || !!busy} onClick={() => { invalidate(); setLoading(true); setReload((n) => n + 1); reloadActive(); }}><RefreshCw aria-hidden size={16} /> Kiểm tra lại</button>
+      <section className="planner-context" aria-label="Data connection">
+        <div role="status"><strong>{loading ? "Checking data…" : context?.backendConfigured ? "Connected campaigns" : "Decision backend not connected"}</strong>
+          <p>{contextError || context?.notice || (context?.backendConfigured ? `Data as of: ${dateText(context.dataAsOf)} (Vietnam time).` : "You can draft and review goals. Connect the decision backend to run simulations.")}</p>
+          {context?.backendConfigured && !context.canPreview && <p>Preview simulation is unavailable. Check backend capabilities and permissions.</p>}
+          {context?.backendConfigured && !context.campaigns.length && <p>No campaigns. Import and send data to the backend from Data Studio first.</p>}</div>
+        <button type="button" disabled={loading || !!busy} onClick={() => { invalidate(); setLoading(true); setReload((n) => n + 1); reloadActive(); }}><RefreshCw aria-hidden size={16} /> Refresh</button>
       </section>
       <section className="planner-card planner-campaign-selection">
-              <label htmlFor="sale-campaign">Chiến dịch</label><select disabled={loading || !!busy} id="sale-campaign" value={campaignId} onChange={(e) => { invalidate(); setActive(null); setActiveError(""); setActiveLoading(!!e.target.value); setCampaignId(e.target.value); }}><option value="">Chọn chiến dịch từ backend</option>{context?.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-              {campaignId && <section className="planner-active-goal" aria-label="Mục tiêu đang áp dụng">
-                <h3>Mục tiêu đang áp dụng</h3>
-                {activeLoading ? <p role="status">Đang đối chiếu mục tiêu của chiến dịch…</p> : activeError ? <><p role="alert">{activeError}</p><button type="button" onClick={reloadActive}>Tải lại mục tiêu hiện tại</button></> : active ? <GoalSummary goal={active.activeGoal} /> : <p>Chưa xác minh được mục tiêu hiện tại.</p>}
-                <p className="planner-help">Mô phỏng thử giữ nguyên mục tiêu này. {focusSku ? "Mục tiêu SKU phải tuân theo các giới hạn của chiến dịch; ràng buộc chặt hơn sẽ được giữ lại." : "Bạn sẽ xem phần thay đổi trước khi quyết định áp dụng."}</p>
-                {!embedded && !focusSku && <button type="button" onClick={() => openMilo({ screen: "sale-planner", campaignId })}>Trao đổi kế hoạch chiến dịch với Milo</button>}
+              <label htmlFor={`${id}-sale-campaign`}>Campaign</label><select disabled={loading || !!busy} id={`${id}-sale-campaign`} value={campaignId} onChange={(e) => { invalidate(); setActive(null); setActiveError(""); setActiveLoading(!!e.target.value); setCampaignId(e.target.value); }}><option value="">Choose a connected campaign</option>{context?.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              {campaignId && <section className="planner-active-goal" aria-label="Active goal">
+                <h3>Active goal</h3>
+                {activeLoading ? <p role="status">Checking the campaign goal…</p> : activeError ? <><p role="alert">{activeError}</p><button type="button" onClick={reloadActive}>Reload active goal</button></> : active ? <GoalSummary goal={active.activeGoal} /> : <p>The active goal has not been verified.</p>}
+                <p className="planner-help">Preview simulations preserve this goal. {focusSku ? "SKU goals must respect campaign limits; stricter constraints are retained." : "Review the changes before applying."}</p>
+                {!initialInterpretation && !focusSku && <button type="button" onClick={() => openMilo({ screen: "sale-planner", campaignId })}>Discuss campaign with Milo</button>}
               </section>}
       </section>
       <div className={`planner-layout ${embedded ? "planner-review-only" : ""}`}>
-        {!embedded &&
-        <section className="planner-card" aria-labelledby="planner-input-title">
-          <span className="planner-eyebrow">BƯỚC 1</span><h2 id="planner-input-title">Buổi sale này, bạn muốn đạt điều gì?</h2>
+        {(!embedded || !initialInterpretation) &&
+        <section className="planner-card" aria-labelledby={`${id}-planner-input-title`}>
+          <span className="planner-eyebrow">STEP 1</span><h2 id={`${id}-planner-input-title`}>What do you want to achieve?</h2>
           <fieldset disabled={!!busy}>
-            <label htmlFor="sale-goal-text">Mô tả mục tiêu</label>
-            <textarea id="sale-goal-text" rows={5} maxLength={4000} value={text} onChange={(e) => changeText(e.target.value)} placeholder="Ví dụ: Bán 100 sản phẩm trong 12 giờ, ngân sách quảng cáo tối đa 2 triệu đồng…" aria-describedby="sale-goal-text-hint" />
-            <p id="sale-goal-text-hint" className="planner-help">Ghi rõ ưu tiên, thời gian, ngân sách và mức rủi ro bạn chấp nhận. {text.length}/4.000 ký tự.</p>
-            <div className="planner-templates" aria-label="Mẫu mục tiêu">{templates.map(([label, value]) => <button type="button" key={label} onClick={() => changeText(value)}>{label}</button>)}</div>
-            <div className="planner-actions"><button className="planner-primary" type="button" disabled={!text.trim()} onClick={() => void interpret()}>{busy === "interpret" ? "Đang phân tích…" : "Phân tích mục tiêu"}<ArrowRight aria-hidden size={16} /></button>
-              <button type="button" disabled={!text.trim()} onClick={() => { invalidate(); setAcknowledged(false); setDraft(blankDraft(text)); setMethod("manual"); setNotices([]); openReview(); }}>Nhập thông số thủ công</button></div>
+            <label htmlFor={`${id}-sale-goal-text`}>Goal description</label>
+            <textarea id={`${id}-sale-goal-text`} rows={5} maxLength={4000} value={text} onChange={(e) => changeText(e.target.value)} placeholder="Example: Sell 100 units in 12 hours with an ad budget of up to 2 million VND…" aria-describedby={`${id}-sale-goal-text-hint`} />
+            <p id={`${id}-sale-goal-text-hint`} className="planner-help">Include your priority, time window, budget and risk limit. {text.length}/4,000 characters.</p>
+            <div className="planner-templates" aria-label="Goal templates">{templates.map(([label, value]) => <button type="button" key={label} onClick={() => changeText(value)}>{label}</button>)}</div>
+            <div className="planner-actions"><button className="planner-primary" type="button" disabled={!text.trim()} onClick={() => void interpret()}>{busy === "interpret" ? "Interpreting…" : "Interpret goal"}<ArrowRight aria-hidden size={16} /></button>
+              <button type="button" disabled={!text.trim()} onClick={() => { invalidate(); setAcknowledged(false); setDraft(blankDraft(text)); setMethod("manual"); setNotices([]); openReview(); }}>Enter parameters manually</button></div>
           </fieldset>
-          <aside className="planner-scope"><strong>Phạm vi của lần lập phương án</strong><p>Một chiến dịch, trong 1–72 giờ. So sánh tiếp tục, tạm dừng, giảm ngân sách và lịch chạy quảng cáo theo bộ mô phỏng hiện có.</p><p>Chưa tối ưu ngân sách chung giữa nhiều chiến dịch; chưa tự thay đổi giá bán, voucher hoặc chạy quảng cáo.</p></aside>
+          <aside className="planner-scope"><strong>Planning scope</strong><p>One campaign, over 1–72 hours. Compare continuing, pausing, reducing budget and scheduling ads.</p><p>Does not optimize budgets across campaigns or execute price, voucher or ad changes.</p></aside>
         </section>}
-        <section ref={review} tabIndex={-1} className="planner-card planner-review" aria-labelledby="planner-review-title">
-          <span className="planner-eyebrow">BƯỚC 2</span><h2 id="planner-review-title">Kiểm tra cách hệ thống hiểu</h2>
-          {!draft ? <div className="planner-empty"><Target aria-hidden size={30} /><p>Thông số sẽ xuất hiện ở đây sau khi phân tích. Bạn có thể chỉnh từng giá trị trước khi xác nhận.</p></div> : <>
-            <p className="planner-help">{method === "ai" ? "Bản nháp do AI diễn giải" : method === "rules" ? "Bản nháp theo quy tắc nhận diện" : "Bản nháp nhập thủ công"}. Các thông số bên dưới là nội dung được dùng để tính.</p>
-            {embedded && <details><summary>Nội dung mục tiêu đã diễn giải</summary><pre>{draft.text}</pre></details>}
+        <section ref={review} tabIndex={-1} className="planner-card planner-review" aria-labelledby={`${id}-planner-review-title`}>
+          <span className="planner-eyebrow">STEP 2</span><h2 id={`${id}-planner-review-title`}>Review parameters</h2>
+          {!draft ? <div className="planner-empty"><Target aria-hidden size={30} /><p>Interpret a goal to review and edit its parameters.</p></div> : <>
+            <p className="planner-help">{method === "ai" ? "AI-interpreted draft" : method === "rules" ? "Rule-based draft" : "Manual draft"}. These parameters will be used for the calculation.</p>
+            {embedded && <details><summary>Interpreted goal</summary><pre>{draft.text}</pre></details>}
             {!!notices.length && <ul className="planner-notices">{notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
             <fieldset disabled={!!busy}>
-              {focusSku && <div className="planner-warning"><strong>Mục tiêu gắn với SKU {focusSku}</strong><p>Số lượng bán/xả hàng được tính riêng cho SKU này. Lợi nhuận J, ngân sách, mức lỗ và hiệu quả chi được tính cho toàn bộ chiến dịch đã chọn; thay đổi quảng cáo có thể ảnh hưởng các SKU khác.</p><p>Xác nhận bên dưới đồng nghĩa bạn đã kiểm tra phạm vi này. Đây chưa phải phép tính lợi nhuận riêng cho SKU.</p></div>}
-              <label htmlFor="sale-kind">Mục tiêu chính</label><select id="sale-kind" value={draft.kind ?? ""} onChange={(e) => edit({ kind: (e.target.value || null) as GoalKind | null })}><option value="">Chọn mục tiêu</option>{Object.entries(kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+              {focusSku && <div className="planner-warning"><strong>Goal for SKU {focusSku}</strong><p>Sales and clearance quantities apply to this SKU. Economic value J, budget, expected loss and ad efficiency apply to the whole selected campaign; ad changes can affect other SKUs.</p><p>Confirm that you have reviewed this scope. This is not a SKU-only profit calculation.</p></div>}
+              <label htmlFor={`${id}-sale-kind`}>Primary goal</label><select id={`${id}-sale-kind`} value={draft.kind ?? ""} onChange={(e) => edit({ kind: (e.target.value || null) as GoalKind | null })}><option value="">Choose a goal</option>{Object.entries(kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
               <div className="planner-fields">
-                <label>Bắt đầu (giờ Việt Nam)<input type="datetime-local" step={3600} value={localDate(draft.start)} onChange={(e) => edit({ start: isoDate(e.target.value) })} /></label>
-                <label>Kết thúc (giờ Việt Nam)<input type="datetime-local" step={3600} value={localDate(draft.deadline)} onChange={(e) => edit({ deadline: isoDate(e.target.value) })} /></label>
+                <label>Start (Vietnam time)<input type="datetime-local" step={3600} value={localDate(draft.start)} onChange={(e) => edit({ start: isoDate(e.target.value) })} /></label>
+                <label>End (Vietnam time)<input type="datetime-local" step={3600} value={localDate(draft.deadline)} onChange={(e) => edit({ deadline: isoDate(e.target.value) })} /></label>
               </div>
-              <p className="planner-help">Chọn giờ tròn, thời lượng tối đa 72 giờ. Hãy đối chiếu thời gian với dữ liệu đã import.</p>
-              <div className="planner-fields"><label>Số sản phẩm mục tiêu<input type="number" min={1} step={1} value={draft.targetUnits ?? ""} onChange={(e) => edit({ targetUnits: e.target.value ? Number(e.target.value) : null })} /></label><label>Xác suất đạt tối thiểu (%)<input type="number" min={0.01} max={100} step="any" value={draft.sellTargetProbability === null ? "" : draft.sellTargetProbability * 100} placeholder="Theo cấu hình hệ thống" onChange={(e) => edit({ sellTargetProbability: e.target.value ? Number(e.target.value) / 100 : null })} /></label></div>
-              <p className="planner-help">Hai trường trên chỉ áp dụng cho mục tiêu Đạt số lượng bán. Để trống nếu chọn mục tiêu khác.</p>
-              <div className="planner-fields"><label>Ngân sách quảng cáo tối đa (₫)<input type="number" min={0} step="any" value={draft.maxSpendVnd ?? ""} placeholder="Không thêm giới hạn" onChange={(e) => edit({ maxSpendVnd: e.target.value ? Number(e.target.value) : null })} /></label><label>Mức lỗ kỳ vọng tối đa (₫)<input type="number" min={0} step="any" value={draft.maxLossVnd ?? ""} placeholder={draft.kind === "clear_stock" ? "Theo cấu hình hệ thống" : "Không thêm giới hạn"} onChange={(e) => edit({ maxLossVnd: e.target.value ? Number(e.target.value) : null })} /></label></div>
-              <p className="planner-help">Ngân sách áp dụng cho toàn bộ khoảng mô phỏng. Mức lỗ giới hạn giá trị kỳ vọng của chỉ số J, không bảo đảm mọi kết quả thực tế đều nằm trong giới hạn.</p>
-              <label>Hiệu quả biên tối thiểu<input type="number" min={0} step="any" value={draft.minMarginalReturn ?? ""} placeholder="Theo cấu hình hệ thống" onChange={(e) => edit({ minMarginalReturn: e.target.value ? Number(e.target.value) : null })} /><span className="planner-help">Chỉ áp dụng cho Tối ưu hiệu quả chi; để trống dùng cấu hình backend. Mục tiêu khác cần để trống trường này.</span></label>
-              {draft.unresolved.length > 0 && <div className="planner-warning"><strong>Các yêu cầu cần làm rõ hoặc chưa được mô hình hỗ trợ</strong><ul>{draft.unresolved.map((item, i) => <li key={i}>{item}</li>)}</ul><p>Chỉnh mô tả rồi phân tích lại, hoặc xác nhận chỉ dùng những thông số đã kiểm tra ở trên.</p><label className="planner-check"><input type="checkbox" checked={acknowledged} onChange={(e) => { invalidate(); setAcknowledged(e.target.checked); }} /><span>Tôi đã kiểm tra và đồng ý loại các yêu cầu chưa được thể hiện trong thông số khỏi lần mô phỏng này.</span></label></div>}
-              {!!issues.length && <ul className="planner-validation" aria-label="Thông tin cần bổ sung">{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
-              <div className="planner-confirm"><label className="planner-check"><input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(e) => setConfirmed(e.target.checked)} /><span>Tôi xác nhận các thông số để mô phỏng thử. Mục tiêu đang áp dụng và đề xuất đang hoạt động được giữ nguyên.</span></label><p>Mỗi lần chỉnh sửa cần xác nhận lại. Mô phỏng chưa áp dụng mục tiêu hoặc thực thi quảng cáo.</p></div>
-              <button className="planner-primary planner-run" type="button" disabled={!canRun} onClick={() => void run()}>{busy === "run" ? "Đang mô phỏng thử…" : "Mô phỏng thử"}<ArrowRight aria-hidden size={16} /></button>
-              {!selected && <p className="planner-help">Cần chọn một chiến dịch đã có trên backend để chạy.</p>}
+              <p className="planner-help">Use whole hours, up to 72 hours. Check the window against imported data.</p>
+              <div className="planner-fields"><label>Target units<input type="number" min={1} step={1} value={draft.targetUnits ?? ""} onChange={(e) => edit({ targetUnits: e.target.value ? Number(e.target.value) : null })} /></label><label>Minimum target probability (%)<input type="number" min={0.01} max={100} step="any" value={draft.sellTargetProbability === null ? "" : draft.sellTargetProbability * 100} placeholder="Backend default" onChange={(e) => edit({ sellTargetProbability: e.target.value ? Number(e.target.value) / 100 : null })} /></label></div>
+              <p className="planner-help">These two fields apply only to Reach sales target. Leave them blank for other goals.</p>
+              <div className="planner-fields"><label>Maximum ad budget (₫)<input type="number" min={0} step="any" value={draft.maxSpendVnd ?? ""} placeholder="No additional limit" onChange={(e) => edit({ maxSpendVnd: e.target.value ? Number(e.target.value) : null })} /></label><label>Maximum expected loss (₫)<input type="number" min={0} step="any" value={draft.maxLossVnd ?? ""} placeholder={draft.kind === "clear_stock" ? "Backend default" : "No additional limit"} onChange={(e) => edit({ maxLossVnd: e.target.value ? Number(e.target.value) : null })} /></label></div>
+              <p className="planner-help">Budget covers the full simulation window. The loss limit applies to expected J; it does not guarantee every outcome stays within the limit.</p>
+              <label>Minimum marginal return<input type="number" min={0} step="any" value={draft.minMarginalReturn ?? ""} placeholder="Backend default" onChange={(e) => edit({ minMarginalReturn: e.target.value ? Number(e.target.value) : null })} /><span className="planner-help">Only applies to Improve ad efficiency. Leave blank for the backend default, or for any other goal.</span></label>
+              {draft.unresolved.length > 0 && <div className="planner-warning"><strong>Unresolved or unsupported requirements</strong><ul>{draft.unresolved.map((item, i) => <li key={i}>{item}</li>)}</ul><p>Revise and reinterpret the goal, or confirm only the reviewed parameters.</p><label className="planner-check"><input type="checkbox" checked={acknowledged} onChange={(e) => { invalidate(); setAcknowledged(e.target.checked); }} /><span>I have reviewed and agree to exclude requirements not represented by these parameters from this simulation.</span></label></div>}
+              {!!issues.length && <ul className="planner-validation" aria-label="Required information">{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
+              <div className="planner-confirm"><label className="planner-check"><input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(e) => setConfirmed(e.target.checked)} /><span>I confirm these parameters for a preview. The active goal and recommendation remain unchanged.</span></label><p>Edits require confirmation again. Previewing does not apply a goal or execute ads.</p></div>
+              <button className="planner-primary planner-run" type="button" disabled={!canRun} onClick={() => void run()}>{busy === "run" ? "Previewing…" : "Preview simulation"}<ArrowRight aria-hidden size={16} /></button>
+              {!selected && <p className="planner-help">Choose a connected campaign to run.</p>}
             </fieldset>
           </>}
         </section>
       </div>
-      {error && <div className="planner-error" role="alert"><strong>{error}</strong>{errorDetails && <details><summary>Chi tiết dữ liệu cần kiểm tra</summary><pre>{JSON.stringify(errorDetails, null, 2)}</pre></details>}</div>}
-      {result && <section ref={results} tabIndex={-1} className="planner-card planner-results" aria-labelledby="planner-results-title">
-        <PlannerResults result={result} campaignName={selected?.name ?? campaignId} />
-        <section className="planner-apply" aria-labelledby="planner-apply-title"><span className="planner-eyebrow">BƯỚC 4 / CHỈ ÁP DỤNG KHI BẠN XÁC NHẬN</span><h2 id="planner-apply-title">Đối chiếu trước khi áp dụng</h2>
-          <div className="planner-goal-comparison"><div><h3>Đang áp dụng khi mô phỏng</h3><GoalSummary goal={result.baseGoal} /></div><div><h3>Mục tiêu dùng trong mô phỏng thử</h3><GoalSummary goal={result.effectiveGoal} /></div></div>
-          {result.changes.length > 0 ? <div className="planner-change-table"><table role="table"><caption>Các thay đổi được đề xuất</caption><thead role="rowgroup"><tr role="row"><th scope="col">Thông số</th><th scope="col">Trước</th><th scope="col">Sau</th></tr></thead><tbody role="rowgroup">{result.changes.map((change, i) => <tr role="row" key={`${change.field}-${i}`}><th scope="row" role="rowheader">{changeLabel(change.field)}</th>{([['Trước', change.before], ['Sau', change.after]] as const).map(([label, value]) => <td role="cell" key={label}><span className="planner-change-mobile-label" aria-hidden="true">{label}</span><span className={typeof value === 'number' ? 'planner-change-number' : undefined}>{changeValue(change.field, value)}</span></td>)}</tr>)}</tbody></table></div> : <p>Không có thay đổi thông số được báo cáo so với mục tiêu nền.</p>}
+      {error && <div className="planner-error" role="alert"><strong>{error}</strong>{errorDetails && <details><summary>Data details to review</summary><pre>{JSON.stringify(errorDetails, null, 2)}</pre></details>}</div>}
+      {result && <section ref={results} tabIndex={-1} className="planner-card planner-results" aria-labelledby={`${id}-planner-results-title`}>
+        <PlannerResults id={id} result={result} campaignName={selected?.name ?? campaignId} />
+        <section className="planner-apply" aria-labelledby={`${id}-planner-apply-title`}><span className="planner-eyebrow">STEP 4 / EXPLICIT APPLICATION</span><h2 id={`${id}-planner-apply-title`}>Review before applying</h2>
+          <div className="planner-goal-comparison"><div><h3>Active at preview time</h3><GoalSummary goal={result.baseGoal} /></div><div><h3>Preview goal</h3><GoalSummary goal={result.effectiveGoal} /></div></div>
+          {result.changes.length > 0 ? <div className="planner-change-table"><table role="table"><caption>Proposed changes</caption><thead role="rowgroup"><tr role="row"><th scope="col">Parameter</th><th scope="col">Before</th><th scope="col">After</th></tr></thead><tbody role="rowgroup">{result.changes.map((change, i) => <tr role="row" key={`${change.field}-${i}`}><th scope="row" role="rowheader">{changeLabel(change.field)}</th>{([['Before', change.before], ['After', change.after]] as const).map(([label, value]) => <td role="cell" key={label}><span className="planner-change-mobile-label" aria-hidden="true">{label}</span><span className={typeof value === 'number' ? 'planner-change-number' : undefined}>{changeValue(change.field, value)}</span></td>)}</tr>)}</tbody></table></div> : <p>No parameter changes from the base goal were reported.</p>}
           {!!result.notices.length && <ul className="planner-notices">{result.notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
-          {applied ? <p className="planner-saved" role="status"><Check aria-hidden size={16} /> Đã áp dụng mục tiêu {applied.goal.goal_id}. Đây chưa phải lệnh thực thi quảng cáo.</p> : <>
-            {!result.canApply && <p className="planner-warning">Chưa thể áp dụng bản mô phỏng này. Hãy xem điều kiện chưa đạt và chỉnh mục tiêu để mô phỏng lại.</p>}
-            {context?.canApply !== true && <p className="planner-warning">Tài khoản hiện tại chưa có quyền áp dụng mục tiêu.</p>}
-            <label className="planner-check"><input type="checkbox" checked={applyConfirmed} disabled={!result.canApply || context?.canApply !== true || !!busy} onChange={(e) => setApplyConfirmed(e.target.checked)} /><span>Tôi đã đối chiếu và muốn áp dụng mục tiêu này thay cho mục tiêu hiện tại của chiến dịch.</span></label>
-            <button type="button" className="planner-primary" disabled={!result.canApply || !applyConfirmed || context?.canApply !== true || !!busy} onClick={() => void apply()}>{busy === "apply" ? "Đang áp dụng mục tiêu…" : "Áp dụng mục tiêu"}</button>
-            <p className="planner-help">Nếu mục tiêu đã được người khác sửa, hệ thống sẽ yêu cầu bạn đối chiếu và mô phỏng lại. Các kết quả thử không cộng dồn thành ngân sách chung.</p>
+          {applied ? <p className="planner-saved" role="status"><Check aria-hidden size={16} /> Applied goal {applied.goal.goal_id}. This does not execute ads.</p> : <>
+            {!result.canApply && <p className="planner-warning">This preview cannot be applied. Review unmet conditions, revise the goal and preview again.</p>}
+            {context?.canApply !== true && <p className="planner-warning">This account cannot apply goals.</p>}
+            <label className="planner-check"><input type="checkbox" checked={applyConfirmed} disabled={!result.canApply || context?.canApply !== true || !!busy} onChange={(e) => setApplyConfirmed(e.target.checked)} /><span>I have reviewed the changes and want to replace the active campaign goal with this goal.</span></label>
+            <button type="button" className="planner-primary" disabled={!result.canApply || !applyConfirmed || context?.canApply !== true || !!busy} onClick={() => void apply()}>{busy === "apply" ? "Applying goal…" : "Apply goal"}</button>
+            <p className="planner-help">If someone changes the active goal, review and preview again. Separate previews do not reserve shares of a common budget.</p>
           </>}
         </section>
       </section>}
@@ -296,73 +297,73 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
 
 function changeLabel(field: string): string {
   const key = field.replace(/^params\./, "");
-  return ({ kind: "Ưu tiên", target_units: "Số lượng mục tiêu", deadline: "Hạn kết thúc", max_spend_vnd: "Ngân sách tối đa", max_loss_vnd: "Lỗ kỳ vọng tối đa", sell_target_prob: "Xác suất đạt tối thiểu", min_marginal_return: "Hiệu quả chi tối thiểu", focus_sku: "Sản phẩm tập trung", planner_start: "Bắt đầu", parent_goal_id: "Mục tiêu chiến dịch nền" } as Record<string, string>)[key] ?? key.replaceAll("_", " ");
+  return ({ kind: "Priority", target_units: "Target units", deadline: "Deadline", max_spend_vnd: "Maximum budget", max_loss_vnd: "Maximum expected loss", sell_target_prob: "Minimum target probability", min_marginal_return: "Minimum ad efficiency", focus_sku: "Focused product", planner_start: "Start", parent_goal_id: "Base campaign goal" } as Record<string, string>)[key] ?? key.replaceAll("_", " ");
 }
 function changeValue(field: string, value: unknown): string {
-  if (value == null) return "Chưa đặt";
+  if (value == null) return "Not set";
   if (field.endsWith("kind") && typeof value === "string") return kinds[value as GoalKind] ?? value;
   if (typeof value === "number") return field.endsWith("_vnd") ? money(value) : field.endsWith("_prob") ? `${number(value * 100)}%` : number(value);
   if (typeof value === "string") return field === "deadline" || field.endsWith("planner_start") ? dateText(value) : value;
   return JSON.stringify(value);
 }
 function GoalSummary({ goal }: { goal: PlannerGoal | null }) {
-  if (!goal) return <p>Chưa có mục tiêu đang áp dụng.</p>;
-  return <dl className="planner-goal-summary"><dt>Ưu tiên</dt><dd>{goal.label ?? kinds[goal.kind as GoalKind] ?? goal.kind}</dd>
-    {goal.target_units !== null && <><dt>Số lượng mục tiêu</dt><dd>{number(goal.target_units)} sản phẩm</dd></>}
-    <dt>Hạn kết thúc</dt><dd>{dateText(goal.deadline)}</dd>
+  if (!goal) return <p>No active goal.</p>;
+  return <dl className="planner-goal-summary"><dt>Priority</dt><dd>{goal.label ?? kinds[goal.kind as GoalKind] ?? goal.kind}</dd>
+    {goal.target_units !== null && <><dt>Target units</dt><dd>{number(goal.target_units)} units</dd></>}
+    <dt>Deadline</dt><dd>{dateText(goal.deadline)}</dd>
     {(["focus_sku", "max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"] as const).map((key) => goal.params[key] != null ? <div className="planner-goal-line" key={key}><dt>{changeLabel(key)}</dt><dd>{changeValue(key, goal.params[key])}</dd></div> : null)}
-    <dt>Phiên bản</dt><dd>{goal.version}</dd>
+    <dt>Version</dt><dd>{goal.version}</dd>
   </dl>;
 }
 
-function Metric({ title, dist, currency = false, field }: { title: string; dist: Dist; currency?: boolean; field: string }) {
+function Metric({ title, dist, currency = false, field, evidenceId }: { evidenceId: string; title: string; dist: Dist; currency?: boolean; field: string }) {
   const format = currency ? money : number;
-  return <details className="planner-metric"><summary><span>{title} (kỳ vọng)</span><strong>{format(dist.mean)}</strong></summary><div><p>P10: {format(dist.p10)} · P50: {format(dist.p50)} · P90: {format(dist.p90)}</p><p>Trung bình và các phân vị từ mẫu mô phỏng backend; đây là ước lượng, không phải cam kết kết quả.</p><p>Trường dữ liệu: <code>{field}</code>. <a href="#planner-evidence">Xem nguồn và tham số</a></p></div></details>;
+  return <details className="planner-metric"><summary><span>{title} (expected)</span><strong>{format(dist.mean)}</strong></summary><div><p>P10: {format(dist.p10)} · P50: {format(dist.p50)} · P90: {format(dist.p90)}</p><p>Mean and quantiles from backend simulation samples are estimates, not guaranteed outcomes.</p><p>Data field: <code>{field}</code>. <a href={`#${evidenceId}`}>View sources and parameters</a></p></div></details>;
 }
-function PlannerResults({ result, campaignName }: { result: PlannerRunResponse; campaignName: string }) {
+function PlannerResults({ id, result, campaignName }: { id: string; result: PlannerRunResponse; campaignName: string }) {
   const { data: scenario, meta } = result.scenario, rec = scenario.recommendation;
-  const status: Record<NonNullable<ScenarioRun["recommendation"]>["status"], string> = { recommend: "Có phương án được đề xuất", undetermined: "Chưa phân biệt rõ phương án tốt hơn", none_meets_goal: "Chưa có phương án đáp ứng mục tiêu" };
+  const status: Record<NonNullable<ScenarioRun["recommendation"]>["status"], string> = { recommend: "Recommended option available", undetermined: "No clearly better option", none_meets_goal: "No option meets the goal" };
   return <>
-    <span className="planner-eyebrow">BƯỚC 3 / KẾT QUẢ TỪ BACKEND</span><h2 id="planner-results-title">Phương án cho {campaignName}</h2>
-    <div className="planner-result-status" role="status"><strong>{scenario.blocked ? "Mô phỏng đang bị chặn bởi dữ liệu" : rec ? status[rec.status] : "Backend chưa trả về đề xuất"}</strong>
-      {rec?.status === "recommend" && rec.best && <p>Đề xuất: {viText.action(rec.best)}. Cần người phụ trách xem xét trước khi thực thi.</p>}
+    <span className="planner-eyebrow">STEP 3 / BACKEND RESULTS</span><h2 id={`${id}-planner-results-title`}>Options for {campaignName}</h2>
+    <div className="planner-result-status" role="status"><strong>{scenario.blocked ? "Simulation blocked by data issues" : rec ? status[rec.status] : "No recommendation returned"}</strong>
+      {rec?.status === "recommend" && rec.best && <p>Recommendation: {viText.action(rec.best)}. Requires review before execution.</p>}
       {rec?.reasons.length ? <ul>{rec.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul> : null}
     </div>
-    <p>Nhấn vào từng chỉ số để xem khoảng P10–P90 và nguồn tính. J = đóng góp − chi quảng cáo + giá trị tồn cuối kỳ − phạt thiếu hàng. Đây là chỉ số kinh tế của mô hình, có tính cả giá trị tồn kho.</p>
+    <p>Expand metrics for P10–P90 and sources. J = contribution − ad spend + leftover value − stockout penalty. This model economic value includes inventory value.</p>
     <div className="planner-options">{scenario.results.map((option, i) => {
       const best = rec?.status === "recommend" && sameAction(option.action, rec.best);
       return <article className={`planner-option ${best ? "planner-option-best" : ""}`} key={option.key || i}>
-        <header><h3>{viText.action(option.action)}</h3>{best && <span className="planner-badge">Được đề xuất</span>}</header>
-        <p className="planner-option-status">{!option.feasible ? "Không khả thi" : !option.goal_eligible ? "Không đạt điều kiện mục tiêu" : "Đáp ứng điều kiện mô hình"}</p>
+        <header><h3>{viText.action(option.action)}</h3>{best && <span className="planner-badge">Recommended</span>}</header>
+        <p className="planner-option-status">{!option.feasible ? "Infeasible" : !option.goal_eligible ? "Does not meet goal conditions" : "Meets model conditions"}</p>
         {!!option.violations.length && <ul>{option.violations.map((v) => <li key={v}>{violationLabel(v)}</li>)}</ul>}
         {option.violation_details?.map((v, j) => <p key={j}>{v}</p>)}{option.goal_note && <p>{option.goal_note}</p>}
-        <Metric title="Chỉ số kinh tế J" dist={option.objective} currency field={`results[${i}].objective`} />
-        <Metric title="Chi quảng cáo" dist={option.spend} currency field={`results[${i}].spend`} />
-        {option.goal_sku && option.goal_units_sold && <Metric title={`Sản phẩm bán · ${option.goal_sku}`} dist={option.goal_units_sold} field={`results[${i}].goal_units_sold`} />}
-        <Metric title={option.goal_sku ? "Sản phẩm bán · toàn chiến dịch" : "Sản phẩm bán"} dist={option.units_sold} field={`results[${i}].units_sold`} />
-        {option.p_target != null && <p>Xác suất đạt số lượng mục tiêu: <strong>{number(option.p_target * 100)}%</strong></p>}
-        <details className="planner-components"><summary>Thành phần kinh tế và tồn kho</summary><Metric title="Đóng góp" dist={option.contribution} currency field={`results[${i}].contribution`} /><Metric title="Giá trị tồn cuối kỳ" dist={option.leftover_value} currency field={`results[${i}].leftover_value`} /><Metric title="Tồn cuối kỳ" dist={option.leftover_units} field={`results[${i}].leftover_units`} />{option.lost_units && <Metric title="Nhu cầu chưa đáp ứng" dist={option.lost_units} field={`results[${i}].lost_units`} />}{option.stockout_hour_p50 && <p>Hết hàng P50: {dateText(option.stockout_hour_p50)}</p>}</details>
-        {option.duplicate_of && <p className="planner-help">Kết quả trùng với phương án: {option.duplicate_of}.</p>}
+        <Metric evidenceId={`${id}-planner-evidence`} title="Economic value J" dist={option.objective} currency field={`results[${i}].objective`} />
+        <Metric evidenceId={`${id}-planner-evidence`} title="Ad spend" dist={option.spend} currency field={`results[${i}].spend`} />
+        {option.goal_sku && option.goal_units_sold && <Metric evidenceId={`${id}-planner-evidence`} title={`Units sold · ${option.goal_sku}`} dist={option.goal_units_sold} field={`results[${i}].goal_units_sold`} />}
+        <Metric evidenceId={`${id}-planner-evidence`} title={option.goal_sku ? "Units sold · whole campaign" : "Units sold"} dist={option.units_sold} field={`results[${i}].units_sold`} />
+        {option.p_target != null && <p>Probability of reaching target units: <strong>{number(option.p_target * 100)}%</strong></p>}
+        <details className="planner-components"><summary>Economic components and inventory</summary><Metric evidenceId={`${id}-planner-evidence`} title="Contribution" dist={option.contribution} currency field={`results[${i}].contribution`} /><Metric evidenceId={`${id}-planner-evidence`} title="Leftover value" dist={option.leftover_value} currency field={`results[${i}].leftover_value`} /><Metric evidenceId={`${id}-planner-evidence`} title="Leftover units" dist={option.leftover_units} field={`results[${i}].leftover_units`} />{option.lost_units && <Metric evidenceId={`${id}-planner-evidence`} title="Unmet demand" dist={option.lost_units} field={`results[${i}].lost_units`} />}{option.stockout_hour_p50 && <p>Stockout P50: {dateText(option.stockout_hour_p50)}</p>}</details>
+        {option.duplicate_of && <p className="planner-help">Same result as option: {option.duplicate_of}.</p>}
         {scenario.calculation_trace?.version === 1 && scenario.calculation_trace.actions.find((action) => action.key === option.key) && <ActionCalculation action={scenario.calculation_trace.actions.find((action) => action.key === option.key)!} index={i} />}
       </article>;
     })}</div>
-    {!scenario.results.length && <p>Chưa có kết quả mô phỏng để so sánh. Kiểm tra nguồn dữ liệu và thông báo từ backend.</p>}
+    {!scenario.results.length && <p>No simulation results to compare. Check source data and backend notices.</p>}
     <CalculationEvidence trace={scenario.calculation_trace} />
     <button type="button" onClick={() => openMilo({ screen: 'sale-planner',
       ...(scenario.calculation_trace?.focus_sku ? { sku: scenario.calculation_trace.focus_sku } : {}),
       campaignId: scenario.request.campaign_id, scenarioId: scenario.scenario_id,
-    })}>Nhờ Milo giải thích kết quả</button>
-    <details className="planner-evidence" id="planner-evidence"><summary>Nguồn dữ liệu và tham số của lần tính</summary><dl>
-      <dt>Mã mô phỏng</dt><dd>{scenario.scenario_id}</dd><dt>Mục tiêu</dt><dd>{result.goalId}</dd>
-      <dt>Dữ liệu đến</dt><dd>{dateText(rec?.inputs_ref.data_as_of ?? meta?.data_as_of)} (giờ Việt Nam)</dd>
-      <dt>Thời gian mô phỏng</dt><dd>{dateText(scenario.request.start)} · {scenario.request.horizon_hours} giờ</dd>
-      <dt>Số mẫu / seed</dt><dd>{scenario.request.samples} / {scenario.request.seed}</dd>
-      <dt>Nguồn ước lượng iROAS</dt><dd>{rec?.inputs_ref.iroas_source === "prior" ? "Giả định prior của mô hình" : rec?.inputs_ref.iroas_source === "estimate" ? "Ước lượng từ dữ liệu" : "Chưa cung cấp"}</dd>
-      <dt>Dự báo đầu vào</dt><dd>{rec?.inputs_ref.forecast_ids.join(", ") || "Chưa cung cấp"}</dd>
-      <dt>Phiên bản tham số</dt><dd><pre>{JSON.stringify(rec?.inputs_ref.param_version ?? {}, null, 2)}</pre></dd>
-      {scenario.input_hash && <><dt>Mã dữ liệu đầu vào</dt><dd>{scenario.input_hash}</dd></>}
-    </dl>{rec?.flip_conditions.length ? <><h3>Khi nào cần xem lại đề xuất?</h3><ul>{rec.flip_conditions.map((item, i) => <li key={i}>{item.text}</li>)}</ul></> : null}
-      <Link to="/mock-data">Mở Data Studio để kiểm tra nguồn nhập</Link>
+    })}>Ask Milo to explain</button>
+    <details className="planner-evidence" id={`${id}-planner-evidence`}><summary>Calculation sources and parameters</summary><dl>
+      <dt>Simulation ID</dt><dd>{scenario.scenario_id}</dd><dt>Goal</dt><dd>{result.goalId}</dd>
+      <dt>Data as of</dt><dd>{dateText(rec?.inputs_ref.data_as_of ?? meta?.data_as_of)} (Vietnam time)</dd>
+      <dt>Simulation window</dt><dd>{dateText(scenario.request.start)} · {scenario.request.horizon_hours} hours</dd>
+      <dt>Samples / seed</dt><dd>{scenario.request.samples} / {scenario.request.seed}</dd>
+      <dt>iROAS source</dt><dd>{rec?.inputs_ref.iroas_source === "prior" ? "Model prior assumption" : rec?.inputs_ref.iroas_source === "estimate" ? "Data estimate" : "Not provided"}</dd>
+      <dt>Input forecasts</dt><dd>{rec?.inputs_ref.forecast_ids.join(", ") || "Not provided"}</dd>
+      <dt>Parameter versions</dt><dd><pre>{JSON.stringify(rec?.inputs_ref.param_version ?? {}, null, 2)}</pre></dd>
+      {scenario.input_hash && <><dt>Input hash</dt><dd>{scenario.input_hash}</dd></>}
+    </dl>{rec?.flip_conditions.length ? <><h3>When should this recommendation be reviewed?</h3><ul>{rec.flip_conditions.map((item, i) => <li key={i}>{item.text}</li>)}</ul></> : null}
+      <Link to="/mock-data">Open Data Studio</Link>
     </details>
   </>;
 }

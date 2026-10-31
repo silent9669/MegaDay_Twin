@@ -1,5 +1,6 @@
 // Minimal "Tạo quyết định" form (09 §2.3, 08 §3.10). Saves a draft via POST /decisions,
 // then offers "Gửi duyệt". Disabled with a stated reason when it cannot be sent.
+import { useHQSelection } from '../../hq/selection';
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { useCreateDecision, useSubmitDecision } from '../../api/queries';
@@ -32,6 +33,7 @@ export function DecisionForm({
   whatIfActive: boolean;
   onClose: () => void;
 }) {
+  const hq=useHQSelection();
   const ordered = orderResults(results);
   const defaultChoice = ordered.find((r) => sameAction(r.action, rec.best)) ?? ordered.find((r) => r.feasible);
   const [choice, setChoice] = useState<string>(defaultChoice ? actionKey(defaultChoice.action) : '');
@@ -65,7 +67,7 @@ export function DecisionForm({
         rationale: rationale.trim(),
         override_of_recommendation: override,
       },
-    });
+    },{onSuccess:result=>hq?.log('Decision draft saved',`Decision ${result.data.id} · ${rec.campaign_id}`)});
   }
 
   return (
@@ -128,7 +130,7 @@ export function DecisionForm({
                 {t.submitted(draft.id)} <Link to="/decisions" className="text-accent hover:underline">{viText.nav.decisions}</Link>
               </span>
             ) : (
-              <button type="button" className="btn-primary" disabled={submit.isPending} onClick={() => submit.mutate(draft.id)}>
+              <button type="button" className="btn-primary" disabled={submit.isPending} onClick={() => submit.mutate(draft.id,{onSuccess:()=>hq?.log('Decision submitted',`Decision ${draft.id} · ${rec.campaign_id}`)})}>
                 {t.submit}
               </button>
             )}

@@ -84,8 +84,8 @@ describe('Tổng quan ca · cover and stock-out time', () => {
   it('stale banner sources and last computed time', () => {
     const sources = [
       { source: 'orders', label: 'Đơn hàng', as_of: null, status: 'fresh' as const },
-      { source: 'inventory', label: 'Tồn kho', as_of: null, status: 'stale' as const },
-      { source: 'cost', label: 'Giá vốn', as_of: null, status: 'partial' as const },
+      { source: 'inventory', label: 'Inventory', as_of: null, status: 'stale' as const },
+      { source: 'cost', label: 'Cost', as_of: null, status: 'partial' as const },
     ];
     expect(staleSources(sources).map((s) => s.source)).toEqual(['inventory']);
     expect(lastComputed([{ computed_at: '2026-10-30T14:47:02+07:00' }, { computed_at: '2026-10-30T15:00:00+07:00' }, { computed_at: null }])).toBe(

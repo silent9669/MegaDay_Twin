@@ -267,8 +267,8 @@ Archive contents stay local and are never committed.
 
 ## Lập kế hoạch sale: mô phỏng thử và áp dụng
 
-Mở **Lập kế hoạch sale** (`/sale-planner`) từ sidebar hoặc MegaDay HQ, chọn cả
-chiến dịch hoặc một SKU. Cả hai phạm vi có thể trao đổi với Milo rồi kiểm tra
+Mở tab **Goals** trong MegaDay HQ, chọn cả chiến dịch hoặc SKU đang theo dõi.
+Các đường dẫn cũ `/sale-planner` và `/sku-assistant` chuyển vào HQ. Cả hai phạm vi có thể trao đổi với Milo rồi kiểm tra
 bản nháp. Giao diện hiển thị mục tiêu đang áp dụng và phiên bản của nó.
 **Mô phỏng thử** chỉ lưu bản nháp không hoạt động và kết quả what-if; không thay
 mục tiêu hoặc đề xuất hiện tại. Sau khi xem kết quả và bảng thay đổi, người dùng
@@ -363,3 +363,39 @@ src/
 ```
 
 Theme: token CSS trên `:root` và `[data-theme='dark']`, map vào Tailwind bằng `@theme inline` (dùng `bg-surface`, `text-muted`, `border-border`...). Nút trên thanh trên cùng đổi Theo hệ thống / Sáng / Tối, lưu ở `localStorage` (bọc try/catch). `Ctrl+K` mở panel Trợ lý, `Esc` đóng.
+
+### HQ product workspace
+
+HQ contains Overview, SKU Details, Comparisons, Campaigns, Goals and Activity Logs.
+Goals supports the active SKU or a whole campaign. Preview simulations preserve the
+active goal; applying a preview requires a separate confirmation and revision check.
+The old `/sku-assistant` and `/sale-planner` links redirect into HQ.
+Track a product from Overview; the active product scopes the other tabs. Tracked
+products, saved worksheet inputs and activity are revisioned in the account's
+`hq` document. Unsaved worksheet inputs and notes stay separate per product while
+HQ remains open. Source records and names retain their original values.
+
+The continue/pause worksheet uses explicit user assumptions. Sales are capped by
+stock; costs include unit cost, packaging and percentage fees. It excludes taxes,
+returns, fixed costs, restocking and leftover valuation. Existing backend model
+comparisons and goal confirmation remain separate from this worksheet.
+
+Milo opens on the left beside desktop HQ. Analyze with AI attaches context to an
+editable draft; only Send starts inference. Up to two PNG/JPEG/WebP images can be
+attached (10 MB input limit, resized to 1,280 px and at most 512 KB each). Saved
+messages retain images and analysis context for history and retries. The existing
+20 MiB account document limit still applies.
+
+The authenticated `/api/pm/chat` endpoint delegates execution to the account
+Durable Object. Milo can list source tables and read/search records through
+read-only tools, with source revisions and record numbers. Each response permits
+at most eight tool calls over five rounds; oversized records/output are explicitly
+marked truncated. This does not grant ad execution, inventory writes or arbitrary
+SQL access. Uploaded records, images and attached context are untrusted evidence.
+
+Building selection opens the workspace and focuses the camera. Closing it returns
+to the city. Data management remains in Data Studio. The tutorial's seen state is
+stored on the device, and Replay tutorial always opens it explicitly.
+
+Verification: `node qa/hq-workspace.mjs` runs against a local Wrangler preview,
+using local test data and mocked AI replies; it never writes to production.

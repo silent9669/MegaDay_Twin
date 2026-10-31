@@ -1,8 +1,8 @@
-// Vietnamese display formatting (09-giao-dien §5): 531.000đ, 10,1 tr, 22,5, 19:00, 12/11.
+// English display formatting with VND and Vietnam local time.
 // All times are shown in Asia/Ho_Chi_Minh regardless of the browser time zone.
 
 export const VN_TZ = 'Asia/Ho_Chi_Minh';
-const LOCALE = 'vi-VN';
+const LOCALE = 'en-US';
 const MINUS = '−';
 
 const numberFormats = new Map<string, Intl.NumberFormat>();
@@ -20,33 +20,33 @@ function withSign(value: number, body: string): string {
   return value < 0 ? `${MINUS}${body}` : body;
 }
 
-/** 35880 → "35.880"; 22.5 → "22,5". Uses a true minus sign for negatives. */
+/** 35880 → "35,880"; 22.5 → "22.5". Uses a true minus sign for negatives. */
 export function formatNumber(value: number | null | undefined, maxFractionDigits = 1): string {
   if (value == null || !Number.isFinite(value)) return '—';
   return withSign(value, nf(0, maxFractionDigits).format(Math.abs(value)));
 }
 
-/** Full VND: 531000 → "531.000đ". */
+/** Full VND: 531000 → "531,000 VND". */
 export function formatVnd(value: number): string {
   if (!Number.isFinite(value)) return '—';
-  return withSign(value, `${nf(0, 0).format(Math.round(Math.abs(value)))}đ`);
+  return withSign(value, `${nf(0, 0).format(Math.round(Math.abs(value)))} VND`);
 }
 
 /**
- * Millions for narrow cells and sentences: 4300000 → "4,3 tr" | "4,3 triệu".
- * Below one million keeps two decimals so −50.000đ reads "−0,05 tr".
+ * Millions for narrow cells and sentences: 4300000 → "4.3 M" | "4.3 million".
+ * Below one million keeps two decimals so −50,000 VND reads "−0.05 M".
  */
 export function formatVndMillions(value: number, style: 'short' | 'long' = 'short'): string {
   if (!Number.isFinite(value)) return '—';
   const millions = Math.abs(value) / 1_000_000;
   const body = nf(0, millions >= 1 ? 1 : 2).format(millions);
-  return withSign(value, `${body} ${style === 'short' ? 'tr' : 'triệu'}`);
+  return withSign(value, `${body} ${style === 'short' ? 'M' : 'million'}`);
 }
 
-/** 41 → "41 sp". */
+/** 41 → "41 units". */
 export function formatUnits(value: number | null | undefined, maxFractionDigits = 1): string {
   if (value == null || !Number.isFinite(value)) return '—';
-  return `${formatNumber(value, maxFractionDigits)} sp`;
+  return `${formatNumber(value, maxFractionDigits)} units`;
 }
 
 /** Ratio 0–1 → "24%". */

@@ -72,7 +72,7 @@ describe('compareLogic', () => {
   });
 
   it('headline in Vietnamese with the gain in millions', () => {
-    expect(headline(rec)).toBe('Chỉ chạy 0–2h, 12–14h. Lợi hơn tiếp tục khoảng 4,3 triệu đ.');
+    expect(headline(rec)).toBe('Run 0–2h, 12–14h. About 4.3 million VND better than continue ads.');
     expect(headline({ ...rec, status: 'none_meets_goal' })).toBeNull();
   });
 
@@ -157,21 +157,21 @@ describe('no zone bar, blocked runs, goals', () => {
   it('explains a missing bar by its cause', () => {
     const hold = { ...rec, reasons: ['Giữ hàng lợi hơn bán: mỗi sp còn lại đáng 56.725đ, bán chỉ lãi 12.585đ'] };
     expect(noZoneBarText(hold)).toBe(
-      'Không vẽ thanh vùng vì giữ hàng lợi hơn bán ở giá sale (mỗi sp còn lại đáng 56.725đ, bán chỉ lãi 12.585đ): về tiền, tạm dừng luôn hơn tiếp tục.',
+      'Holding stock is worth more than selling (mỗi sp còn lại đáng 56.725đ, bán chỉ lãi 12.585đ); pausing is financially better.',
     );
-    expect(noZoneBarText({ ...rec, best: null })).toBe('Chưa có thanh vùng vì chưa so sánh được các hành động.');
-    expect(noZoneBarText(rec)).toMatch(/^Chưa có thanh vùng cho đề xuất này/);
+    expect(noZoneBarText({ ...rec, best: null })).toBe('Actions cannot yet be compared.');
+    expect(noZoneBarText(rec)).toMatch(/^No single break-even threshold/);
   });
 
   it('says pause is blocked when holding stock wins but pause breaks the commitment', () => {
     const results = [{ action: { kind: 'pause' }, feasible: false, violations: ['campaign_must_run'] }] as never;
-    expect(pauseBlockedLine(null, results, true)).toMatch(/không được tắt hẳn/);
+    expect(pauseBlockedLine(null, results, true)).toMatch(/blocked by a flash-sale commitment/);
     expect(pauseBlockedLine(null, results, false)).toBeNull();
   });
 
   it('maps 422 BLOCKING_DATA_ISSUE to "missing goal" or "missing data"', () => {
-    const goal = new ApiError(422, 'BLOCKING_DATA_ISSUE', 'Chiến dịch CD006 chưa có mục tiêu.', { missing: 'goal' });
-    expect(blockingInfo(goal)).toEqual({ kind: 'goal', message: 'Chiến dịch CD006 chưa có mục tiêu.' });
+    const goal = new ApiError(422, 'BLOCKING_DATA_ISSUE', 'Campaign CD006 has no goal.', { missing: 'goal' });
+    expect(blockingInfo(goal)).toEqual({ kind: 'goal', message: 'Campaign CD006 has no goal.' });
     const data = new ApiError(422, 'BLOCKING_DATA_ISSUE', 'Thiếu giá vốn', { reasons: ['Thiếu giá vốn: THAM-XANH', 7] });
     expect(blockingInfo(data)).toEqual({ kind: 'data', message: 'Thiếu giá vốn', reasons: ['Thiếu giá vốn: THAM-XANH'] });
     expect(blockingInfo(new ApiError(409, 'CONSTRAINT_VIOLATION', 'x'))).toBeNull();
@@ -181,13 +181,13 @@ describe('no zone bar, blocked runs, goals', () => {
     const goal = {
       goal_id: 'g',
       kind: 'profit',
-      label: 'Lợi nhuận tới 00:00 12/11',
+      label: 'Profit through 00:00 12/11',
       deadline: '2026-11-12T00:00:00+07:00',
       target_units: null,
       confirmed_by: 'u-lead-1',
       version: 1,
     };
-    expect(goalText(goal, 'g')).toBe('Lợi nhuận tới 00:00 12/11');
+    expect(goalText(goal, 'g')).toBe('Profit through 00:00 12/11');
     expect(goalText(goal, 'other')).toBe('other');
     expect(goalText(null, 'g')).toBe('g');
   });
@@ -199,8 +199,8 @@ describe('no zone bar, blocked runs, goals', () => {
   });
 
   it('param_version object → short text', () => {
-    expect(paramVersionText({ a: 0, b: 0 })).toBe('2 tham số, đều là mặc định (v0)');
-    expect(paramVersionText({ a: 0, leftover_value_per_unit: -1, b: 3 })).toBe('leftover_value_per_unit: giả định của lần chạy · b v3');
+    expect(paramVersionText({ a: 0, b: 0 })).toBe('2 default parameters (v0)');
+    expect(paramVersionText({ a: 0, leftover_value_per_unit: -1, b: 3 })).toBe('leftover_value_per_unit: Run overrides · b v3');
   });
 });
 
@@ -250,7 +250,7 @@ describe('pause not allowed (05 §7.2, M3-mo-phong Q14)', () => {
     leftover_value_per_unit_vnd: 0,
   };
   const blockedBar = {
-    axis_label: 'Lượng bán mỗi giờ nếu pause (sp)',
+    axis_label: 'Sales per hour if ads pause (units)',
     threshold: 22.5,
     interval: [18, 24, 31] as [number, number, number],
     verdict: 'undetermined' as const,
@@ -266,7 +266,7 @@ describe('pause not allowed (05 §7.2, M3-mo-phong Q14)', () => {
     expect(estimated).toBe(true);
     expect(bar?.verdict).toBe('pause_better');
     expect(bar?.pause_feasible).toBe(false);
-    expect(bar?.verdict_note).toMatch(/^Tạm dừng bị cấm vì đã cam kết với sàn trong khung flash sale. Về tiền, tạm dừng lợi hơn chạy tiếp/);
+    expect(bar?.verdict_note).toMatch(/^Pausing is blocked because of a flash-sale commitment. Although financially better/);
   });
 
   it('no duplicate "pause blocked" line when the API sends verdict_note', () => {
@@ -276,6 +276,6 @@ describe('pause not allowed (05 §7.2, M3-mo-phong Q14)', () => {
 
   it('headline when only the best action meets the goal (goal_cost_vnd)', () => {
     const r = { ...rec, runner_up_meets_goal: false, goal_cost_vnd: 1_300_000, p_best_beats_runner_up: null, expected_gain_vnd: null };
-    expect(headline(r)).toBe('Chỉ chạy 0–2h, 12–14h. Chỉ phương án này đạt mục tiêu; tiếp tục lợi hơn khoảng 1,3 triệu đ nhưng không đạt.');
+    expect(headline(r)).toBe('Run 0–2h, 12–14h is the only option meeting the goal. continue ads earns about 1.3 million VND more but misses the goal.');
   });
 });

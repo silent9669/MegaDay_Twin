@@ -1,3 +1,5 @@
+import { analyzeWithAI } from '../../city/analysis-context';
+import { useHQSelection } from '../../hq/selection';
 // So sánh lựa chọn (09 §2.3): tier 1 conclusion + ZoneBar + 5 action cards,
 // tier 2 reasons / flip conditions / what-if sliders, tier 3 audit table and lineage.
 import { ArrowLeft, ChevronRight, FilePlus2, Scale } from 'lucide-react';
@@ -65,8 +67,9 @@ function CompareSkeleton() {
   );
 }
 
-export function ComparePage() {
-  const { target, rec: recQuery, scenario: scenarioQuery } = useCompareData();
+export function ComparePage({sku}: {sku?:string} = {}) {
+  const hq = useHQSelection();
+  const { target, rec: recQuery, scenario: scenarioQuery } = useCompareData(sku);
   const freshness = useFreshness();
   const location = useLocation();
 
@@ -243,7 +246,7 @@ export function ComparePage() {
   return (
     <>
       <div className="mb-2">
-        <Link to={backTo} className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg">
+        <Link to={backTo} onClick={e=>{if(hq){e.preventDefault();hq.tab('details');}}} className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg">
           <ArrowLeft aria-hidden className="size-4" />
           {backLabel}
         </Link>
@@ -300,6 +303,7 @@ export function ComparePage() {
               </>
             )}
             <ActionCards results={results} rec={rec} />
+            <button className="btn-secondary" onClick={()=>analyzeWithAI({title:'Decision model comparison',source:config.useFixtures?'model-snapshot':'model-api',sku:target.sku,data:JSON.stringify({recommendation:rec,results,whatIf,dataAsOf,computedAt}).slice(0,24000)},'Explain this comparison in English. Trace expected outcomes, constraints and confidence to the supplied model results. Explain what assumptions would change the conclusion. Do not treat snapshots as live data or user assumptions as validated forecasts.')}>Analyze with AI</button>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"

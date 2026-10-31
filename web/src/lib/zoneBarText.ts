@@ -1,3 +1,4 @@
+import { evidenceText } from './evidence-text';
 // Text and scale helpers for ZoneBar (kept out of the component file for fast refresh).
 import type { ZoneBar as ZoneBarData } from '../api/types';
 import { formatNumber } from './format';
@@ -17,7 +18,7 @@ function fmt(v: number): string {
 
 /** Verdict sentence; when pause is not allowed the API's `verdict_note` replaces it (05 §7.2). */
 export function verdictSentence(bar: Pick<ZoneBarData, 'verdict' | 'threshold'> & Partial<Pick<ZoneBarData, 'pause_feasible' | 'verdict_note'>>): string {
-  if (bar.pause_feasible === false && bar.verdict_note) return bar.verdict_note.endsWith('.') ? bar.verdict_note : `${bar.verdict_note}.`;
+  if (bar.pause_feasible === false && bar.verdict_note) return evidenceText(bar.verdict_note).replace(/\.?$/,'.');
   switch (bar.verdict) {
     case 'undetermined':
       return t.verdict.undetermined(fmt(bar.threshold));
@@ -30,7 +31,7 @@ export function verdictSentence(bar: Pick<ZoneBarData, 'verdict' | 'threshold'> 
 
 /** Alternative thresholds that can be drawn (the API sends threshold = null when the line does not exist). */
 export function drawableAlts(bar: Pick<ZoneBarData, 'alt_thresholds'>): { label: string; threshold: number }[] {
-  return bar.alt_thresholds.flatMap((a) => (a.threshold == null ? [] : [{ label: a.label, threshold: a.threshold }]));
+  return bar.alt_thresholds.flatMap((a) => (a.threshold == null ? [] : [{ label: a.leftover_value_per_unit!=null?t.altLabel(a.leftover_value_per_unit):a.label, threshold: a.threshold }]));
 }
 
 export function zoneBarAriaLabel(bar: ZoneBarData): string {
