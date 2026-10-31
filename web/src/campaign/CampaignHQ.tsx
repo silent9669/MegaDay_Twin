@@ -85,7 +85,7 @@ export function CampaignHQ({ watch }: { watch: { context: CampaignContext | null
         <p><strong>{goalNames[current.goal.kind] ?? current.goal.kind}</strong> · Hạn {time(current.goal.deadline)}</p>
         <p>{current.goal.target_units != null && <>Chỉ tiêu: {units(current.goal.target_units)} sản phẩm · </>}Phiên bản {current.goal.version} · Xác nhận bởi {current.goal.confirmed_by}</p>
       </> : <p>Chưa có mục tiêu được áp dụng. Mở phần lập kế hoạch, xem trước rồi chọn Apply. Bản xem trước chưa thay mục tiêu đang chạy.</p>}
-        <Link to="/sale-planner">Xem / chỉnh mục tiêu →</Link>
+        <Link to="/sale-planner?campaign=CD002">Xem / chỉnh mục tiêu →</Link>
       </section>
       <section className="campaign-card"><h2>Sản phẩm trong campaign</h2><p>Ngân sách ngày hiện tại: {money(current?.campaign.daily_budget_vnd)} · Chi ads đã ghi nhận hôm nay: {money(current?.campaign.spend_today_vnd)}</p>
         <div className="campaign-table-scroll"><table><thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Tồn nguồn</th><th>Chi tiết</th></tr></thead><tbody>{current?.campaign.sku_detail.map(s => <tr key={s.sku}><td>{s.name}<small>{s.sku}</small></td><td>{money(s.price_effective_vnd)}</td><td>{s.is_bundle ? "Dùng tồn thành phần" : units(s.stock_available)}</td><td><button onClick={() => { setSku(s.sku); setTab("analysis"); }}>Xem bảng tính</button></td></tr>)}</tbody></table></div>

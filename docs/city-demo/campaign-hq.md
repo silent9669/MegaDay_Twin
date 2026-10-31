@@ -1,6 +1,6 @@
 # Campaign HQ — CD002
 
-Integrated with main `19864b9`; the shared Milo, new HQ and preview/apply goal planner are reused. Open
+Integrated with main `4fbe60d`; the shared Milo, new HQ and preview/apply goal planner are reused. Open
 `/campaign-hq`, or MegaDay HQ → **CD002 · Phân tích và đề xuất**.
 
 ## Flow
@@ -8,6 +8,8 @@ Integrated with main `19864b9`; the shared Milo, new HQ and preview/apply goal p
 1. Ingest seller sources into Python and explicitly **Apply** a campaign goal through
    the sale planner. A preview is inactive and does not replace the running goal. CD002
    analysis reads only the applied goal; it never creates or edits that goal.
+   The goal link carries CD002 into HQ and defaults to the whole campaign, even when
+   another product was previously selected in HQ.
 2. Open CD002. Overview shows campaign SKUs, reported ad spend, active goal and separate
    source timestamps. Sources saved only in Data Studio are not yet analytical inputs.
 3. **Cập nhật & đề xuất lại** reads the latest backend revision, verifies the same active
@@ -18,6 +20,8 @@ Integrated with main `19864b9`; the shared Milo, new HQ and preview/apply goal p
    AI cannot generate new amounts, choose a different action, or execute ads. Without AI,
    the UI explicitly shows the simulator's original reasons. Contextual chat remains
    available for the saved scenario.
+   This first version compares the simulator's supported actions inside the applied
+   goal's time window. It does not optimize an arbitrary selling duration or execute ads.
 5. Python replay/ingest changes the backend revision. A watcher polls every 15 seconds
    while City is open and adds one coalesced Milo notification. The old table remains
    visible and marked outdated. The bell also stays accessible on full-page workspaces.
@@ -107,3 +111,21 @@ real Python scenario persistence, retained results after refresh errors and AI e
 selection. Browser QA: start Vite on 5186, run `node qa/studio/campaign-hq.mjs`
 (`STUDIO_QA_CHANNEL=msedge` on Windows). Browser QA uses mocked APIs, not live AI or
 production data; screenshots under `qa/runs/campaign-hq/` are illustrative.
+
+The replay API integration test also covers preview → Apply → initial HQ calculation →
+ZIP staging → hour 0 → rejection of stale inputs → recalculation of the remaining three
+hours. It verifies the applied goal and the previous calculation trace stay unchanged.
+
+## Review against the agreed first version
+
+| Requirement | Implementation / boundary |
+|---|---|
+| Focus CD002 and its products | Dedicated route linked from HQ; campaign membership comes from Python |
+| Inherit the other contributor's goal workflow | Read applied goal; previews remain inactive; goal link preserves CD002 |
+| Two tables matching the supplied examples | Same economic rows, continue/pause columns; numbers come from saved simulation traces |
+| Shared combo stock and flash-sale constraints | Component consumption reconciled; forbidden pause shows no actionable financial totals |
+| Time and advertising plan | Recommended supported action, schedule/budget reduction and remaining goal window |
+| AI proposal | Evidence selection after simulation; explicit rules fallback when AI is unavailable |
+| ZIP upload from Studio | Replay archive is staged, not imported as full-day observations |
+| Trigger → Milo notification → manual refresh | Poll backend revision; retain/mark old snapshot; save a new snapshot on refresh |
+| Public deployment | Requires Python backend and configured authenticated Worker bridge; web-only deployment is insufficient |

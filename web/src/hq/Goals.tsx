@@ -3,8 +3,8 @@ import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
 import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
 import type { TrackedProduct } from "./types";
 
-export function Goals({ product }: { product: TrackedProduct | null }) {
-  const [scope, setScope] = useState(product ? "product" : "campaign");
+export function Goals({ product, campaignId }: { product: TrackedProduct | null; campaignId?: string }) {
+  const [scope, setScope] = useState(product && !campaignId ? "product" : "campaign");
   const [showFacts, setShowFacts] = useState(false);
   const sku = scope === "product" ? product?.sku : undefined;
   return <>
@@ -18,6 +18,6 @@ export function Goals({ product }: { product: TrackedProduct | null }) {
       </label>
     </div>
     {sku && <details className="hq-goal-context" onToggle={e => setShowFacts(e.currentTarget.open)}><summary>Product facts &amp; Milo</summary>{showFacts && <SkuGoalAssistant key={sku} sku={sku} />}</details>}
-    <SaleGoalPlanner key={sku || "campaign"} embedded focusSku={sku} />
+    <SaleGoalPlanner key={sku || "campaign"} embedded focusSku={sku} campaignIds={campaignId ? [campaignId] : undefined} />
   </>;
 }

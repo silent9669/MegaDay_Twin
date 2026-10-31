@@ -1,5 +1,5 @@
-import copy
 import asyncio
+import copy
 import io
 import json
 import zipfile
@@ -9,8 +9,8 @@ import pytest
 
 from app.core.errors import ValidationFailed
 from app.live.archive import inspect_archive
-from app.live.replay import write_live_stream
 from app.live.control import LiveController
+from app.live.replay import write_live_stream
 from tests.mockdata import require
 
 

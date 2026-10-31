@@ -44,7 +44,7 @@ it("inherits the goal, computes before AI and retains the table after refresh fa
 it("does not create a goal or manufacture a scenario without confirmed inputs", () => {
   render(<MemoryRouter><CampaignHQ watch={{ context: { ...context, goal: null }, error: "", acceptContext: vi.fn() }} /></MemoryRouter>);
   expect(screen.getByRole("button", { name: "Cập nhật & đề xuất lại" })).toBeDisabled();
-  expect(screen.getByRole("link", { name: /Xem \/ chỉnh mục tiêu/ })).toHaveAttribute("href", "/sale-planner");
+  expect(screen.getByRole("link", { name: /Xem \/ chỉnh mục tiêu/ })).toHaveAttribute("href", "/sale-planner?campaign=CD002");
 });
 it("restores credited progress from the saved scenario, not the current goal", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json({ data: { ...run.scenario,
