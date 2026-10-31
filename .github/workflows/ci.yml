@@ -27,6 +27,7 @@ jobs:
       mock_data: ${{ steps.filter.outputs.mock_data }}
     steps:
       - uses: actions/checkout@v4
+        if: github.event_name != 'pull_request'
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -91,7 +92,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - name: Typecheck and build Cloudflare Worker (demo fixtures)
-        run: npm run build:cloudflare
+        # Sources were already prepared above for lint/tests; avoid the prebuild hook twice.
+        run: npm --ignore-scripts run build:cloudflare
         env:
           CF_SEND_TELEMETRY: "false"
       - name: Validate deployment without credentials
@@ -132,16 +134,71 @@ jobs:
             exit 1
           fi
 
-  promote-cloudflare:
+  deploy:
     needs: [changes, ci]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.web == 'true'
+    # A skipped backend/mock-data job must not skip deployment after a green gate.
+    if: >-
+      !cancelled() && needs.ci.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment:
+      name: production
+      url: https://megadaytwin.dangphuc.me
     permissions:
       contents: write
+      checks: read
     steps:
-      - name: Promote the passed commit for Cloudflare Workers Builds
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/cloudflare-production" \
-            -f sha="$GITHUB_SHA" -F force=false
+      - name: Promote and wait for the actual Cloudflare deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            const { data: main } = await github.rest.repos.getBranch({ ...repo, branch: 'main' });
+            if (main.commit.sha !== context.sha) {
+              throw new Error('A newer main commit exists; refusing to deploy this older commit.');
+            }
+            await github.rest.git.updateRef({
+              ...repo, ref: 'heads/cloudflare-production', sha: context.sha, force: false,
+            });
+            const deadline = Date.now() + 10 * 60 * 1000;
+            while (Date.now() < deadline) {
+              const checks = await github.paginate(github.rest.checks.listForRef, {
+                ...repo, ref: context.sha, check_name: 'Workers Builds: megadaytwin', per_page: 100,
+              });
+              const check = checks
+                .filter((run) => run.app?.slug === 'cloudflare-workers-and-pages')
+                .sort((a, b) => b.id - a.id)[0];
+              if (check?.status === 'completed') {
+                if (check.conclusion !== 'success') {
+                  throw new Error(`Cloudflare deployment ${check.conclusion}: ${check.details_url}`);
+                }
+                await core.summary.addLink('Cloudflare deployment', check.details_url).write();
+                return;
+              }
+              core.info(`Waiting for Cloudflare build of ${context.sha}...`);
+              await new Promise((resolve) => setTimeout(resolve, 10000));
+            }
+            throw new Error('Timed out waiting for Cloudflare deployment; production success is unconfirmed.');
+      - name: Verify live D1 health and access gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const base = 'https://megadaytwin.dangphuc.me';
+            const request = (path) => fetch(`${base}${path}`, {
+              redirect: 'manual', signal: AbortSignal.timeout(15000),
+            });
+            const health = await request('/healthz');
+            const body = await health.json();
+            if (health.status !== 200 || body.status !== 'ok' || body.db !== 'ok') {
+              throw new Error('Production D1 health check failed.');
+            }
+            const login = await request('/login');
+            const privateChat = await request('/api/workspace/chats');
+            const city = await request('/city-demo');
+            if (login.status !== 200 || privateChat.status !== 401 || city.status !== 307) {
+              throw new Error('Production login/access gate check failed.');
+            }
+            await core.summary.addRaw('Production health and access gate passed.').write();
