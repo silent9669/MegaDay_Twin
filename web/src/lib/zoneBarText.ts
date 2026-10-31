@@ -30,7 +30,7 @@ export function verdictSentence(bar: Pick<ZoneBarData, 'verdict' | 'threshold'> 
 
 /** Alternative thresholds that can be drawn (the API sends threshold = null when the line does not exist). */
 export function drawableAlts(bar: Pick<ZoneBarData, 'alt_thresholds'>): { label: string; threshold: number }[] {
-  return bar.alt_thresholds.flatMap((a) => (a.threshold == null ? [] : [{ label: a.label, threshold: a.threshold }]));
+  return bar.alt_thresholds.flatMap((a) => (a.threshold == null ? [] : [{ label: a.leftover_value_per_unit!=null?t.altLabel(a.leftover_value_per_unit):a.label, threshold: a.threshold }]));
 }
 
 export function zoneBarAriaLabel(bar: ZoneBarData): string {

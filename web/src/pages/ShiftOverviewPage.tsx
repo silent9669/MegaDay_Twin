@@ -1,3 +1,4 @@
+import { useHQSelection } from '../hq/selection';
 // Tổng quan ca (09 §2.1): "Cần xem ngay" (top 5 products by priority) + the full SKU
 // table with cursor paging. Reads GET /skus, /recommendations, /freshness and /me.
 import { ChevronRight, Database, Search } from 'lucide-react';
@@ -55,6 +56,7 @@ function AttentionCard({
   rec: Recommendation | undefined;
   dataAsOf: string | null | undefined;
 }) {
+  const hq = useHQSelection();
   const item = group.lead;
   const many = group.items.length > 1;
   const updating = isUpdating(item);
@@ -73,7 +75,7 @@ function AttentionCard({
         </p>
         <p className="text-xs text-muted">
           {many ? group.items.map((i) => (group.sameProduct ? i.variant || i.sku : i.sku)).join(', ') : item.sku} ·{' '}
-          {item.campaign ? `${item.campaign.id} · ${item.campaign.status ?? ''}` : t.noCampaign}
+          {item.campaign ? `${item.campaign.id} · ${item.campaign.status_code ?? ''}` : t.noCampaign}
         </p>
       </div>
       <div className="min-w-48 text-sm">
@@ -93,7 +95,7 @@ function AttentionCard({
           {item.compute_state && item.compute_state !== 'fresh' ? <ComputeStateTag state={item.compute_state} /> : null}
         </div>
       </div>
-      <Link to={compareTo} className="btn-secondary ml-auto" aria-label={`${t.compare} ${many && group.sameProduct ? group.name : displayName(item)}`}>
+      <Link to={compareTo} onClick={e=>{if(hq){e.preventDefault();hq.open({sku:item.sku,name:displayName(item),mode:'model'},'comparisons');}}} className="btn-secondary ml-auto" aria-label={`${t.compare} ${many && group.sameProduct ? group.name : displayName(item)}`}>
         {t.compare}
         <ChevronRight aria-hidden className="size-4" />
       </Link>
@@ -103,6 +105,7 @@ function AttentionCard({
 
 function SkuTable({ items }: { items: SkuListItem[] }) {
   const c = t.columns;
+  const hq = useHQSelection();
   return (
     <div className="card overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -123,7 +126,7 @@ function SkuTable({ items }: { items: SkuListItem[] }) {
             return (
               <tr key={item.sku} className={`border-b border-border last:border-0 hover:bg-surface-2 ${updating ? 'opacity-60' : ''}`}>
                 <td className="px-3 py-2">
-                  <Link to={`/sku/${encodeURIComponent(item.sku)}`} className="font-medium hover:underline">
+                  <Link to={`/sku/${encodeURIComponent(item.sku)}`} onClick={e=>{if(hq){e.preventDefault();hq.open({sku:item.sku,name:displayName(item),mode:'model'},'details');}}} className="font-medium hover:underline">
                     {item.sku}
                   </Link>
                   <div className="text-xs text-muted">{displayName(item)}</div>
@@ -307,7 +310,7 @@ export function ShiftOverviewPage() {
   return (
     <>
       <PageHeader title={p.title} description={p.description} />
-      {meData ? <p className="-mt-3 mb-3 text-xs text-muted">{t.roleLine(meData.role_label, meData.id)}</p> : null}
+      {meData ? <p className="-mt-3 mb-3 text-xs text-muted">{t.roleLine(viText.role[meData.role], meData.id)}</p> : null}
       {stale.length ? (
         <Banner tone="warn">{viText.banner.stale(stale.map((s) => viText.freshnessSource[s.source] ?? s.label).join(', '))}</Banner>
       ) : null}

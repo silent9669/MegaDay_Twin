@@ -81,7 +81,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return fail(403, "Request not allowed.");
     if (path.startsWith("/api/workspace/")) {
       // Internal labeling claims/results are never reachable through the browser proxy.
-      if (!/^\/api\/workspace\/(sources|settings|sandbox|chats|events)$/.test(path))
+      if (!/^\/api\/workspace\/(sources|settings|sandbox|chats|hq|events)$/.test(path))
         return fail(404, "Workspace document not found.");
       if (!env.WORKSPACE)
         return fail(503, "Account storage is not configured.");

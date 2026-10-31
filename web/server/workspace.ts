@@ -1,3 +1,4 @@
+import { hqSchema, defaultHQ } from "../src/hq/types";
 import type {
   DurableObjectState,
   WebSocket as WorkerSocket,
@@ -239,7 +240,7 @@ export class AccountWorkspace {
         webSocket: pair[0],
       } as ResponseInit);
     }
-    if (!["sources", "settings", "sandbox", "chats"].includes(name))
+    if (!["sources", "settings", "sandbox", "chats", "hq"].includes(name))
       return fail(404, "Workspace document not found.");
     if (request.method === "GET") {
       let document = this.read(name);
@@ -247,7 +248,9 @@ export class AccountWorkspace {
         const data =
           name === "sources"
             ? { schema: "hackathon.sources.v1", files: [] }
-            : name === "settings"
+            : name === "hq"
+              ? defaultHQ
+              : name === "settings"
               ? defaultSettings
               : name === "chats"
                 ? defaultChatArchive
@@ -271,7 +274,9 @@ export class AccountWorkspace {
       const data =
         name === "sources"
           ? await withoutDemandLabels(await validatePack(body.data))
-          : name === "settings"
+          : name === "hq"
+            ? hqSchema.parse(body.data)
+            : name === "settings"
             ? settingsSchema.parse(body.data)
             : name === "chats"
               ? chatArchiveSchema.parse(body.data)

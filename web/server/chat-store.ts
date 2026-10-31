@@ -1,3 +1,4 @@
+import { workspaceReader } from "./analysis-tools";
 import { fail } from "./auth";
 import { pmChat, type PMEnv } from "./pm";
 import type {
@@ -63,11 +64,12 @@ export async function savedChat(
         model: conversation.model,
         messages: conversation.messages
           .slice(-16)
-          .map(({ role, content }) => ({ role, content })),
+          .map(({ role, content, attachments, analysis }) => ({ role, content, attachments, analysis })),
       }),
     }),
     env,
     change ? { workspace: context, change } : context,
+    workspaceReader(storage,request.url),
   );
   if (!response.ok) return response;
   const result = (await response.json()) as { reply: string; model: string };

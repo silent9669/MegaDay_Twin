@@ -1,0 +1,18 @@
+import { Sparkles } from 'lucide-react';
+import { analyzeWithAI } from '../city/analysis-context';
+import { blankWorksheet, exampleWorksheet, worksheetResults, type Worksheet, type TrackedProduct } from './types';
+const fields: [keyof Worksheet,string][]=[['stock','Available units'],['price','Selling price (VND)'],['cost','Unit cost (VND)'],['packaging','Packaging / unit (VND)'],['feePercent','Platform fee (%)'],['continueUnits','Demand with ads (units)'],['pauseUnits','Demand without ads (units)'],['spend','New ad spend (VND)']];
+const format=(value:number)=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(value);
+export function ScenarioWorksheet({product,saved,onSave,onChange:setValue,busy}:{product:TrackedProduct;saved?:Worksheet;onChange:(value:Worksheet)=>void;onSave:(value:Worksheet)=>void;busy:boolean}) {
+ const value=saved??blankWorksheet;
+ const results=worksheetResults(value);
+ return <section className="hq-worksheet" aria-label="Scenario worksheet">
+  <header><div><h3>Continue or pause?</h3><span className="hq-provenance">User assumptions · one product</span></div><button onClick={()=>setValue({...exampleWorksheet})}>Load reference example</button></header>
+  <div className="hq-assumptions">{fields.map(([key,label])=><label key={key}>{label}<input type="number" min="0" max={key==='feePercent'?100:key.includes('Units')||key==='stock'?1e9:1e12} step="any" value={value[key]??''} onChange={e=>{const n=e.target.valueAsNumber;setValue({...value,[key]:Number.isFinite(n)?Math.min(key==='feePercent'?100:key.includes('Units')||key==='stock'?1e9:1e12,Math.max(0,n)):null});}} /></label>)}</div>
+  {results?<div className="hq-table-scroll" tabIndex={0} role="region" aria-label="Continue versus pause results"><table className="hq-financial-table"><caption>Illustration for the selected period · VND</caption><thead><tr><th>Metric</th><th>Continue ads</th><th>Pause ads</th></tr></thead><tbody>{([
+   ['Units sold','units'],['Units remaining','leftover'],['Revenue','revenue'],['Cost of goods + fees + packaging','costs'],['Contribution before advertising','beforeAds'],['New advertising spend','spend'],['Result after these costs','afterAds'],
+  ] as const).map(([label,key])=><tr key={key}><th scope="row">{label}</th>{results.map((result,i)=><td key={i}>{format(result[key])}{key!=='units'&&key!=='leftover'?' VND':''}</td>)}</tr>)}</tbody></table></div>:<p className="hq-empty">Enter the assumptions to compare the two options.</p>}
+  <details><summary>How this is calculated</summary><p>Units sold = the smaller of demand and available units. Revenue = units × price. Costs = units × (unit cost + packaging + price × fee rate). Result = revenue − costs − new ad spend.</p><p>This worksheet excludes taxes, returns, fixed costs, restocking and leftover inventory value. It does not estimate demand or enforce campaign commitments.</p></details>
+  <footer><button className="btn-secondary" disabled={busy||!results} onClick={()=>onSave(value)}>Save assumptions</button><button className="btn-primary" disabled={!results} onClick={()=>analyzeWithAI({title:'Continue versus pause',source:'user-assumptions',sku:product.sku,data:JSON.stringify({product,assumptions:value,results,formula:'units=min(stock,demand); costs=units*(cost+packaging+price*feePercent/100); afterAds=units*price-costs-spend',excludes:['taxes','returns','fixed costs','restocking','leftover valuation','campaign constraints']})},'Explain this product comparison in English. Trace each number to its assumptions and formula, explain why the outcomes differ, and suggest which assumptions need evidence. Treat demand as a user assumption, not a forecast.')}><Sparkles size={16}/>Analyze with AI</button></footer>
+ </section>;
+}

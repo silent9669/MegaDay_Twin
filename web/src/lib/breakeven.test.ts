@@ -41,11 +41,11 @@ describe('breakeven (05 §7, page-10 example)', () => {
     const res = computeZoneBar(page10);
     expect(res.flip_leftover_value_vnd).toBe(16_875);
     expect(res.zone_bar).toMatchObject({
-      axis_label: 'Lượng bán mỗi giờ nếu pause (sp)',
+      axis_label: 'Sales per hour if ads pause (units)',
       threshold: 22.5,
       interval: [18, 24, 31],
       verdict: 'undetermined',
-      alt_thresholds: [{ label: 'hàng dư 20.000đ', threshold: 16.5, leftover_value_per_unit: 20_000, status: 'ok' }],
+      alt_thresholds: [{ label: 'leftover value 20,000 VND', threshold: 16.5, leftover_value_per_unit: 20_000, status: 'ok' }],
     });
   });
 
@@ -53,7 +53,7 @@ describe('breakeven (05 §7, page-10 example)', () => {
     const res = computeZoneBar({ ...page10, leftover_value_per_unit_vnd: 20_000 }, [0]);
     expect(res.zone_bar?.threshold).toBe(16.5);
     expect(res.zone_bar?.verdict).toBe('pause_better');
-    expect(res.zone_bar?.alt_thresholds).toEqual([{ label: 'hàng dư 0đ', threshold: 22.5, leftover_value_per_unit: 0, status: 'ok' }]);
+    expect(res.zone_bar?.alt_thresholds).toEqual([{ label: 'leftover value 0 VND', threshold: 22.5, leftover_value_per_unit: 0, status: 'ok' }]);
   });
 });
 

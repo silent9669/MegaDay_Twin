@@ -1,5 +1,7 @@
+import { HQWorkspace } from "../hq/HQWorkspace";
+import { useAssistant } from "./assistant-context";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link,  useNavigate, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   ArrowRight,
@@ -28,7 +30,6 @@ import {
 } from "lucide-react";
 import {
   useAccountDocument,
-  useAccountEvents,
   requestJSON,
 } from "../studio/account";
 import {
@@ -42,7 +43,6 @@ import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
-import { CityChat } from "./CityChat";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import type { createCity, District, WorldState } from "./world";
 import "./city.css";
@@ -50,7 +50,6 @@ import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
 import { Tutorial } from "./Tutorial";
 import { usePanelResize } from "./usePanelResize";
 import { TOUR, TOUR_KEY } from "./tutorial-steps";
-import { useWorkspaceMonitor } from "./monitor/useWorkspaceMonitor";
 import type { Landmark } from "./map-labels";
 import { Brand, BrandMark } from "./Brand";
 const DISTRICTS = [
@@ -61,26 +60,20 @@ const DISTRICTS = [
 ] as const;
 export function CityApp({ studio = false }: { studio?: boolean }) {
   const [mobile, setMobile] = useState(
-    () => matchMedia("(max-width: 899px)").matches,
+    () => matchMedia("(max-width: 1023px)").matches,
   );
   useEffect(() => {
-    const media = matchMedia("(max-width: 899px)");
+    const media = matchMedia("(max-width: 1023px)");
     const update = () => setMobile(media.matches);
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const [chatAnchor, setChatAnchor] = useState<HTMLSpanElement | null>(null);
-  const connected = useAccountEvents();
+  const assistant = useAssistant();
+  const { connected, setLauncherAnchor: setChatAnchor, open: chatOpen, setOpen: setChatOpen } = assistant;
   const settings = useAccountDocument<ViewSettings>("settings"),
     sources = useAccountDocument<SourcePack>("sources"),
     sandbox = useAccountDocument<Sandbox>("sandbox");
-  const updates = useWorkspaceMonitor(
-    sources.document,
-    sandbox.document,
-    connected,
-  );
-  const [chatOpen, setChatOpen] = useState(false);
-  const panel = usePanelResize(980, 560);
+  const panel = usePanelResize(980, 560, "right", chatOpen ? assistant.width + 12 : 0);
   const viewSettings = settings.document?.data ?? defaultSettings;
   const appearance = viewSettings.appearance ?? "morning";
   useEffect(() => {
@@ -109,10 +102,11 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     [ready, setReady] = useState(false),
     [failure, setFailure] = useState(""),
     [error, setError] = useState("");
+  const setWorkspaceOpen=assistant.setWorkspaceOpen;
   const [params, setParams] = useSearchParams();
+  useEffect(() => { setWorkspaceOpen(workspace && !studio); return () => setWorkspaceOpen(false); }, [workspace, studio, setWorkspaceOpen]);
   const settingsOpen = params.get("panel") === "settings";
-  const navigate = useNavigate(),
-    location = useLocation();
+  const navigate = useNavigate();
   const worldRef = useRef<ReturnType<typeof createCity> | null>(null),
     host = useRef<HTMLDivElement>(null),
     settingsDialog = useRef<HTMLDialogElement>(null);
@@ -130,11 +124,11 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   const latest = useRef(state);
   latest.current = state;
   useEffect(() => {
-    worldRef.current?.setPanelInset(!mobile && workspace && !chatOpen ? panel.style?.width ?? 0 : 0);
+    worldRef.current?.setPanelInset(!mobile && workspace ? panel.style?.width ?? 0 : 0);
   }, [mobile, workspace, chatOpen, panel.style?.width, ready]);
   const enter = (next: District | null, tourIndex: number | null = null) => {
     setTour(tourIndex);
-    setChatOpen(false);
+    if (mobile) setChatOpen(false);
     setDistrict(next);
     setWorkspace(next === "hq" || next === "warehouse" || next === "ads");
     worldRef.current?.focus(next);
@@ -200,7 +194,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       if (e.key === "Escape" && !chatOpen) {
         if (tour !== null) finishTour();
         else if (workspace) setWorkspace(false);
-        else enter(null);
+        else enterRef.current(null);
       }
     };
     window.addEventListener("keydown", key);
@@ -483,8 +477,8 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                 <Minus />
               </button>
             </div>
-            {workspace && district && !chatOpen && (
-              <Sheet open onOpenChange={open => { setWorkspace(open); if (!open) finishTour(); }} modal={mobile}>
+            {workspace && district && (!mobile || !chatOpen) && (
+              <Sheet open disablePointerDismissal={!mobile} onOpenChange={open => { setWorkspace(open); if (!open) finishTour(); }} modal={mobile}>
                 <SheetContent
                   showCloseButton={false}
                   style={panel.style}
@@ -510,7 +504,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                   {tour !== null && <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />}
                   <div className="district-workspace-body">
                     {district === "hq" ? (
-                      <SourceWorkspace pack={sources.document?.data ?? null} district="hq" />
+                      <HQWorkspace pack={sources.document?.data ?? null} revision={sources.document?.revision ?? 0} />
                     ) : district === "warehouse" ? (
                       <>
                         <div className="warehouse-title">
@@ -616,15 +610,8 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             : "Loading account"}
         </span>
       </footer>
-      <CityChat
-        launcherAnchor={chatAnchor}
-        updates={updates}
-        onOpenChange={setChatOpen}
-        open={chatOpen}
-      />
-      <div className="monitor-live sr-only" role="status" aria-live="polite">
-        {updates.toast?.title ?? ""}
-      </div>
+
+
       <dialog
         ref={settingsDialog}
         className="city-settings"
@@ -713,7 +700,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         )}
       </dialog>
       <RouteSteering
-        locationKey={location.key}
+        locationKey={String(studio) + (params.get("district") ?? "") + (params.get("stock") ?? "") + (params.get("tour") ?? "")}
         ready={ready}
         onDistrict={(id) => {
           enterRef.current(id);

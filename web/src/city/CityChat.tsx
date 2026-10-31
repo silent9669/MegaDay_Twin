@@ -1,3 +1,5 @@
+import { analysisContextSchema, type AnalysisContext } from "./analysis-context";
+import { prepareChatImage, type ImageAttachment } from "./chat-evidence";
 import { usePanelResize } from "./usePanelResize";
 import {
   useCallback,
@@ -8,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  ImagePlus,
   ArrowUp,
   ArrowRight,
   Bell,
@@ -37,21 +40,25 @@ import type { WorkspaceUpdates } from "./monitor/useWorkspaceMonitor";
 import type { ChangeReference } from "./monitor/changes";
 const EMPTY_MESSAGES: ChatMessage[] = [];
 export function CityChat({
+  workspaceOpen = false,
+  onWidthChange,
   launcherAnchor,
   updates,
   onOpenChange,
   open: controlledOpen,
 }: {
+  workspaceOpen?: boolean;
+  onWidthChange?: (width:number)=>void;
   launcherAnchor?: HTMLElement | null;
   updates?: WorkspaceUpdates;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
 }) {
   const [mobile, setMobile] = useState(
-    () => window.matchMedia("(max-width: 899px)").matches,
+    () => window.matchMedia("(max-width: 1023px)").matches,
   );
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 899px)");
+    const media = window.matchMedia("(max-width: 1023px)");
     const update = () => setMobile(media.matches);
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -61,6 +68,11 @@ export function CityChat({
     ChangeReference | undefined
   >();
 
+  const [analysis,setAnalysis]=useState<AnalysisContext|undefined>();
+  const [attachments,setAttachments]=useState<ImageAttachment[]>([]);
+  const [preparingImage,setPreparingImage]=useState(false);
+  const evidence=useRef(new Map<string,{analysis?:AnalysisContext;attachments:ImageAttachment[]}>());
+  const imageInput=useRef<HTMLInputElement>(null);
   const archive = useChatArchive();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
@@ -73,7 +85,8 @@ export function CityChat({
     optimistic && !messages.some((m) => m.id === optimistic.id)
       ? [...messages, optimistic]
       : messages;
-  const panel = usePanelResize(560, 420);
+  const panel = usePanelResize(400, 300, "left", workspaceOpen ? 572 : 0);
+  useEffect(()=>{onWidthChange?.(panel.width);},[panel.width,onWidthChange]);
   const { expanded, setExpanded } = panel;
   const [localOpen, setLocalOpen] = useState(false),
     [draft, setDraft] = useState(""),
@@ -128,6 +141,28 @@ export function CityChat({
       window.removeEventListener("workspace:updates", show);
     };
   }, [open, setOpen]);
+  useEffect(()=>{
+    const analyze=(event:Event)=>{
+      const detail=(event as CustomEvent).detail;
+      const parsed=analysisContextSchema.safeParse(detail?.context);
+      if(!parsed.success||typeof detail?.prompt!=='string')return;
+      setAnalysis(parsed.data);setDraft(previous=>previous.trim()||detail.prompt.slice(0,4000));
+      setOpen(true);setTab('chat');setHistory(false);
+      setTimeout(()=>input.current?.focus(),0);
+    };
+    window.addEventListener('workspace:analyze',analyze);
+    return()=>window.removeEventListener('workspace:analyze',analyze);
+  },[setOpen]);
+  async function attachImages(files:FileList|null) {
+    if(!files?.length)return;
+    if(files.length+attachments.length>2){setError('Attach up to two images per message.');return;}
+    setPreparingImage(true);setError('');
+    try{const images=await Promise.all(Array.from(files).map(prepareChatImage));setAttachments(previous=>[...previous,...images]);}
+    catch(e){setError(e instanceof Error?e.message:'Could not prepare image.');}
+    finally{setPreparingImage(false);if(imageInput.current)imageInput.current.value='';}
+  }
+  function rememberEvidence(){evidence.current.set(sessionId??'new',{analysis,attachments});}
+  function restoreEvidence(id:string){const saved=evidence.current.get(id);setAnalysis(saved?.analysis);setAttachments(saved?.attachments??[]);}
   useEffect(() => () => controller.current?.abort(), []);
   const preferredModel = archive.document?.data.preferredModel;
   useEffect(() => {
@@ -164,12 +199,14 @@ export function CityChat({
   }, [messages, pending]);
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!draft.trim() || pending || !model) return;
-    const content = draft.trim();
+    if ((!draft.trim()&&!attachments.length) || pending || preparingImage || !model) return;
+    const content = draft.trim() || "Analyze the attached image in the workspace context.";
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
       content,
+      ...(analysis?{analysis}:{}),
+      ...(attachments.length?{attachments}:{}),
     };
     const session: ChatSession = conversation ?? {
       id: crypto.randomUUID(),
@@ -185,6 +222,8 @@ export function CityChat({
     try {
       await archive.append({ ...session, model }, message);
       drafts.current.delete(sessionId ?? "new");
+      evidence.current.delete(sessionId??"new");
+      setAnalysis(undefined);setAttachments([]);
       setSessionId(session.id);
       setDraft("");
       setOptimistic(null);
@@ -257,6 +296,7 @@ export function CityChat({
     }
   }
   function newChat() {
+    rememberEvidence();restoreEvidence("new");
     references.current.set(sessionId ?? "new", changeReference);
     setChangeReference(references.current.get("new"));
     drafts.current.set(sessionId ?? "new", draft);
@@ -292,11 +332,12 @@ export function CityChat({
   );
 
   return (
-    <div className="city-pm">
+    <div className={`city-pm ${launcherAnchor ? "" : "pm-global-launcher"}`}>
       {launcherAnchor ? createPortal(launcher, launcherAnchor) : launcher}
-      <Sheet open={open} onOpenChange={setOpen} modal={mobile}>
+      <Sheet open={open} onOpenChange={setOpen} modal={mobile} disablePointerDismissal={!mobile}>
         <SheetContent
           id="city-pm-chat"
+          side="left"
           style={panel.style}
           className={`city-chat city-sheet ${expanded ? "chat-expanded" : ""}`}
           showCloseButton={false}
@@ -305,7 +346,7 @@ export function CityChat({
           initialFocus={tab === "chat" ? input : undefined}
           aria-labelledby="chat-title"
         >
-          <div className="panel-resize-grip" {...panel.grip} />
+          <div className="panel-resize-grip panel-resize-right" {...panel.grip} />
           <header>
             <div className="chat-identity">
               <MiloAvatar
@@ -334,7 +375,7 @@ export function CityChat({
               className="city-icon"
               aria-label="New chat"
               title="New chat"
-              disabled={pending}
+              disabled={pending||preparingImage}
               onClick={newChat}
             >
               <Plus />
@@ -399,12 +440,13 @@ export function CityChat({
                 <ChatHistory
                   sessions={archive.document?.data.sessions ?? []}
                   activeId={sessionId}
-                  busy={pending}
+                  busy={pending||preparingImage}
                   onBack={() => {
                     setHistory(false);
                     setTimeout(() => input.current?.focus(), 0);
                   }}
                   onSelect={(id) => {
+                    rememberEvidence();restoreEvidence(id);
                     drafts.current.set(sessionId ?? "new", draft);
                     references.current.set(sessionId ?? "new", changeReference);
                     setChangeReference(references.current.get(id));
@@ -465,6 +507,8 @@ export function CityChat({
                           <span className="chat-role">
                             {message.role === "user" ? "You" : "Milo"}
                           </span>
+                          {message.analysis&&<details className="chat-context"><summary>{message.analysis.title} · {message.analysis.source}</summary><pre>{message.analysis.data}</pre></details>}
+                          {!!message.attachments?.length&&<div className="chat-images">{message.attachments.map((image,i)=><a key={i} href={image.dataUrl} download={image.name}><img src={image.dataUrl} alt={image.name}/></a>)}</div>}
                           <div className="chat-markdown">
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
@@ -533,6 +577,8 @@ export function CityChat({
                       </button>
                     </div>
                   )}
+                  {analysis&&<div className="change-attached"><span>{analysis.title} · {analysis.source}</span><button type="button" aria-label="Remove analysis context" onClick={()=>setAnalysis(undefined)}><X size={14}/></button></div>}
+                  {!!attachments.length&&<div className="chat-images chat-attachments">{attachments.map((image,i)=><figure key={i}><img src={image.dataUrl} alt={image.name}/><button aria-label={`Remove ${image.name}`} disabled={pending} onClick={()=>setAttachments(previous=>previous.filter((_,index)=>index!==i))}><X size={14}/></button></figure>)}</div>}
                   <form className="chat-form" onSubmit={(e) => void send(e)}>
                     <div className="chat-composer">
                       <textarea
@@ -570,7 +616,7 @@ export function CityChat({
                           className="chat-send"
                           aria-label="Send message"
                           disabled={
-                            !draft.trim() || !model || !archive.document
+                            (!draft.trim()&&!attachments.length) || !model || !archive.document || preparingImage
                           }
                         >
                           <ArrowUp size={18} />
@@ -578,6 +624,8 @@ export function CityChat({
                       )}
                     </div>
                     <footer>
+                      <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={e=>void attachImages(e.target.files)}/>
+                      <button type="button" className="city-icon" aria-label="Attach images" title="Attach images" disabled={pending||preparingImage||attachments.length>=2} onClick={()=>imageInput.current?.click()}><ImagePlus size={18}/></button>
                       <label>
                         <span className="sr-only">OpenAI model</span>
                         <select
@@ -594,7 +642,7 @@ export function CityChat({
                         </select>
                       </label>
                       <span className="chat-save-status" role="status">
-                        {pending
+                        {preparingImage?"Preparing image…":pending
                           ? "Working…"
                           : error || archive.error
                             ? "Needs attention"

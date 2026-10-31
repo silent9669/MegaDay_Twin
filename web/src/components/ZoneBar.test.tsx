@@ -5,7 +5,7 @@ import { ZoneBar } from './ZoneBar';
 
 // 09 §4 "Ví dụ kiểm tra": same forecast 18–31, two thresholds.
 const undetermined: ZoneBarData = {
-  axis_label: 'Lượng bán mỗi giờ nếu pause (sp)',
+  axis_label: 'Sales per hour if ads pause (units)',
   threshold: 22.5,
   interval: [18, 24, 31],
   verdict: 'undetermined',
@@ -13,18 +13,18 @@ const undetermined: ZoneBarData = {
 };
 
 describe('ZoneBar (09 §4 examples)', () => {
-  it('threshold 22,5 with forecast 18–31 → "Chưa phân định"', () => {
+  it('threshold 22,5 with forecast 18–31 → "Undetermined"', () => {
     render(<ZoneBar bar={undetermined} />);
     const img = screen.getByRole('img');
     const label = img.getAttribute('aria-label') ?? '';
-    expect(label).toContain('Chưa phân định: khoảng dự báo nằm cả hai phía ngưỡng 22,5 sp/giờ.');
-    expect(label).toContain('18–31 sp/giờ (mức giữa 24)');
-    expect(label).toContain('Nếu hàng dư 20.000đ: ngưỡng 16,5 sp/giờ.');
-    expect(screen.getByText('ngưỡng 22,5')).toBeInTheDocument();
-    expect(screen.getByText('hàng dư 20.000đ: 16,5')).toBeInTheDocument();
+    expect(label).toContain('Undetermined: the forecast spans both sides of 22.5 units/hour.');
+    expect(label).toContain('18–31 units/hour (median 24)');
+    expect(label).toContain('With leftover value 20,000 VND: 16.5 units/hour.');
+    expect(screen.getByText('threshold 22.5')).toBeInTheDocument();
+    expect(screen.getByText('leftover value 20,000 VND: 16.5')).toBeInTheDocument();
   });
 
-  it('threshold 16,5 (hàng dư 20.000đ) with the same forecast → "Pause tốt hơn"', () => {
+  it('threshold 16,5 (hàng dư 20.000đ) with the same forecast → "Pause is better"', () => {
     const bar = computeZoneBar(
       {
         units_left: 120,
@@ -39,17 +39,17 @@ describe('ZoneBar (09 §4 examples)', () => {
     ).zone_bar;
     expect(bar).not.toBeNull();
     render(<ZoneBar bar={bar as ZoneBarData} estimated />);
-    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('Pause tốt hơn: cả khoảng dự báo nằm trên ngưỡng.');
-    expect(screen.getByText('ngưỡng 16,5')).toBeInTheDocument();
-    expect(screen.getByText(/Ước tính nhanh trên trình duyệt/)).toBeInTheDocument();
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('Pause is better: the forecast is above the threshold.');
+    expect(screen.getByText('threshold 16.5')).toBeInTheDocument();
+    expect(screen.getByText(/Browser break-even estimate/)).toBeInTheDocument();
   });
 
   it('continue_better reads the third sentence', () => {
     render(<ZoneBar bar={{ ...undetermined, threshold: 3.49, interval: [1.8, 2.4, 3.1], verdict: 'continue_better', alt_thresholds: [] }} />);
-    expect(screen.getByText('Tiếp tục tốt hơn: cả khoảng dự báo nằm dưới ngưỡng.')).toBeInTheDocument();
+    expect(screen.getByText('Continue is better: the forecast is below the threshold.')).toBeInTheDocument();
   });
 
-  it('pause not allowed: verdict_note replaces "Pause tốt hơn"', () => {
+  it('pause not allowed: verdict_note replaces "Pause is better"', () => {
     render(
       <ZoneBar
         bar={{
@@ -66,7 +66,7 @@ describe('ZoneBar (09 §4 examples)', () => {
     expect(label).toContain('Tạm dừng bị cấm');
     expect(label).not.toContain('Pause tốt hơn: cả khoảng');
     expect(screen.getByRole('note')).toHaveTextContent('Tạm dừng bị cấm');
-    expect(screen.getByText('Pause (bị cấm) ▶')).toBeInTheDocument();
+    expect(screen.getByText('Pause (blocked) ▶')).toBeInTheDocument();
     expect(screen.queryByText('Pause tốt hơn ▶')).not.toBeInTheDocument();
   });
 });

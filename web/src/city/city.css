@@ -1625,3 +1625,21 @@
 .district-workspace>header>.panel-expand {margin-left:auto;}
 .city-chat[data-slot=sheet-content] {max-width:calc(100vw - 112px);}
 @media(max-width:899px){.panel-resize-grip,.panel-expand{display:none;}.district-workspace>header>.city-icon:last-child{margin-left:auto;}.city-chat[data-slot=sheet-content]{max-width:none;}}
+/* Milo shares the desktop with the workplace instead of replacing it. */
+.panel-resize-right{left:auto;right:0;}
+.city-chat[data-slot=sheet-content]{right:auto;left:94px;}
+.pm-global-launcher{position:fixed;left:88px;bottom:54px;z-index:45;}
+@media(max-width:1023px){
+ .panel-resize-grip,.panel-expand{display:none;}
+ .district-workspace[data-slot=sheet-content],.district-workspace.hq-workspace[data-slot=sheet-content],.city-chat[data-slot=sheet-content],.city-chat.chat-expanded[data-slot=sheet-content]{inset:12px;width:auto;max-width:none;height:auto;border-radius:16px;}
+}
+.chat-images { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+.chat-images img { max-width:160px; max-height:140px; object-fit:contain; border-radius:8px; }
+.chat-attachments { padding:0 14px; margin:0; }
+.chat-attachments figure { margin:0; position:relative; }
+.chat-attachments img { width:64px; height:64px; object-fit:cover; }
+.chat-attachments button { position:absolute; right:0; top:0; border-radius:50%; background:var(--city-panel); }
+.chat-context { font-size:11px; margin-bottom:8px; }
+.chat-context pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; }
+.change-attached { gap:8px; }
+.change-attached span { min-width:0; overflow-wrap:anywhere; }
