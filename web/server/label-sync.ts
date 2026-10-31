@@ -4,8 +4,8 @@ import { getProductLabelProvider } from "./product-label-provider";
 import type { StudioModelEnv } from "./model-json";
 import { labelRunSchema } from "../src/studio/product-labels";
 import { snapshotInput } from "./product-labels";
-import { sourceText } from "../src/studio/source-text";
-import { hashText, withoutDemandLabels, type SourcePack } from "../src/studio/sources";
+import { backendSourceChunks } from "./backend-import";
+import { hashText, type SourcePack } from "../src/studio/sources";
 
 type Storage = { fetch(request: Request): Promise<Response> };
 const snapshotSchema = z.object({ hour: z.number().min(0).max(24).optional(), sources: z.object({ revision: z.number().int(), data: z.unknown() }), run: labelRunSchema.nullable() });
@@ -41,8 +41,10 @@ export async function syncDemandLabels(request: Request, env: PlannerEnv & Studi
       label: result.group, reason: result.reason, confidence: result.confidence ?? null, manual: result.manual ?? false,
     }));
     if (!labels.length) return Response.json({ status: "empty", message: "No current labels to synchronize." });
-    const inventory = (await withoutDemandLabels(pack)).files.find(file => file.kind === "inventory");
+    const inventory = pack.files.find(file => file.kind === "inventory");
     if (!inventory) throw Error("Inventory missing");
+    if (inventory.replay && !inventory.replay.hours.some(hour => hour < 0))
+      return Response.json({ status: "pending", message: "Import shop baseline inventory before synchronizing labels. Replay-only observations are not included in the baseline upload." });
     if (request.method === "GET") {
       const result = await api("demand-labels");
       const data = z.object({ version: z.literal(1), labels: z.record(z.string(), z.object({
@@ -55,7 +57,7 @@ export async function syncDemandLabels(request: Request, env: PlannerEnv & Studi
     }
     const result = await api("demand-labels/sync", {
       run_id: run.id, source_revision: run.sourceRevision, source_fingerprint: run.sourceFingerprint,
-      inventory_sha256: await hashText(sourceText(inventory)), provider: run.provider,
+      inventory_sha256: await hashText(backendSourceChunks(inventory).join("")), provider: run.provider,
       market: run.context.market, assessed_on: run.context.asOf, completed_at: run.completedAt,
       evidence_through: evidenceThrough, labels,
     });

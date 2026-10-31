@@ -33,6 +33,7 @@ import { mergeReplaySources } from "./replay";
 import { SandboxControl } from "./SandboxControl";
 import { SourceDiagnostics } from "./SourceDiagnostics";
 import { ArchiveImport, type ArchiveImportHandle } from "./ArchiveImport";
+import { backendImportReport } from "./backend-import-report";
 import "./studio.css";
 function download(name: string, text: string) {
   const url = URL.createObjectURL(
@@ -297,22 +298,28 @@ export function DataStudio() {
   };
   const importBackend = async () => {
     setBusy(true);
+    let receivedResponse = false;
     try {
       const result = await requestJSON<unknown>("/api/data-backend/import", {
         method: "POST",
       });
+      receivedResponse = true;
       download("backend-import-report.json", JSON.stringify(result, null, 2));
+      const report = backendImportReport(result);
+      if (!report.canSyncLabels) { setMessage(report.message); return; }
       try {
         const sync = await requestJSON<{ message: string }>("/api/product-labels/sync", { method: "POST" });
-        setMessage(`Backend import finished. ${sync.message}`);
+        setMessage(`${report.message} ${sync.message}`);
       } catch (error) {
-        setMessage(`Backend import finished; label synchronization needs attention: ${error instanceof Error ? error.message : "retry from Warehouse"}`);
+        setMessage(`${report.message} Label synchronization needs attention: ${error instanceof Error ? error.message : "retry from Warehouse"}`);
       }
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Backend import unavailable.",
       );
     } finally {
+      // Partial imports can commit valid rows even when other files fail.
+      if (receivedResponse) window.dispatchEvent(new CustomEvent("workspace:backend-refresh", { detail: { reason: "sources-imported" } }));
       setBusy(false);
     }
   };

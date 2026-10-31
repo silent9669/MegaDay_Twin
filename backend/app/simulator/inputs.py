@@ -182,7 +182,8 @@ def _scalar(conn: duckdb.DuckDBPyConnection, sql: str, args: Sequence[object] = 
 def data_as_of(conn: duckdb.DuckDBPyConnection) -> datetime | None:
     v = _scalar(
         conn,
-        "SELECT max(as_of) FROM ingest_batches WHERE source_type IN ('orders', 'inventory')",
+        "SELECT max(as_of) FROM ingest_batches WHERE source_type IN ('orders', 'inventory')"
+        " AND status <> 'failed'",
     )
     return v if isinstance(v, datetime) else None
 
