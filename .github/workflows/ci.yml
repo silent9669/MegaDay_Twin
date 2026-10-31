@@ -1,6 +1,6 @@
 name: ci
 
-# Một workflow duy nhất. Job `changes` xem PR đụng phần nào; chỉ phần đó chạy.
+# Một workflow duy nhất. PR và push chỉ kiểm tra phần thay đổi; chạy tay kiểm tra tất cả.
 # Job cổng `ci` luôn chạy và là check DUY NHẤT cần bắt buộc trong bảo vệ nhánh main:
 # job bị bỏ qua (skipped) được coi là qua, job lỗi hoặc bị hủy thì cổng đỏ.
 
@@ -37,6 +37,7 @@ jobs:
               - '.github/workflows/ci.yml'
             web:
               - 'web/**'
+              - 'mock-data/out/**'
               - '.github/workflows/ci.yml'
             mock_data:
               - 'mock-data/**'
@@ -44,7 +45,7 @@ jobs:
 
   backend:
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request'
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -72,7 +73,7 @@ jobs:
 
   web:
     needs: changes
-    if: needs.changes.outputs.web == 'true' || github.event_name != 'pull_request'
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -85,13 +86,11 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
+      - run: npm ci --prefer-offline --no-audit --no-fund
       - run: npm run prepare:sources
       - run: npm run lint
-      - run: npm run typecheck
       - run: npm test
-      - run: npm run build
-      - name: Build Cloudflare Worker (demo fixtures)
+      - name: Typecheck and build Cloudflare Worker (demo fixtures)
         run: npm run build:cloudflare
         env:
           CF_SEND_TELEMETRY: "false"
@@ -101,7 +100,7 @@ jobs:
           CF_SEND_TELEMETRY: "false"
   mock-data:
     needs: changes
-    if: needs.changes.outputs.mock_data == 'true' || github.event_name != 'pull_request'
+    if: needs.changes.outputs.mock_data == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -134,14 +133,12 @@ jobs:
           fi
 
   promote-cloudflare:
-    needs: ci
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [changes, ci]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Promote the passed commit for Cloudflare Workers Builds
         run: git push origin HEAD:refs/heads/cloudflare-production

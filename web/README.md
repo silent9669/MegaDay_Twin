@@ -112,7 +112,10 @@ copies the exact commit to the automation-only `cloudflare-production` branch.
 Cloudflare Workers Builds watches that branch and automatically pulls, builds and
 deploys `web/`. GitHub Actions does not hold Cloudflare deployment credentials.
 The Cloudflare Build configuration uses `npm run build:cloudflare` followed by
-`npm run deploy:cloudflare`.
+`npm run deploy:cloudflare`. PRs and pushes check only changed components;
+frontend CI runs one typechecked Cloudflare build. Web/config or bundled-data
+changes trigger promotion; docs-only and backend-only changes do not redeploy
+the frontend. A manual workflow run checks every component.
 
 Teammates: open a PR to `main`, wait for the `ci` check, then merge. Do not merge
 or push to `cloudflare-production` directly. Watch GitHub Actions for CI and the
