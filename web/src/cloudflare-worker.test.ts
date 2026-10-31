@@ -33,6 +33,18 @@ describe("repository-owned deployment", () => {
     expect(policy).not.toContain("'unsafe-eval'");
     expect(policy).toContain("frame-ancestors 'none'");
   });
+  it("returns an actionable quota error without exposing internal storage details", async () => {
+    const { env, cookie } = await authenticated();
+    const response = await worker.fetch(new Request(origin + "/api/workspace/sources", { headers: { Cookie: cookie } }), {
+      ...env,
+      WORKSPACE: { idFromName: name => name, get: () => ({ fetch: async () => { throw Error("remote: Exceeded allowed rows written in Durable Objects free tier. private storage details"); } }) },
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: {
+      code: "WORKSPACE_WRITE_QUOTA",
+      message: "Cloudflare's workspace write quota is exhausted. Saved data is retained. Retry after the quota resets or ask the owner to upgrade the Workers plan.",
+    } });
+  });
   it("checks D1 without requiring a session", async () => {
     const response = await worker.fetch(new Request(`${origin}/healthz`), base);
     expect(await response.json()).toEqual({
