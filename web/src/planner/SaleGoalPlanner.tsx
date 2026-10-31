@@ -111,9 +111,10 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
     void request<PlannerContext>("context", undefined, controller.signal).then((value) => {
       if (!controller.signal.aborted) {
         const ids = campaignScope?.split("\u0000");
-        const scoped = ids ? { ...value, campaigns: value.campaigns.filter((campaign) => ids.includes(campaign.id)) } : value;
+        const scoped = { ...value, campaigns: value.campaigns.filter(campaign =>
+          (!ids || ids.includes(campaign.id)) && (!focusSku || !campaign.skus || campaign.skus.includes(focusSku))) };
         setContext(scoped); setContextError("");
-        if (campaignScope && scoped.campaigns.length === 1) {
+        if ((campaignScope || focusSku) && scoped.campaigns.length === 1) {
           setActive(null); setActiveError(""); setActiveLoading(true); setActiveReload((n) => n + 1);
           setCampaignId(scoped.campaigns[0]!.id);
         }
@@ -190,6 +191,7 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
         expectedGoal: result.baseGoal ? { goal_id: result.baseGoal.goal_id, version: result.baseGoal.version } : null }, controller.signal);
       if (controller.signal.aborted) return;
       setApplied(response); setApplyConfirmed(false); reloadActive();
+      window.dispatchEvent(new CustomEvent("workspace:backend-refresh", { detail: { reason: "goal-applied" } }));
     } catch (e) {
       if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : "Could not apply the goal.");
