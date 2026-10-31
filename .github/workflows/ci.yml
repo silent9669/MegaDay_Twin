@@ -134,7 +134,8 @@ jobs:
 
   promote-cloudflare:
     needs: [changes, ci]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.web == 'true'
+    # Component jobs may be skipped; the successful ci gate is the deployment authority.
+    if: ${{ !cancelled() && needs.ci.result == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
