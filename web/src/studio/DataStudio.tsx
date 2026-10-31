@@ -26,6 +26,7 @@ import {
   type SourcePack,
 } from "./sources";
 import { SandboxControl } from "./SandboxControl";
+import { SourceDiagnostics } from "./SourceDiagnostics";
 import "./studio.css";
 function download(name: string, text: string) {
   const url = URL.createObjectURL(
@@ -55,6 +56,7 @@ export function DataStudio() {
     [tab, setTab] = useState<"records" | "diagnostics" | "schema">("records"),
     [query, setQuery] = useState(""),
     [page, setPage] = useState(0),
+    [focusRow, setFocusRow] = useState<number | null>(null),
     [cell, setCell] = useState<{
       row: number;
       column: string;
@@ -95,6 +97,12 @@ export function DataStudio() {
       ) ?? [];
   const pages = Math.max(1, Math.ceil(filtered.length / 30));
   const sourceErrors = logs.filter((i) => i.level === "error").length;
+  const sourceWarnings = logs.filter((i) => i.level === "warning").length;
+  useEffect(() => {
+    if (tab === "records" && focusRow !== null && current) {
+      window.document.getElementById(`source-record-${current.kind}-${focusRow}`)?.focus();
+    }
+  }, [tab, focusRow, current, page]);
   const change = (next: SourcePack) => {
     if (!dirty) setBase(cloud.document?.revision ?? revision);
     setDraft(next);
@@ -346,6 +354,7 @@ export function DataStudio() {
                   setSelected(def.kind);
                   setPage(0);
                   setQuery("");
+                  setFocusRow(null);
                 }}
               >
                 <span className={`source-file-icon source-${def.kind}`}>
@@ -465,6 +474,7 @@ export function DataStudio() {
           <div
             id="source-tab-panel"
             className="source-content"
+            data-view={tab}
             role="tabpanel"
             aria-label={tab}
           >
@@ -489,7 +499,12 @@ export function DataStudio() {
                           (Math.min(page, pages - 1) + 1) * 30,
                         )
                         .map(({ row, index }) => (
-                          <tr key={index}>
+                          <tr
+                            key={index}
+                            id={`source-record-${current?.kind}-${index}`}
+                            tabIndex={-1}
+                            className={focusRow === index ? "source-record-selected" : undefined}
+                          >
                             <td>{index + 1}</td>
                             {currentParsed.columns.map((column) => (
                               <td key={column}>
@@ -542,35 +557,20 @@ export function DataStudio() {
                 </footer>
               </>
             ) : tab === "diagnostics" ? (
-              <div className="source-diagnostics">
-                {currentParsed.issues
-                  .filter(
-                    (i) =>
-                      !query ||
-                      JSON.stringify(i)
-                        .toLowerCase()
-                        .includes(query.toLowerCase()),
-                  )
-                  .map((issue, index) => (
-                    <article key={index} data-level={issue.level}>
-                      <span>{issue.level}</span>
-                      <div>
-                        <strong>{issue.code}</strong>
-                        <p>{issue.message}</p>
-                        <small>
-                          {issue.row ? `Row ${issue.row}` : "File"}
-                          {issue.column ? ` · ${issue.column}` : ""}
-                        </small>
-                      </div>
-                    </article>
-                  ))}
-                {!currentParsed.issues.length && (
-                  <p className="source-empty">
-                    <Check size={20} />
-                    No format issues found.
-                  </p>
-                )}
-              </div>
+              <SourceDiagnostics
+                key={current?.kind}
+                issues={currentParsed.issues}
+                query={query}
+                format={currentParsed.payload === undefined ? "csv" : "json"}
+                rowCount={currentParsed.rows.length}
+                repositorySample={!!current?.commit}
+                onViewRecord={(index) => {
+                  setQuery("");
+                  setPage(Math.floor(index / 30));
+                  setFocusRow(index);
+                  setTab("records");
+                }}
+              />
             ) : (
               <div className="source-schema">
                 <h3>Expected format</h3>
@@ -599,7 +599,7 @@ export function DataStudio() {
           <footer className="source-footer">
             <span>
               <Database size={14} />
-              {sourceErrors} format errors across sources
+              {sourceErrors} errors · {sourceWarnings} warnings across sources
             </span>
             <button
               disabled={busy || dirty || saving || conflict || !files.length}
