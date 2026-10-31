@@ -656,12 +656,6 @@
   transform: translateY(6px);
   transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
 }
-.pm-preview img {
-  width: 60px;
-  height: 90px;
-  image-rendering: pixelated;
-  animation: pm-idle 4s ease-in-out infinite;
-}
 .pm-launcher:focus-visible .pm-preview {
   opacity: 1;
   visibility: visible;
@@ -1376,12 +1370,6 @@
   }
 }
 
-.city-studio .pm-launcher {
-  display: none;
-}
-.city-studio .city-pm {
-  pointer-events: none;
-}
 .city-chat {
   pointer-events: auto;
 }
@@ -1447,8 +1435,8 @@
 .milo-updates footer { justify-content: space-between; }
 .updates-empty { padding: 32px 0; }
 .pm-unread { position:absolute; right: -3px; top: -3px; min-width: 22px; height:22px; border-radius: 50%; padding:0 4px; background: var(--city-green); color: white; font-size: 11px; display:grid; place-items:center; border:2px solid var(--city-paper); }
-.city-app .milo-sprite { display:inline-block; width:32px; height:48px; flex:none; overflow:hidden; vertical-align:middle; }
-.city-app .milo-sprite img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; max-width:none; }
+.milo-sprite { position:relative; display:inline-block; width:32px; height:48px; flex:none; overflow:hidden; vertical-align:middle; }
+.milo-sprite img { display:block; width:100%; height:100%; object-fit:contain; image-rendering:pixelated; max-width:none; }
 .pm-avatar .milo-sprite { width:32px; height:48px; }
 .pm-preview .milo-sprite { width:64px; height:96px; }
 .change-attached {display:flex; align-items:center; justify-content:space-between; margin:0 16px; font-size:12px; color:var(--city-green);}
@@ -1473,8 +1461,6 @@
 .city-sheet :focus-visible {outline:2px solid var(--city-green);outline-offset:2px;}
 .city-chat[data-slot=sheet-content] {width:440px;max-width:calc(100vw - 100px);gap:0;right:18px;left:auto;top:82px;bottom:48px;height:auto;transition:opacity 180ms ease,transform 180ms ease;}
 .city-chat.chat-expanded[data-slot=sheet-content] {left:94px;width:auto;max-width:none;}
-.city-chat .milo-sprite {display:inline-block;width:32px;height:48px;overflow:hidden;flex:none;}
-.city-chat .milo-sprite img {width:100%;height:100%;object-fit:contain;image-rendering:pixelated;}
 @media(max-width:899px){
  .city-chat[data-slot=sheet-content],.city-chat.chat-expanded[data-slot=sheet-content] {top:max(12px,env(safe-area-inset-top));bottom:max(12px,env(safe-area-inset-bottom));left:12px;right:12px;width:auto;max-width:none;border-radius:16px;}
 }
@@ -1482,11 +1468,10 @@
 .district-workspace.hq-workspace[data-slot=sheet-content] {left:94px;width:auto;}
 .city-sheet button, .city-sheet a {min-height:44px;}
 @media(max-width:899px){.district-workspace[data-slot=sheet-content],.district-workspace.hq-workspace[data-slot=sheet-content]{inset:12px;width:auto;max-width:none;}.district-workspace>header {gap:10px;flex-wrap:wrap;}.district-workspace-body{padding:16px;}.workspace-tabs{order:3;width:100%;}}
-.milo-sprite {position:relative;}
-.city-app .milo-sprite img.milo-motion,.city-chat .milo-sprite img.milo-motion {display:none;}
+.milo-sprite img.milo-motion {display:none;}
 @media(prefers-reduced-motion:no-preference){
- .city-app .milo-sprite:not(.milo-idle) .milo-still,.city-chat .milo-sprite:not(.milo-idle) .milo-still {visibility:hidden;}
- .city-app .milo-sprite img.milo-motion,.city-chat .milo-sprite img.milo-motion {display:block;position:absolute;inset:0 auto auto 0;width:500%;max-width:none;height:100%;object-fit:fill;animation:milo-frames 1.8s steps(5) 1;}
+ .milo-sprite:not(.milo-idle) .milo-still {visibility:hidden;}
+ .milo-sprite img.milo-motion {display:block;position:absolute;inset:0 auto auto 0;width:500%;max-width:none;height:100%;object-fit:fill;animation:milo-frames 1.8s steps(5) 1;}
  .city-app .milo-thinking img.milo-motion,.city-chat .milo-thinking img.milo-motion {animation-iteration-count:infinite;animation-duration:2.4s;}
 }
 @keyframes milo-frames {to{transform:translateX(-100%);}}
@@ -1569,7 +1554,7 @@
 .pm-companion {position:relative;pointer-events:auto;width:48px;height:48px;}
 .pm-companion .pm-avatar > img {width:48px;height:48px;max-width:none;object-fit:contain;margin:0;}
 .pm-companion .pm-preview {width:64px;padding:0;}
-.pm-companion .pm-preview img {margin:0;animation:none;}
+.pm-companion .pm-preview img {margin:0;}
 .pm-companion[data-speaking="true"] .pm-preview {opacity:1;visibility:visible;transform:none;}
 .pm-companion[data-speaking="true"] .pm-avatar {opacity:0;}
 .milo-dialogue {position:absolute;left:78px;bottom:4px;width:min(300px,calc(100vw - 180px));padding:16px;border:1px solid var(--city-line);border-radius:14px 14px 14px 3px;background:var(--city-paper);color:var(--city-ink);box-shadow:0 8px 32px #102b2926;animation:city-appear 180ms ease-out;}
