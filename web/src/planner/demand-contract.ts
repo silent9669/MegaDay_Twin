@@ -7,6 +7,7 @@ export const demandEvidenceSchema = z.object({
   source_revision: z.number().int(), source_fingerprint: z.string().max(64),
   raw_code: z.string().max(300), sku_id: z.string().max(300),
   confidence: z.number().min(0).max(1).nullable().optional(),
+  manual: z.boolean().optional(), evidence_through: z.string().max(60).nullable().optional(),
 });
 export const modelSelectionSchema = z.object({
   policy_version: z.string().max(100).optional(), primary_label: demandLabelSchema.nullable().optional(),

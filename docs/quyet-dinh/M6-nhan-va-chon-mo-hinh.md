@@ -17,10 +17,16 @@ backtest; không đổi nghĩa của các bản mô phỏng đã lưu.
   gần nhất và mã nội bộ đã được ghép duy nhất qua `sku_aliases` (confirmed/auto_accepted).
   Không ghép bằng tên hoặc đoán mã. Mã chưa rõ, nhiều SKU ứng viên hoặc nhiều mã trong một
   lần gửi cùng trỏ một SKU được trả về `pending`.
+- Nhãn chỉnh tay vẫn đi cùng luồng đồng bộ, với nguồn `warehouse_manual`; nhãn AI là
+  `warehouse_ai`. Nhãn thủ công cũng không tự cấp chứng nhận chất lượng cho mô hình.
 - Mỗi bản nhãn lưu run/provider, nguyên nhân, điểm hỗ trợ, ngày đánh giá, thời điểm tạo,
   source revision/fingerprint và mã canonical. Retry cùng bản không sinh phiên bản mới.
   Điểm hỗ trợ AI không phải xác suất đúng đã hiệu chuẩn.
-- Nhãn được xét chỉ khi đã tồn tại tại mốc dự báo (cả ngày đánh giá và thời điểm hoàn thành).
+- Nhãn được xét chỉ khi đã tồn tại tại mốc dự báo (ngày đánh giá, thời điểm hoàn thành và
+  `evidence_through`). Với replay, tính hết giờ quan sát của lần gán nhãn; không đồng bộ
+  nhãn dùng dữ liệu giờ sau vào thời điểm đang tua về trước. Với nguồn không có replay,
+  dùng hết ngày đánh giá làm mốc bảo thủ. Ngày kinh doanh của demo có thể sau ngày máy tính
+  nhưng phải nằm trong dữ liệu inventory backend đã nhận; thời điểm tạo nhãn không được giả lập tương lai.
   Nhãn mới không được dùng để giải thích một dự báo lịch sử. Backend hiện dùng lịch Việt Nam,
   nên từ chối đồng bộ nhãn của thị trường khác. Đổi inventory hoặc alias làm nhãn cũ mất hiệu lực.
 
@@ -56,8 +62,13 @@ và quản lý phiên bản mô hình.
 
 ## Giới hạn cần biết
 
-Nhãn AI hiện chủ yếu từ tên/công dụng khi không có bằng chứng bổ sung; chưa tự thu thập web
-hay đưa toàn bộ lịch sử sáu nguồn vào prompt. Chính sách coi đó là prior, không phải chứng minh
+Nhãn AI dùng tên/công dụng và bằng chứng bán hàng tổng hợp khi có thể ghép duy nhất tên + biến thể;
+đây chưa phải xác nhận ánh xạ SKU. Không tự thu thập web hay đưa toàn bộ sáu nguồn vào prompt.
+Chính sách coi nhãn là prior, không phải chứng minh
 nhu cầu. Các mô hình mùa hiện hỗ trợ lịch quà tặng, Tết, mùa đông; chưa phải mọi mùa/ngành hàng.
 Kiểm thử kỹ thuật không thay thế đánh giá độ chính xác bằng dữ liệu shop thật và backtest
 theo đúng bối cảnh. Backend chưa kết nối thì nhãn được lưu tại Warehouse và báo chưa đồng bộ.
+
+Chặn nhìn trước ở đây áp dụng cho bằng chứng nhãn. Mô phỏng lại quá khứ vẫn dùng bộ tham số
+và model registry đang hiệu lực; không đồng nghĩa với một backtest tái dựng đầy đủ trạng thái
+vận hành từng thời điểm. Backtest rolling-origin có luồng đánh giá riêng.

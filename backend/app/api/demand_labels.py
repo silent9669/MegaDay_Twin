@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -31,6 +31,7 @@ class DemandEntry(BaseModel):
     label: Literal["Normal", "Seasonal", "Trendy"]
     reason: str = Field(min_length=1, max_length=1000)
     confidence: float | None = Field(default=None, ge=0, le=1)
+    manual: bool = False
 
 
 class DemandSync(BaseModel):
@@ -43,6 +44,7 @@ class DemandSync(BaseModel):
     market: str = Field(min_length=1, max_length=100)
     assessed_on: date
     completed_at: datetime
+    evidence_through: datetime | None = None
     labels: list[DemandEntry] = Field(min_length=1, max_length=2000)
 
     @model_validator(mode="after")
@@ -63,8 +65,6 @@ def get_labels(conn: Conn, user: Viewer, request: Request) -> Envelope[dict[str,
 def sync_labels(
     body: DemandSync, conn: Conn, user: Operator, request: Request
 ) -> Envelope[dict[str, Any]]:
-    if body.assessed_on > utcnow().astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date():
-        raise ValidationFailed("Ngày đánh giá nhãn không được ở tương lai.")
     if body.completed_at.tzinfo is None or body.completed_at > utcnow():
         raise ValidationFailed("Thời điểm tạo nhãn phải có múi giờ và không ở tương lai.")
     if body.market.strip().lower() not in {"vietnam", "viet nam", "việt nam", "vn"}:
@@ -74,6 +74,25 @@ def sync_labels(
             raise StateConflict(
                 "Cần gửi đúng bản dữ liệu tồn kho mới nhất sang backend trước khi đồng bộ nhãn."
             )
+        vn = ZoneInfo("Asia/Ho_Chi_Minh")
+        last = conn.execute(
+            "SELECT max(snapshot_at) FROM inventory_snapshots JOIN ingest_batches USING (batch_id) "
+            "WHERE file_sha256=?",
+            [body.inventory_sha256],
+        ).fetchone()
+        latest_day = (
+            max(utcnow().astimezone(vn).date(), last[0].astimezone(vn).date())
+            if last and last[0]
+            else utcnow().astimezone(vn).date()
+        )
+        if body.assessed_on > latest_day:
+            raise ValidationFailed("Ngày đánh giá vượt quá ngày dữ liệu tồn kho hiện có.")
+        if body.evidence_through is not None and (
+            body.evidence_through.tzinfo is None
+            or body.evidence_through
+            > datetime.combine(latest_day + timedelta(days=1), time.min, vn)
+        ):
+            raise ValidationFailed("Mốc bằng chứng phải có múi giờ và nằm trong dữ liệu hiện có.")
         mapping = inventory_mapping(conn)
         targets = Counter(mapping.get(entry.raw_code) for entry in body.labels)
         rejected = []
@@ -83,6 +102,7 @@ def sync_labels(
         assessed = max(
             body.completed_at,
             datetime.combine(body.assessed_on, time.min, ZoneInfo("Asia/Ho_Chi_Minh")),
+            body.evidence_through or body.completed_at,
         )
         # Never overwrite an earlier source run. Each entry is an immutable snapshot.
         conn.execute("BEGIN TRANSACTION")

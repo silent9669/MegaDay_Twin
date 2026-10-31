@@ -9,8 +9,6 @@ from typing import Any
 
 import duckdb
 
-from app.core.timeutil import utcnow
-
 POLICY_VERSION = "demand-selection-v1"
 PRIMARY_FROM_HISTORY = {"on_dinh": "Normal", "mua_vu": "Seasonal", "trend": "Trendy"}
 
@@ -53,9 +51,9 @@ def active_labels(
     mapping = inventory_mapping(conn)
     rows = conn.execute(
         "SELECT sku_id, raw_code, payload FROM sku_demand_labels "
-        "WHERE inventory_sha256=? AND assessed_at<=? "
-        "ORDER BY assessed_at, synced_at, entry_id",
-        [fingerprint, at or utcnow()],
+        "WHERE inventory_sha256=? AND (? IS NULL OR assessed_at<=?) "
+        "ORDER BY CAST(payload->>'completed_at' AS TIMESTAMPTZ), synced_at, entry_id",
+        [fingerprint, at, at],
     ).fetchall()
     out = {}
     for sku, code, payload in rows:
@@ -110,7 +108,11 @@ def demand_summary(conn: duckdb.DuckDBPyConnection, sku: str) -> dict[str, Any]:
     selection = json.loads(forecast[0]).get("model_selection") if forecast else None
     return {
         "primary_label": label["label"] if label else PRIMARY_FROM_HISTORY.get(group),
-        "source": "warehouse_ai" if label else "history" if group in PRIMARY_FROM_HISTORY else None,
+        "source": ("warehouse_manual" if label.get("manual") else "warehouse_ai")
+        if label
+        else "history"
+        if group in PRIMARY_FROM_HISTORY
+        else None,
         "label_evidence": label,
         "history_profile": group,
         "model_selection": selection,

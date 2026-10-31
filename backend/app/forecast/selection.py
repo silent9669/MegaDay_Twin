@@ -49,7 +49,7 @@ def select_model(
     elif new:
         use(
             "analog",
-            "Lịch sử còn ngắn: dùng sản phẩm tương tự, không coi nhãn AI là bằng chứng doanh số.",
+            "Lịch sử còn ngắn: dùng sản phẩm tương tự, không coi nhãn là bằng chứng doanh số.",
         )
     elif sparse:
         use("tsb", "Nhiều ngày không có đơn: ưu tiên mô hình bán thưa, giữ nguyên nhãn nhu cầu.")
@@ -81,12 +81,16 @@ def select_model(
         )
     if label and PRIMARY_FROM_HISTORY.get(group) not in (None, primary):
         notes.append(
-            "Nhãn AI và hình dạng lịch sử khác nhau; giữ nhãn chính và ghi rõ căn cứ chọn mô hình."
+            "Nhãn chính và hình dạng lịch sử khác nhau; giữ nhãn và ghi rõ căn cứ chọn mô hình."
         )
     return chosen, {
         "policy_version": POLICY_VERSION,
         "primary_label": primary,
-        "label_source": "warehouse_ai" if label else "history" if primary else None,
+        "label_source": ("warehouse_manual" if label.get("manual") else "warehouse_ai")
+        if label
+        else "history"
+        if primary
+        else None,
         "label_evidence": label,
         "history_profile": group,
         "data_status": {

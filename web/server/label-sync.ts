@@ -2,11 +2,13 @@ import { z } from "zod";
 import { plannerBackend, BackendFailure, type PlannerEnv } from "./sale-planner";
 import { getProductLabelProvider } from "./product-label-provider";
 import type { StudioModelEnv } from "./model-json";
-import { labelRunSchema, buildLabelInput } from "../src/studio/product-labels";
+import { labelRunSchema } from "../src/studio/product-labels";
+import { snapshotInput } from "./product-labels";
+import { sourceText } from "../src/studio/source-text";
 import { hashText, withoutDemandLabels, type SourcePack } from "../src/studio/sources";
 
 type Storage = { fetch(request: Request): Promise<Response> };
-const snapshotSchema = z.object({ sources: z.object({ revision: z.number().int(), data: z.unknown() }), run: labelRunSchema.nullable() });
+const snapshotSchema = z.object({ hour: z.number().min(0).max(24).optional(), sources: z.object({ revision: z.number().int(), data: z.unknown() }), run: labelRunSchema.nullable() });
 
 /** Read the saved snapshot server-side: the browser cannot supply a SKU mapping or AI result. */
 export async function syncDemandLabels(request: Request, env: PlannerEnv & StudioModelEnv, storage: Storage): Promise<Response> {
@@ -21,17 +23,22 @@ export async function syncDemandLabels(request: Request, env: PlannerEnv & Studi
     };
     const snapshot = await read();
     const pack = snapshot.sources.data as SourcePack;
-    const input = await buildLabelInput(pack, snapshot.sources.revision);
+    const input = await snapshotInput({ ...snapshot, sources: { ...snapshot.sources, data: pack } });
     const run = snapshot.run;
     const provider = getProductLabelProvider(env);
     if (!run?.context || !run.completedAt || !["completed", "partial"].includes(run.status) ||
       run.sourceRevision !== input.sourceRevision || run.sourceFingerprint !== input.sourceFingerprint ||
-      (provider && run.provider !== provider.id))
+      (provider && run.provider !== provider.id && !run.results.every(result => result.manual)))
       return Response.json({ status: "stale", message: "Save the latest sources and label them before synchronizing." });
+    const replayDates = [...new Set(pack.files.flatMap(file => file.replay ? [file.replay.date] : []))];
+    if (replayDates.length && (replayDates.length !== 1 || run.context.eventHour === undefined || run.context.eventHour > (snapshot.hour ?? 24)))
+      return Response.json({ status: "stale", message: "Review labels at the current replay hour before synchronizing; later observations cannot be used earlier." });
+    const evidenceThrough = new Date(Date.parse(`${replayDates[0] ?? run.context.asOf}T00:00:00+07:00`) +
+      (replayDates.length ? Math.min(24, run.context.eventHour! + 1) : 24) * 3600000).toISOString();
     const products = new Map(input.products.map(product => [product.id, product]));
     const labels = run.results.filter(result => result.group && products.has(result.productId)).map(result => ({
       raw_code: products.get(result.productId)!.reference, name: products.get(result.productId)!.name,
-      label: result.group, reason: result.reason, confidence: result.confidence ?? null,
+      label: result.group, reason: result.reason, confidence: result.confidence ?? null, manual: result.manual ?? false,
     }));
     if (!labels.length) return Response.json({ status: "empty", message: "No current labels to synchronize." });
     const inventory = (await withoutDemandLabels(pack)).files.find(file => file.kind === "inventory");
@@ -48,8 +55,9 @@ export async function syncDemandLabels(request: Request, env: PlannerEnv & Studi
     }
     const result = await api("demand-labels/sync", {
       run_id: run.id, source_revision: run.sourceRevision, source_fingerprint: run.sourceFingerprint,
-      inventory_sha256: await hashText(inventory.text), provider: run.provider,
-      market: run.context.market, assessed_on: run.context.asOf, completed_at: run.completedAt, labels,
+      inventory_sha256: await hashText(sourceText(inventory)), provider: run.provider,
+      market: run.context.market, assessed_on: run.context.asOf, completed_at: run.completedAt,
+      evidence_through: evidenceThrough, labels,
     });
     const data = z.object({ version: z.literal(1), run_id: z.literal(run.id),
       accepted: z.array(z.object({ raw_code: z.string(), sku_id: z.string(), entry_id: z.string() })),

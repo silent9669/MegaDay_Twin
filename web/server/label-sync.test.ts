@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
 import { syncDemandLabels } from "./label-sync";
-import { buildLabelInput, type LabelRun } from "../src/studio/product-labels";
+import { buildLabelInput, sourceFingerprint, type LabelRun } from "../src/studio/product-labels";
 import { makeSource, withoutDemandLabels, hashText, type SourcePack } from "../src/studio/sources";
 
 const env = { DATA_BACKEND_URL: "https://backend.test/api/v1/", DATA_BACKEND_USER: "test", DATA_BACKEND_ROLE: "operator" };
@@ -27,7 +27,7 @@ it("sends only the saved label snapshot and canonical inventory hash, never brow
   const [url, options] = fetch.mock.calls[0] as unknown as [URL, RequestInit];
   expect(url.pathname).toBe("/api/v1/demand-labels/sync");
   const payload = JSON.parse(String(options.body));
-  expect(payload.labels).toEqual([{ raw_code: "LOCAL-1", name: "Áo len", label: "Seasonal", reason: "Use in winter", confidence: 0.7 }]);
+  expect(payload.labels).toEqual([{ raw_code: "LOCAL-1", name: "Áo len", label: "Seasonal", reason: "Use in winter", confidence: 0.7, manual: false }]);
   expect(payload.inventory_sha256).toBe(await hashText((await withoutDemandLabels(f.pack)).files[0]!.text));
   expect(payload.completed_at).toBe(f.snapshot.run.completedAt);
 });
@@ -37,6 +37,30 @@ it("holds stale sources without writing to the backend", async () => {
   const response = await syncDemandLabels(new Request("https://app/api/product-labels/sync", { method: "POST" }), env, f.storage);
   expect(await response.json()).toMatchObject({ status: "stale" });
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it("keeps manual provenance and refuses labels from a later replay hour", async () => {
+  const f = await fixture();
+  f.pack.files[0]!.replay = { date: "2026-10-30", hours: [10], lagHours: 0 };
+  f.snapshot.run.sourceFingerprint = await sourceFingerprint(f.pack);
+  f.snapshot.run.provider = "manual";
+  f.snapshot.run.results[0]!.manual = true;
+  f.snapshot.run.context!.eventHour = 10;
+  Object.assign(f.snapshot, { hour: 9 });
+  const fetch = vi.fn(async () => Response.json({ data: { version: 1, run_id: f.snapshot.run.id,
+    accepted: [{ raw_code: "LOCAL-1", sku_id: "CANONICAL", entry_id: "saved" }], pending: [] } }));
+  vi.stubGlobal("fetch", fetch);
+  const configured = { ...env, OPENAI_API_KEY: "test-only", OPENAI_MODEL_DECISION: "test" };
+  let result = await syncDemandLabels(new Request("https://app/api/product-labels/sync", { method: "POST" }), configured, f.storage);
+  expect(await result.json()).toMatchObject({ status: "stale" });
+  expect(fetch).not.toHaveBeenCalled();
+  Object.assign(f.snapshot, { hour: 10 });
+  result = await syncDemandLabels(new Request("https://app/api/product-labels/sync", { method: "POST" }), configured, f.storage);
+  expect(await result.json()).toMatchObject({ status: "synced" });
+  const [, options] = fetch.mock.calls[0] as unknown as [URL, RequestInit];
+  const payload = JSON.parse(String(options.body));
+  expect(payload.labels[0].manual).toBe(true);
+  expect(payload.evidence_through).toBe("2026-10-30T04:00:00.000Z");
 });
 it("reports pending canonical mapping and retries by the same run identity", async () => {
   const f = await fixture();

@@ -14,7 +14,7 @@ export function ModelChoice({ selection }: { selection?: ModelSelection | null }
 export function DemandDetails({ demand }: { demand?: DemandSummary }) {
   return <section aria-label="Demand classification and model choice">
     <h4>Demand classification</h4>
-    <p><strong>{demand?.primary_label ?? "Unclassified"}</strong> · {demand?.source === "warehouse_ai" ? "Shared Warehouse label" : demand?.source === "history" ? "Estimated from historical pattern" : "No shared classification yet"}</p>
+    <p><strong>{demand?.primary_label ?? "Unclassified"}</strong> · {demand?.source === "warehouse_manual" ? "Manually selected in Warehouse" : demand?.source === "warehouse_ai" ? "Shared Warehouse label" : demand?.source === "history" ? "Estimated from historical pattern" : "No shared classification yet"}</p>
     {demand?.label_evidence && <p>{demand.label_evidence.reason}<br />Assessed: {demand.label_evidence.assessed_on} · Source revision: {demand.label_evidence.source_revision}. AI support scores are not calibrated probabilities.</p>}
     <details><summary>Why this forecast model?</summary><ModelChoice selection={demand?.model_selection} /></details>
   </section>;

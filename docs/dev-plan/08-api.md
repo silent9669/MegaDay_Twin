@@ -811,14 +811,17 @@ saving the late reply (409). Failed calls retain the user's saved message for re
 Only labels matching the latest successfully imported inventory and an unambiguous resolved
 inventory alias are active. Evidence includes `run_id`, `source_revision`, `source_fingerprint`,
 `inventory_sha256`, `provider`, `market`, `assessed_on`, `completed_at`, `raw_code`, `sku_id`,
-`label`, `reason` and optional nullable `confidence` (an AI support score, not calibrated accuracy).
+`label`, `reason`, `manual`, `evidence_through` and optional nullable `confidence` (an AI support score, not calibrated accuracy).
 
 `POST /api/v1/demand-labels/sync` (operator/lead) accepts the same run/source fields plus
-`labels:[{raw_code,name,label,reason,confidence?}]`. Labels are `Trendy|Seasonal|Normal`.
+`labels:[{raw_code,name,label,reason,confidence?,manual?}]`, and optional `evidence_through`.
+Labels are `Trendy|Seasonal|Normal`. Manual provenance survives synchronization.
 Duplicate codes are invalid; unresolved or many-to-one SKU matches return `pending`.
 The response is `{data:{version:1,run_id,accepted:[{raw_code,sku_id,entry_id}],pending:[{raw_code,reason}]},meta}`.
 The source hash must match current inventory (409 otherwise), market must match the Vietnam
-calendar, and assessment/completion cannot be future-dated. Retrying identical content is
+calendar, completion cannot be future-dated, and assessment/evidence dates must be bounded
+by the received inventory's business date (including demo/replay dates). Forecasts before
+the evidence cutoff cannot use the label. Retrying identical content is
 idempotent. Newly inserted labels request recomputation; they do not execute ads or apply goals.
 
 The authenticated web gateway `GET|POST /api/product-labels/sync` resolves the saved account

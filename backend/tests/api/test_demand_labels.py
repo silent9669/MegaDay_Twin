@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -79,6 +80,21 @@ def test_pending_alias_is_not_guessed_from_a_name(api: TestClient) -> None:
     result = ok(api.post("/api/v1/demand-labels/sync", json=payload, headers=OPS))["data"]
     assert not result["accepted"]
     assert result["pending"][0]["raw_code"] == "MISSING"
+
+
+def test_manual_replay_label_waits_for_its_evidence_hour(api: TestClient) -> None:
+    conn = api.app.state.db.write  # type: ignore[union-attr]
+    payload = body(api)
+    evidence = conn.execute("SELECT max(snapshot_at) FROM inventory_snapshots").fetchone()[0]
+    payload["assessed_on"] = evidence.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
+    payload["evidence_through"] = evidence.isoformat()
+    payload["labels"][0]["manual"] = True
+    ok(api.post("/api/v1/demand-labels/sync", json=payload, headers=OPS))
+    boundary = max(evidence, datetime.fromisoformat(payload["completed_at"]))
+    assert active_labels(conn, boundary - timedelta(seconds=1)) == {}
+    assert active_labels(conn, boundary)["NOICHIEN2L"]["manual"] is True
+    detail = ok(api.get("/api/v1/skus/NOICHIEN2L", headers=VIEWER))["data"]
+    assert detail["demand"]["source"] == "warehouse_manual"
 
 
 def test_two_codes_for_one_sku_require_resolution(api: TestClient) -> None:

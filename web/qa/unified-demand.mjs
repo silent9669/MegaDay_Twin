@@ -44,7 +44,7 @@ try {
     window.__vite_plugin_react_preamble_installed__=true;
     const React=(await import('/node_modules/.vite/deps/react.js')).default;
     const {createRoot}=(await import('/node_modules/.vite/deps/react-dom_client.js')).default;
-    await import('/src/index.css'); await import('/src/studio/studio.css'); await import('/src/hq/hq.css');
+    await import('/src/index.css'); await import('/src/city/city.css'); await import('/src/studio/studio.css'); await import('/src/hq/hq.css');
     const {ProductLabels}=await import('/src/studio/ProductLabels.tsx');
     const {DemandDetails}=await import('/src/planner/DemandDetails.tsx');
     createRoot(document.getElementById('root')).render(React.createElement('main',{style:{maxWidth:1050,margin:'auto',padding:16}},
@@ -62,8 +62,8 @@ try {
   await page.getByText(/New product.*Sparse sales/).waitFor();
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
-    assert(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth + 1), `Overflow at ${width}px`);
     await page.screenshot({ path: fileURLToPath(new URL(`labels-${width}.png`, out)), fullPage: true });
+    assert(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth + 1), `Overflow at ${width}px`);
   }
   assert.equal(posts, 2);
   assert.deepEqual(errors, []);
