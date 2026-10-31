@@ -1,3 +1,4 @@
+import { evidenceText } from '../lib/evidence-text';
 // Source chip next to a number (09 §4 `CitationChip`). Clicking opens a small
 // popover with the source kind, id, tool and data time; Esc or a click outside closes it.
 import { ExternalLink, X } from 'lucide-react';
@@ -66,17 +67,17 @@ export function CitationChip({ citation, children }: { citation: Citation; child
         {children != null ? (
           <span className="font-medium tabular-nums underline decoration-dotted underline-offset-4">{children}</span>
         ) : null}
-        <span className="rounded border border-border bg-surface-2 px-1.5 text-xs font-normal text-muted">{citation.label}</span>
+        <span className="rounded border border-border bg-surface-2 px-1.5 text-xs font-normal text-muted">{evidenceText(citation.label)}</span>
       </button>
       {open ? (
         <span
           id={popId}
           role="dialog"
-          aria-label={t.dialog(citation.label)}
+          aria-label={t.dialog(evidenceText(citation.label))}
           className="absolute left-0 top-full z-30 mt-1 block w-72 rounded-lg border border-border bg-surface p-3 text-left text-sm shadow-lg"
         >
           <span className="mb-2 flex items-start justify-between gap-2">
-            <span className="font-medium">{citation.label}</span>
+            <span className="font-medium">{evidenceText(citation.label)}</span>
             <button type="button" className="icon-btn -m-1 size-6" aria-label={t.close} onClick={() => setOpen(false)}>
               <X aria-hidden className="size-3.5" />
             </button>

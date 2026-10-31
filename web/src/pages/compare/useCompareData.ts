@@ -30,14 +30,15 @@ export function pickActive(list: readonly Recommendation[] | undefined, campaign
   return mine.find((r) => r.active !== false) ?? mine[0];
 }
 
-export function useCompareTarget(): CompareTarget {
-  const { sku, id } = useParams();
+export function useCompareTarget(selectedSku?: string): CompareTarget {
+  const { sku: routeSku, id } = useParams();
+  const sku = selectedSku ?? routeSku;
   const [search] = useSearchParams();
   const recParam = search.get('rec') ?? undefined;
 
   const skuQ = useSku(sku);
   const skuItem = skuQ.data?.data;
-  const campaignId = id ?? skuItem?.campaign?.id;
+  const campaignId = id ?? (selectedSku ? undefined : search.get('campaign') ?? undefined) ?? skuItem?.campaign?.id;
   const campaignQ = useCampaign(campaignId);
   const needsList = Boolean(campaignId) && !recParam;
   const recsQ = useRecommendations({ campaign_id: campaignId ?? '', active: 'true' }, needsList);
@@ -69,8 +70,8 @@ export function useCompareTarget(): CompareTarget {
   };
 }
 
-export function useCompareData() {
-  const target = useCompareTarget();
+export function useCompareData(selectedSku?: string) {
+  const target = useCompareTarget(selectedSku);
   const rec = useRecommendation(target.recommendationId);
   const scenarioId = rec.data?.data.scenario_id;
   const scenario = useScenario(scenarioId);

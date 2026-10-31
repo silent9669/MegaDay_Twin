@@ -8,7 +8,7 @@ const dist = { mean: 100, p10: 50, p50: 100, p90: 150 };
 const trace = {
   version: 1, input_hash: "hash-1", campaign_id: "CD1", focus_sku: "SKU1", quantity_scope: "sku", economic_scope: "campaign",
   start: "2026-11-11T08:00:00+07:00", horizon_hours: 4, samples: 1000, seed: 11, data_as_of: "2026-11-11T07:00:00+07:00",
-  goal: { kind: "sell_target", target_units: 100, params: { private_extra: "omit" } },
+  goal: { kind: "sell_target", target_units: 100, params: { max_spend_vnd: 5000000, max_loss_vnd: 0, private_extra: "omit" } },
   equations: [{ id: "J", formula: "contribution - spend + leftover_value - stockout_penalty", explanation: "Objective from simulation samples" }],
   actions: [{ key: "keep", metrics: { objective: dist, contribution: dist, spend: dist, leftover_value: dist,
     stockout_penalty: dist, units_sold: dist, focus_units_sold: dist },
@@ -72,8 +72,39 @@ describe("Milo authoritative business context", () => {
     const result = await buildMiloContext({ scenarioId: "SC1" }, env);
     expect(result.scenario?.trace.actions[0]?.metrics.objective).toEqual(dist);
     expect(result.scenario?.trace.input_hash).toBe("hash-1");
+    expect(result.scenario?.trace.goal.params).toEqual({ max_spend_vnd: 5000000, max_loss_vnd: 0 });
     expect(JSON.stringify(result)).not.toContain("private_extra");
   });
+  it("resolves versioned active constraints without trusting unrelated goal metadata", async () => {
+    const goal = { goal_id: "G1", kind: "profit", label: "Profit", deadline: "2026-11-11T20:00:00+07:00",
+      target_units: null, scope: "campaign", scope_id: "CD1", active: true, version: 3,
+      created_at: "2026-11-10T08:00:00+07:00", confirmed_by: "lead",
+      params: { max_spend_vnd: 5000000, max_loss_vnd: 0, planner_start: "2026-11-11T08:00:00+07:00", private_note: "omit" } };
+    const fetch = vi.fn(async (target: URL | string, init?: RequestInit) => {
+      expect(init?.method).toBe("GET");
+      return Response.json({ data: new URL(target).pathname.includes("/goals/") ? goal
+        : { campaign_id: "CD1", name: "Sale", skus: ["SKU1"], goal } });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const result = await buildMiloContext({ campaignId: "CD1" }, env);
+    expect(result.campaign?.goal).toMatchObject({ goal_id: "G1", version: 3, detail_verified: true,
+      params: { max_spend_vnd: 5000000, max_loss_vnd: 0 } });
+    expect(JSON.stringify(result.campaign)).not.toContain("private_note");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it.each([{ active: false }, { scope_id: "OTHER" }, { goal_id: "OTHER" }, { params: { max_spend_vnd: "5000000" } }])(
+    "does not describe changed or invalid goal constraints as the current plan", async (change) => {
+      const goal = { goal_id: "G1", kind: "profit", label: "Profit", deadline: "2026-11-11T20:00:00+07:00",
+        target_units: null, scope: "campaign", scope_id: "CD1", active: true, version: 1, params: { max_loss_vnd: 0 } };
+      vi.stubGlobal("fetch", vi.fn(async (target: URL | string) => Response.json({
+        data: new URL(target).pathname.includes("/goals/") ? { ...goal, ...change }
+          : { campaign_id: "CD1", name: "Sale", skus: ["SKU1"], goal },
+      })));
+      const result = await buildMiloContext({ campaignId: "CD1" }, env);
+      expect(result.campaign?.goal).toBeNull();
+      expect(result.notices.join(" ")).toContain("Mục tiêu đang áp dụng chưa được xác minh");
+    },
+  );
   it("loads real daily history without inventing aggregate totals or dropping provisional flags", async () => {
     vi.mocked(loadContext).mockRejectedValue(Error("offline"));
     const history = { sku: "SKU1", grain: "day", start: "2026-11-04T08:00:00+07:00", end: "2026-11-11T08:00:00+07:00",

@@ -176,6 +176,11 @@ CSV/JSON and immediately save recognized and general tables. If several files
 match the same business table, choose one before saving. Import does not wait
 for AI. **Review & fix with AI** reviews the current saved tables and applies
 validated column mappings with revision checks; failed review leaves them unchanged.
+Repair also standardizes recognized headers, trims surrounding whitespace and
+normalizes readable, nonnegative VND amounts using the existing money contract.
+It never invents missing values, resolves ambiguous SKU identities, drops rows or
+assumes timezones. The result shows applied repairs and remaining diagnostics.
+An unchanged review does not rewrite sources or clear demand labels.
 Cell edits retain revision-checked autosave. SQLite
 `studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
 with the source document revision. Unchanged table rows are not rewritten; no
@@ -183,6 +188,20 @@ user or model SQL is executed. The
 map uses saved inventory. HQ shows imported table, order, ad and stocked-product
 counts; Neighborhood shows searchable, paginated imported orders. The demo clock
 only filters repository demo data, not uploaded inventory or orders.
+
+The authenticated gateway streams import and labeling requests to the existing
+AccountWorkspace Durable Object. Extraction, parsing, model calls and persistence
+run there, avoiding the gateway CPU limit that caused HTTP 503 responses for
+the 11.11 archive. The object receives the same `OPENAI_API_KEY` binding as Milo;
+no second key or public internal route is introduced.
+Initialized workspaces skip redundant schema writes. Table saves update only
+changed records and remove only deleted records, reducing row writes during
+repeated labeling and edits. Quota failures report `WORKSPACE_WRITE_QUOTA`.
+Production verification found that Cloudflare can reject even SELECT operations
+once the free-tier row-write quota is exhausted; skipping schema writes does not
+bypass that platform restriction. Data remains stored, but workspace reads and
+label saves must wait for the daily reset at 00:00 UTC or a Workers plan upgrade.
+See [Cloudflare's Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 
 `POST /api/studio/import` accepts raw ZIP bytes and returns `{ tables, skipped,
 model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
@@ -202,8 +221,11 @@ products with positive latest stock only. The toolbar contains search by name/co
 and **Label data**. New runs default to Vietnam and today; retries retain their
 saved assessment context. The API continues to accept dated product evidence. Each model batch gets
 only evidence for its products. No web search is performed; metadata and manual
-evidence do not imply measured demand. Labels are `Trendy`, `Seasonal`, `Normal`,
-or `null` with an explanation of missing evidence. The Vietnamese prompt lives
+evidence do not imply measured demand. New model runs always choose the best-fit `Trendy`, `Seasonal` or `Normal` label,
+with no confidence cutoff. When evidence is weak, the model may infer likely use
+from product attributes and must identify the result as an estimate. It never
+claims invented sales history or trend evidence. Older saved `null` results remain
+readable; prompt version `demand-v3` marks them stale for reclassification. The Vietnamese prompt lives
 in `server/demand-prompt.ts`; these labels do not change forecast groups or ads.
 
 - `GET /api/product-labels`: inventory candidates, configuration, latest run, stale flag.
@@ -212,7 +234,7 @@ in `server/demand-prompt.ts`; these labels do not change forecast groups or ads.
 
 Both routes require authentication and same-origin writes. Classification runs
 only on button click, uses batches of 50 (up to three concurrent calls), with
-a 30-second timeout per batch and a 120-second overall timeout. At most 2,000 candidates and 100 evidence records are
+a 60-second timeout per batch and a 150-second overall timeout. At most 2,000 candidates and 100 evidence records are
 accepted. Long jobs can time out; there is no background queue. Results retain
 assessment context, model/prompt version and source fingerprint in account
 storage. Invalid/duplicate/unknown results are rejected. Concurrent calls are
@@ -243,18 +265,28 @@ For an actual archive, set `LIVE_ARCHIVE_PATH` and run
 Neighborhood, Warehouse and responsive layouts against the local Worker.
 Archive contents stay local and are never committed.
 
-## Mục tiêu buổi sale (Task 1)
+## Lập kế hoạch sale: mô phỏng thử và áp dụng
 
-Mở `/sale-planner` từ sidebar hoặc MegaDay HQ. Nhập mong muốn, phân tích,
-chỉnh thông số và chọn chiến dịch, sau đó xác nhận để lưu mục tiêu đang áp dụng
-và chạy mô phỏng. Bản đầu hỗ trợ **một chiến dịch, 1–72 giờ tròn**; bốn mục tiêu
-là lợi nhuận, số lượng bán, xả hàng và hiệu quả chi. Ngân sách là tổng cho cả kỳ.
-Thao tác này không thực thi thay đổi quảng cáo. Sửa thông số hủy xác nhận và
-ẩn kết quả cũ. Nếu đã lưu mục tiêu nhưng mô phỏng lỗi, nút thử lại dùng mục tiêu đó.
+Mở tab **Goals** trong MegaDay HQ, chọn cả chiến dịch hoặc SKU đang theo dõi.
+Các đường dẫn cũ `/sale-planner` và `/sku-assistant` chuyển vào HQ. Cả hai phạm vi có thể trao đổi với Milo rồi kiểm tra
+bản nháp. Giao diện hiển thị mục tiêu đang áp dụng và phiên bản của nó.
+**Mô phỏng thử** chỉ lưu bản nháp không hoạt động và kết quả what-if; không thay
+mục tiêu hoặc đề xuất hiện tại. Sau khi xem kết quả và bảng thay đổi, người dùng
+xác nhận riêng **Áp dụng mục tiêu**. Bản đầu hỗ trợ một chiến dịch, một SKU trọng
+tâm mỗi lần và 1–72 giờ tròn. Đây không phải lệnh thực thi quảng cáo.
+
+SKU kế thừa giới hạn ngân sách/lỗ chặt hơn từ mục tiêu chiến dịch. Thay đổi ưu
+tiên không tương thích được nêu rõ và chặn áp dụng; cần sửa kế hoạch chung trước.
+Chưa cộng gộp hay tối ưu đồng thời nhiều SKU. Sửa bản nháp/phạm vi hủy kết quả
+thử và xác nhận cũ. Nếu mục tiêu hoặc dữ liệu/mô hình thay đổi sau lúc tính,
+backend trả 409, yêu cầu đối chiếu và mô phỏng lại. Lỗi mạng lúc áp dụng giữ mã
+bản thử để thử lại an toàn; không kích hoạt hai lần. Kiểm tra dữ liệu hiện dùng
+dấu vết toàn warehouse, nên thay đổi ngoài SKU đang xét cũng có thể yêu cầu tính lại.
 
 Gateway dùng `DATA_BACKEND_URL` (gốc API, ví dụ `https://backend.example/api/v1/`),
-`DATA_BACKEND_USER`, `DATA_BACKEND_ROLE=lead` như kết nối Data Studio. Backend
-phải có `/goal-planner/capabilities` phiên bản 1 và dữ liệu đã ingest. Chỉ dùng
+`DATA_BACKEND_USER`, `DATA_BACKEND_ROLE` như kết nối Data Studio. Operator có thể
+mô phỏng; lead mới được áp dụng. Backend cần migration 6, capability `preview_apply`
+trong `/goal-planner/capabilities` phiên bản 1 và dữ liệu đã ingest. Chỉ dùng
 backend trên mạng tin cậy theo mô hình xác thực hiện có. Frontend gọi trực tiếp
 gateway cùng origin; không dùng fixture để thay kết quả thật. Backend chưa nối,
 chưa nâng cấp hoặc không đủ quyền sẽ có thông báo và không cho chạy.
@@ -270,11 +302,14 @@ Kiểm chứng: `npm.cmd run check`; chạy Vite cổng 5186 rồi
 `node qa/studio/sale-planner.mjs` (Windows có thể đặt `STUDIO_QA_CHANNEL=msedge`).
 Browser QA dùng API giả lập; ảnh/kết quả ở `qa/runs/sale-planner/`.
 Ảnh review (số minh họa từ API giả lập): [desktop](../docs/images/sale-planner-desktop.png),
-[mobile](../docs/images/sale-planner-mobile.png).
+[mobile](../docs/images/sale-planner-mobile.png),
+[đối chiếu trước khi áp dụng](../docs/images/sale-plan-apply-desktop.png),
+[đối chiếu trên mobile](../docs/images/sale-plan-apply-mobile.png).
 
 ## Trợ lý mục tiêu theo SKU và minh bạch con số
 
-Từ HQ chọn **Lập mục tiêu** của một SKU, hoặc mở `/sku-assistant?sku=...`.
+Từ HQ chọn **Lập kế hoạch sale → Một sản phẩm**. Liên kết cũ
+`/sku-assistant?sku=...` chuyển đến luồng chung và giữ SKU đã chọn.
 Danh sách và ngữ cảnh được đọc từ backend thật. SKU được chuyển vào **Milo**,
 dùng chung hội thoại và lịch sử lưu trong tài khoản. Milo nhận dữ liệu SKU,
 lịch sử bán gần đây, nguồn/mốc dữ liệu và chiến dịch liên quan. Mục tiêu được
@@ -295,7 +330,7 @@ vốn/phí và giả định từng SKU. Snapshot cũ không bị thay bằng d�
 quả trước khi có trace hiển thị thiếu bằng chứng; không dựng lời giải thích giả.
 Nguồn chưa truy vết được tới từng dòng CSV được nêu rõ trong giới hạn.
 
-Cần backend có migration 5 và capability `focus_sku`, `calculation_trace`, cùng
+Cần backend có migration 6 và capability `focus_sku`, `calculation_trace`, `preview_apply`, cùng
 cấu hình kết nối/lead của planner. Chạy migration theo quy trình backend trước
 khi dùng; gateway từ chối chạy theo SKU trên backend cũ. AI diễn giải vẫn dùng
 cấu hình Milo (`OPENAI_API_KEY`, model đã chọn trong tài khoản) và có fallback
@@ -328,3 +363,39 @@ src/
 ```
 
 Theme: token CSS trên `:root` và `[data-theme='dark']`, map vào Tailwind bằng `@theme inline` (dùng `bg-surface`, `text-muted`, `border-border`...). Nút trên thanh trên cùng đổi Theo hệ thống / Sáng / Tối, lưu ở `localStorage` (bọc try/catch). `Ctrl+K` mở panel Trợ lý, `Esc` đóng.
+
+### HQ product workspace
+
+HQ contains Overview, SKU Details, Comparisons, Campaigns, Goals and Activity Logs.
+Goals supports the active SKU or a whole campaign. Preview simulations preserve the
+active goal; applying a preview requires a separate confirmation and revision check.
+The old `/sku-assistant` and `/sale-planner` links redirect into HQ.
+Track a product from Overview; the active product scopes the other tabs. Tracked
+products, saved worksheet inputs and activity are revisioned in the account's
+`hq` document. Unsaved worksheet inputs and notes stay separate per product while
+HQ remains open. Source records and names retain their original values.
+
+The continue/pause worksheet uses explicit user assumptions. Sales are capped by
+stock; costs include unit cost, packaging and percentage fees. It excludes taxes,
+returns, fixed costs, restocking and leftover valuation. Existing backend model
+comparisons and goal confirmation remain separate from this worksheet.
+
+Milo opens on the left beside desktop HQ. Analyze with AI attaches context to an
+editable draft; only Send starts inference. Up to two PNG/JPEG/WebP images can be
+attached (10 MB input limit, resized to 1,280 px and at most 512 KB each). Saved
+messages retain images and analysis context for history and retries. The existing
+20 MiB account document limit still applies.
+
+The authenticated `/api/pm/chat` endpoint delegates execution to the account
+Durable Object. Milo can list source tables and read/search records through
+read-only tools, with source revisions and record numbers. Each response permits
+at most eight tool calls over five rounds; oversized records/output are explicitly
+marked truncated. This does not grant ad execution, inventory writes or arbitrary
+SQL access. Uploaded records, images and attached context are untrusted evidence.
+
+Building selection opens the workspace and focuses the camera. Closing it returns
+to the city. Data management remains in Data Studio. The tutorial's seen state is
+stored on the device, and Replay tutorial always opens it explicitly.
+
+Verification: `node qa/hq-workspace.mjs` runs against a local Wrangler preview,
+using local test data and mocked AI replies; it never writes to production.

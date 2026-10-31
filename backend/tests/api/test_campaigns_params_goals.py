@@ -137,6 +137,7 @@ def test_goal_planner_capabilities(api: TestClient) -> None:
             "min_marginal_return",
             "focus_sku",
             "calculation_trace",
+            "preview_apply",
         ],
     }
     assert api.get(f"{V1}/goal-planner/capabilities").status_code in (401, 403)

@@ -11,13 +11,13 @@ import {
 } from './format';
 
 describe('formatVnd', () => {
-  it('uses dot thousands and đ suffix', () => {
-    expect(formatVnd(531000)).toBe('531.000đ');
-    expect(formatVnd(9280)).toBe('9.280đ');
-    expect(formatVnd(0)).toBe('0đ');
+  it('uses comma thousands and VND suffix', () => {
+    expect(formatVnd(531000)).toBe('531,000 VND');
+    expect(formatVnd(9280)).toBe('9,280 VND');
+    expect(formatVnd(0)).toBe('0 VND');
   });
   it('rounds and uses a real minus sign', () => {
-    expect(formatVnd(-4480000.4)).toBe('−4.480.000đ');
+    expect(formatVnd(-4480000.4)).toBe('−4,480,000 VND');
   });
   it('handles non-finite input', () => {
     expect(formatVnd(Number.NaN)).toBe('—');
@@ -25,29 +25,29 @@ describe('formatVnd', () => {
 });
 
 describe('formatVndMillions', () => {
-  it('formats millions with comma decimals', () => {
-    expect(formatVndMillions(4300000)).toBe('4,3 tr');
-    expect(formatVndMillions(10100000, 'long')).toBe('10,1 triệu');
-    expect(formatVndMillions(1000000)).toBe('1 tr');
+  it('formats millions with decimal points', () => {
+    expect(formatVndMillions(4300000)).toBe('4.3 M');
+    expect(formatVndMillions(10100000, 'long')).toBe('10.1 million');
+    expect(formatVndMillions(1000000)).toBe('1 M');
   });
   it('keeps two decimals below one million', () => {
-    expect(formatVndMillions(-200000)).toBe('−0,2 tr');
-    expect(formatVndMillions(-50000)).toBe('−0,05 tr');
+    expect(formatVndMillions(-200000)).toBe('−0.2 M');
+    expect(formatVndMillions(-50000)).toBe('−0.05 M');
   });
 });
 
 describe('formatNumber / formatUnits / formatPct', () => {
-  it('formats Vietnamese decimals', () => {
-    expect(formatNumber(22.5)).toBe('22,5');
-    expect(formatNumber(35880)).toBe('35.880');
-    expect(formatNumber(6.54)).toBe('6,5');
+  it('formats English decimals', () => {
+    expect(formatNumber(22.5)).toBe('22.5');
+    expect(formatNumber(35880)).toBe('35,880');
+    expect(formatNumber(6.54)).toBe('6.5');
   });
   it('appends units', () => {
-    expect(formatUnits(41)).toBe('41 sp');
+    expect(formatUnits(41)).toBe('41 units');
   });
   it('formats ratios as percent', () => {
     expect(formatPct(0.24)).toBe('24%');
-    expect(formatPct(0.815, 1)).toBe('81,5%');
+    expect(formatPct(0.815, 1)).toBe('81.5%');
   });
 });
 

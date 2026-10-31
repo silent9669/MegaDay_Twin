@@ -25,16 +25,20 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
   async function load(result: ImportAnalysis, files: string[]) {
     setBusy("Saving tables…");
     const tables = result.tables.filter(table => files.includes(table.file));
-    await onLoad(tables.map(table => table.source), reviewing.current);
+    const unchanged = reviewing.current && tables.length === sources.length && tables.every(table =>
+      sources.some(source => sourceKey(source) === sourceKey(table.source) && source.hash === table.source.hash));
+    if (!unchanged) await onLoad(tables.map(table => table.source), reviewing.current);
     setNeedsSelection(false);
-    setNotice(`${tables.length} tables loaded · ${tables.reduce((sum, table) => sum + table.rowCount, 0).toLocaleString()} records`);
+    setNotice(reviewing.current
+      ? unchanged ? `AI checked ${tables.length} tables · No safe changes needed` : `AI fixes saved · ${tables.length} tables`
+      : `${tables.length} tables loaded · ${tables.reduce((sum, table) => sum + table.rowCount, 0).toLocaleString()} records`);
   }
   async function analyze(file?: File, review = false) {
     if (!file || inFlight.current || blocked) return;
     if (!/\.zip$/i.test(file.name)) { setError("Drop one ZIP file, or use Import CSV / JSON."); return; }
     reviewing.current = review;
     inFlight.current = true; onBusyChange?.(true);
-    setBusy(review ? "Reviewing and fixing columns…" : "Extracting ZIP…"); setError(""); setNotice(""); setReplayReady(false);
+    setBusy(review ? "Checking and fixing data…" : "Extracting ZIP…"); setError(""); setNotice(""); setReplayReady(false);
     if (!review) { setAnalysis(null); setNeedsSelection(false); }
     try {
       if (file.size > MAX_BYTES) throw Error("ZIP exceeds 20 MiB.");
@@ -83,7 +87,7 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
     {(busy || notice) && <p role="status">{busy || notice}</p>}
     {replayReady && <p><a href="/campaign-hq#replay">Mở CD002 để chạy replay →</a></p>}
     {error && <p role="alert">{error}{error.includes("replay") && <> <a href="/campaign-hq#replay">Mở Replay demo CD002 →</a></>}</p>}
-    {analysis && <details open={needsSelection || undefined}>
+    {analysis && <details open={needsSelection || reviewing.current || undefined}>
       <summary>Import details</summary>
       {analysis.tables.map(table => <div className="archive-table" key={table.file}>
         {needsSelection && <input type="checkbox" aria-label={`Load ${table.file}`} checked={selected.includes(table.file)} disabled={blocked || !!busy}
@@ -92,7 +96,9 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
             : current.filter(file => file !== table.file))} />}
         <strong>{SOURCE_DEFS.find(d => d.kind === table.source.kind)?.name ?? table.source.name}</strong> · {table.rowCount.toLocaleString()} records
         {table.method === "model" && <p>{table.columns.filter(c => c.source !== c.target).map(c => `${c.source} → ${c.target}`).join(" · ")}</p>}
-        {table.review && <p>{table.review.length ? table.review.join(" · ") : "No issues found in the reviewed sample."}</p>}
+        {!!table.repairs?.length && <p>{table.repairs.join(" ")}</p>}
+        {!!table.remainingIssues?.length && <p>Needs review: {table.remainingIssues.join(" ")}</p>}
+        {!!table.review?.length && <p>{table.review.join(" · ")}</p>}
       </div>)}
       {analysis.skipped.map(item => <p key={item.file}>{item.file}: {item.reason}</p>)}
       {needsSelection && <button disabled={blocked || !!busy || !selected.length} onClick={async () => {

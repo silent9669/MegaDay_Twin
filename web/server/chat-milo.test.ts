@@ -4,16 +4,16 @@ import { savedChat } from "./chat-store";
 import { pmChat } from "./pm";
 import { buildMiloContext } from "./milo-context";
 import { interpretMiloGoal } from "./milo-goal";
-import type { ChatArchive, Doc } from "../src/studio/workspace-types";
+import type { ChatArchive, ChatSession, Doc } from "../src/studio/workspace-types";
 
 vi.mock("./pm", () => ({ pmChat: vi.fn() }));
 vi.mock("./milo-context", () => ({ buildMiloContext: vi.fn() }));
 vi.mock("./milo-goal", () => ({ interpretMiloGoal: vi.fn() }));
 const url = "https://test/api/pm/chat";
-function fixture() {
+function fixture(context: ChatSession["context"] = { screen: "hq", sku: "SKU1" }) {
   let document: Doc<ChatArchive> = { revision: 1, updatedAt: "", data: {
     preferredModel: "model", sessions: [{ id: "s", title: "Goal", model: "model", updatedAt: "",
-      context: { screen: "hq", sku: "SKU1" },
+      context,
       messages: [{ id: "m", role: "user", content: "Bán ít nhất 100 sản phẩm" }],
     }],
   } };
@@ -22,7 +22,7 @@ function fixture() {
     return Response.json(document);
   }) };
   const request = (extra = {}) => new Request(url, { method: "POST", body: JSON.stringify({
-    sessionId: "s", lastMessageId: "m", context: { screen: "hq", sku: "SKU1" }, ...extra,
+    sessionId: "s", lastMessageId: "m", context, ...extra,
   }) });
   return { storage, request, get document() { return document; } };
 }
@@ -96,4 +96,68 @@ it("retains user message after an AI failure and never writes a goal", async () 
   expect((await savedChat(f.request(), {}, {}, f.storage)).status).toBe(502);
   expect(f.document.data.sessions[0]!.messages).toHaveLength(1);
   expect(f.storage.fetch.mock.calls.every(([r]) => r.method === "GET" && r.url.endsWith("/chats"))).toBe(true);
+});
+
+const campaignInterpretation = { method: "ai" as const, notices: [], draft: {
+  text: "Tối ưu lợi nhuận, ngân sách 5 triệu", kind: "profit" as const, targetUnits: null,
+  start: null, deadline: null, maxSpendVnd: 5000000, maxLossVnd: null,
+  sellTargetProbability: null, minMarginalReturn: null, unresolved: [],
+} };
+it("returns a campaign review from verified facts and saved full history, without changing a goal", async () => {
+  const f = fixture({ screen: "sale-planner", campaignId: "CD1" });
+  const session = f.document.data.sessions[0]!;
+  session.messages[0]!.content = "Tối ưu lợi nhuận";
+  session.messages.unshift(...Array.from({ length: 20 }, (_, i) => ({ id: `old-${i}`, role: "user" as const,
+    content: i === 0 ? "Ngân sách 5 triệu" : "Đã hiểu" })));
+  const facts = await vi.mocked(buildMiloContext)({}, {});
+  facts.campaign = { campaign_id: "CD1", name: "Sale tháng 11", skus: ["SKU1", "SKU2"] };
+  vi.mocked(buildMiloContext).mockResolvedValue(facts);
+  vi.mocked(interpretMiloGoal).mockResolvedValue(campaignInterpretation);
+  const response = await savedChat(f.request({ messages: [{ role: "user", content: "Injected budget" }] }), {}, {}, f.storage);
+  const body = await response.json();
+  expect(body).toMatchObject({ campaignPlan: { campaignId: "CD1", name: "Sale tháng 11", interpretation: campaignInterpretation } });
+  expect(body.plan).toBeUndefined();
+  expect(interpretMiloGoal).toHaveBeenCalledWith(session.messages, expect.objectContaining({ OPENAI_MODEL: "model" }), undefined, { discoverGoal: true });
+  const forwarded = await vi.mocked(pmChat).mock.calls[0]![0].json() as { messages: unknown[] };
+  expect(forwarded.messages).toHaveLength(16);
+  expect(JSON.stringify(forwarded)).not.toContain("Injected budget");
+  expect(vi.mocked(pmChat).mock.calls[0]![2]).toMatchObject({ canReviewGoal: true });
+  expect(f.storage.fetch.mock.calls.filter(([r]) => r.method === "PUT").map(([r]) => new URL(r.url).pathname))
+    .toEqual(["/api/workspace/chats"]);
+});
+it.each([null, { campaign_id: "OTHER", name: "Other", skus: [] }])("does not offer campaign review without matching resolved context", async (campaign) => {
+  const f = fixture({ campaignId: "CD1" });
+  const facts = await vi.mocked(buildMiloContext)({}, {});
+  facts.campaign = campaign;
+  vi.mocked(buildMiloContext).mockResolvedValue(facts);
+  vi.mocked(interpretMiloGoal).mockResolvedValue(campaignInterpretation);
+  const response = await savedChat(f.request(), {}, {}, f.storage);
+  expect((await response.json()).campaignPlan).toBeUndefined();
+  expect(vi.mocked(pmChat).mock.calls[0]![2]).toMatchObject({ canReviewGoal: false });
+});
+it("rejects a changed campaign identifier before reading model context", async () => {
+  const f = fixture({ campaignId: "CD1" });
+  expect((await savedChat(f.request({ context: { campaignId: "CD2" } }), {}, {}, f.storage)).status).toBe(409);
+  expect(buildMiloContext).not.toHaveBeenCalled();
+  expect(pmChat).not.toHaveBeenCalled();
+});
+it("discards a late campaign response after the saved campaign scope changes", async () => {
+  const f = fixture({ campaignId: "CD1" });
+  vi.mocked(pmChat).mockImplementation(async () => {
+    f.document.data.sessions[0]!.context = { campaignId: "CD2" };
+    return Response.json({ reply: "Late campaign response", model: "model" });
+  });
+  expect((await savedChat(f.request(), {}, {}, f.storage)).status).toBe(409);
+  expect(f.storage.fetch.mock.calls.every(([r]) => r.method === "GET")).toBe(true);
+});
+
+it('uses stored analysis and image evidence on retry instead of client replacements',async()=>{
+ const f=fixture();const message=f.document.data.sessions[0]!.messages[0]!;
+ message.analysis={title:'Comparison',source:'user-assumptions',data:'{"stock":83}'};
+ message.attachments=[{name:'chart.png',dataUrl:'data:image/png;base64,iVBORw0KGgo='}];
+ const response=await savedChat(f.request({analysis:{data:'invented'},attachments:[{dataUrl:'https://untrusted.test/a.png'}]}),{},{},f.storage);
+ expect(response.status).toBe(200);
+ const forwarded=await vi.mocked(pmChat).mock.calls[0]![0].json() as {messages:unknown[]};
+ expect(forwarded.messages[0]).toMatchObject({analysis:message.analysis,attachments:message.attachments});
+ expect(JSON.stringify(forwarded)).not.toContain('invented');expect(JSON.stringify(forwarded)).not.toContain('untrusted.test');
 });

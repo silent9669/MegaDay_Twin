@@ -1,3 +1,5 @@
+import { imageAttachmentSchema } from "../city/chat-evidence";
+import { analysisContextSchema } from "../city/analysis-context";
 import { z } from "zod";
 import { miloContextSchema } from "../city/milo-contract";
 export const settingsSchema = z.object({
@@ -29,6 +31,8 @@ export const chatMessageSchema = z.object({
   id: z.string().uuid(),
   role: z.enum(["user", "assistant"]),
   content: z.string().trim().min(1).max(16000),
+  attachments: z.array(imageAttachmentSchema).max(2).optional(),
+  analysis: analysisContextSchema.optional(),
 });
 export const chatSessionSchema = z.object({
   id: z.string().uuid(),
@@ -63,4 +67,4 @@ export const defaultChatArchive: ChatArchive = {
   preferredModel: "",
   sessions: [],
 };
-export type WorkspaceKey = "sources" | "settings" | "sandbox" | "chats";
+export type WorkspaceKey = "sources" | "settings" | "sandbox" | "chats" | "hq";

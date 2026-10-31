@@ -1,3 +1,4 @@
+import { evidenceText } from '../../lib/evidence-text';
 // Pure helpers for the Compare screen (09 §2.3). No React here so they are easy to test.
 import { ApiError } from '../../api/client';
 import type {
@@ -255,7 +256,7 @@ export function reasonCitation(rec: Recommendation, i: number, computedAt?: stri
  */
 export function splitFirstNumber(text: string): { before: string; number: string; after: string } | null {
   const m =
-    /\d{1,2}:\d{2}(?:–\d{1,2}:\d{2})?|\d[\d.,]*(?:–\d[\d.,]*)?(?:đ\/sp|đ| ?sp\/giờ| ?sp|%| lần)/.exec(text) ?? /\d[\d.,]*/.exec(text);
+    /\d{1,2}:\d{2}(?:–\d{1,2}:\d{2})?|\d[\d.,]*(?:–\d[\d.,]*)?(?: VND\/unit| VND| units\/hour| units|đ\/sp|đ| ?sp\/giờ| ?sp|%| lần)/.exec(text) ?? /\d[\d.,]*/.exec(text);
   if (!m) return null;
   return { before: text.slice(0, m.index), number: m[0], after: text.slice(m.index + m[0].length) };
 }
@@ -281,7 +282,7 @@ export function noZoneBarText(rec: Recommendation): string {
 /** "Lợi nhuận tới 00:00 12/11" (label from the API, deadline included); falls back to the id. */
 export function goalText(goal: GoalBrief | null | undefined, goalId: string): string {
   if (!goal || goal.goal_id !== goalId) return goalId;
-  return goal.label;
+  return evidenceText(goal.label);
 }
 
 /** Default deadline for a new goal: next local midnight after the data clock. */

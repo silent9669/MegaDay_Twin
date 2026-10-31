@@ -14,7 +14,8 @@ export type MiloReplyPlan = {
   interpretation: GoalInterpretResponse;
   context: AssistantContext;
 };
-export type MiloReply = { reply: string; model: string; plan?: MiloReplyPlan | null };
+export type MiloCampaignPlan = { campaignId: string; name: string; interpretation: GoalInterpretResponse };
+export type MiloReply = { reply: string; model: string; plan?: MiloReplyPlan | null; campaignPlan?: MiloCampaignPlan | null };
 export function openMilo(context: MiloContext) {
   window.dispatchEvent(new CustomEvent("workspace:milo-sku", { detail: context }));
 }

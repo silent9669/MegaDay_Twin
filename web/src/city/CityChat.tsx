@@ -1,3 +1,5 @@
+import { analysisContextSchema, type AnalysisContext } from "./analysis-context";
+import { prepareChatImage, type ImageAttachment } from "./chat-evidence";
 import { usePanelResize } from "./usePanelResize";
 import {
   useCallback,
@@ -8,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  ImagePlus,
   ArrowUp,
   ArrowRight,
   Bell,
@@ -35,17 +38,22 @@ import { MiloAvatar } from "./MiloAvatar";
 import { Updates } from "./monitor/Updates";
 import type { WorkspaceUpdates } from "./monitor/useWorkspaceMonitor";
 import type { ChangeReference } from "./monitor/changes";
-import { miloContextSchema, type MiloContext, type MiloReply, type MiloReplyPlan } from "./milo-contract";
+import { miloContextSchema, type MiloContext, type MiloReply, type MiloReplyPlan, type MiloCampaignPlan } from "./milo-contract";
 import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
+const draftScope=(context?:MiloContext)=>"new:"+JSON.stringify([context?.sku??null,context?.campaignId??null,context?.scenarioId??null]);
 const EMPTY_MESSAGES: ChatMessage[] = [];
-type SavedPlan = { plan: MiloReplyPlan; userMessageId: string };
+type SavedPlan = { plan?: MiloReplyPlan; campaignPlan?: MiloCampaignPlan; userMessageId: string };
 export function CityChat({
+  workspaceOpen = false,
+  onWidthChange,
   launcherAnchor,
   updates,
   onOpenChange,
   open: controlledOpen,
   context: screenContext,
 }: {
+  workspaceOpen?: boolean;
+  onWidthChange?: (width:number)=>void;
   launcherAnchor?: HTMLElement | null;
   updates?: WorkspaceUpdates;
   onOpenChange?: (open: boolean) => void;
@@ -53,10 +61,10 @@ export function CityChat({
   context?: MiloContext;
 }) {
   const [mobile, setMobile] = useState(
-    () => window.matchMedia("(max-width: 899px)").matches,
+    () => window.matchMedia("(max-width: 1023px)").matches,
   );
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 899px)");
+    const media = window.matchMedia("(max-width: 1023px)");
     const update = () => setMobile(media.matches);
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -66,6 +74,11 @@ export function CityChat({
     ChangeReference | undefined
   >();
 
+  const [analysis,setAnalysis]=useState<AnalysisContext|undefined>();
+  const [attachments,setAttachments]=useState<ImageAttachment[]>([]);
+  const [preparingImage,setPreparingImage]=useState(false);
+  const evidence=useRef(new Map<string,{analysis?:AnalysisContext;attachments:ImageAttachment[]}>());
+  const imageInput=useRef<HTMLInputElement>(null);
   const archive = useChatArchive();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [selectedContext, setSelectedContext] = useState<MiloContext | undefined>();
@@ -78,13 +91,16 @@ export function CityChat({
     (s) => s.id === sessionId,
   );
   const messages = conversation?.messages ?? EMPTY_MESSAGES;
-  const plan = savedPlan && messages.at(-1)?.role === "assistant" && messages.at(-2)?.id === savedPlan.userMessageId ? savedPlan.plan : null;
+  const currentPlan = savedPlan && messages.at(-1)?.role === "assistant" && messages.at(-2)?.id === savedPlan.userMessageId ? savedPlan : null;
+  const plan = currentPlan?.plan, campaignPlan = currentPlan?.campaignPlan;
   const context = conversation?.context ?? selectedContext ?? screenContext;
+  const draftKey=sessionId??draftScope(context);
   const visibleMessages =
     optimistic && !messages.some((m) => m.id === optimistic.id)
       ? [...messages, optimistic]
       : messages;
-  const panel = usePanelResize(560, 420);
+  const panel = usePanelResize(400, 300, "left", workspaceOpen ? 572 : 0);
+  useEffect(()=>{onWidthChange?.(panel.width);},[panel.width,onWidthChange]);
   const { expanded, setExpanded } = panel;
   const [localOpen, setLocalOpen] = useState(false),
     [draft, setDraft] = useState(""),
@@ -114,18 +130,22 @@ export function CityChat({
   useEffect(() => {
     const selectSku = (event: Event) => {
       const result = miloContextSchema.safeParse((event as CustomEvent).detail);
-      if (!result.success || (!result.data.sku && !result.data.scenarioId)) return;
+      if (!result.success || (!result.data.sku && !result.data.scenarioId && !result.data.campaignId)) return;
+      drafts.current.set(draftKey,draft);
+      evidence.current.set(draftKey,{analysis,attachments});
       operation.current++;
       controller.current?.abort();
       setPending(false);
       setOptimistic(null);
       setSelectedContext(result.data);
       const saved = archive.document?.data.sessions.find((session) => session.context?.sku === result.data.sku && session.context?.campaignId === result.data.campaignId && session.context?.scenarioId === result.data.scenarioId);
+      const savedEvidence=evidence.current.get(saved?.id??draftScope(result.data));
+      setAnalysis(savedEvidence?.analysis);setAttachments(savedEvidence?.attachments??[]);
       setSessionId(saved?.id ?? null);
       setPlan(saved ? plans.current.get(saved.id) ?? null : null);
       setReview(false);
       setChangeReference(undefined);
-      setDraft(result.data.scenarioId ? "Giải thích giúp mình các con số và căn cứ của phương án này." : "");
+      setDraft(drafts.current.get(saved?.id??draftScope(result.data))??(result.data.scenarioId ? "Explain the numbers and evidence for this scenario." : ""));
       setError("");
       setHistory(false);
       setTab("chat");
@@ -133,7 +153,7 @@ export function CityChat({
     };
     window.addEventListener("workspace:milo-sku", selectSku);
     return () => window.removeEventListener("workspace:milo-sku", selectSku);
-  }, [archive.document, setOpen]);
+  }, [archive.document, setOpen,draftKey,draft,analysis,attachments]);
   useEffect(() => {
     const show = (event: Event) => {
       setOpen(true);
@@ -163,6 +183,29 @@ export function CityChat({
       window.removeEventListener("workspace:updates", show);
     };
   }, [open, setOpen]);
+  useEffect(()=>{
+    const analyze=(event:Event)=>{
+      const detail=(event as CustomEvent).detail;
+      const parsed=analysisContextSchema.safeParse(detail?.context);
+      if(!parsed.success||typeof detail?.prompt!=='string')return;
+      if(parsed.data.sku){const selection=miloContextSchema.safeParse({sku:parsed.data.sku,screen:'hq'});if(selection.success)window.dispatchEvent(new CustomEvent('workspace:milo-sku',{detail:selection.data}));}
+      setAnalysis(parsed.data);setDraft(previous=>previous.trim()||detail.prompt.slice(0,4000));
+      setOpen(true);setTab('chat');setHistory(false);
+      setTimeout(()=>input.current?.focus(),0);
+    };
+    window.addEventListener('workspace:analyze',analyze);
+    return()=>window.removeEventListener('workspace:analyze',analyze);
+  },[setOpen]);
+  async function attachImages(files:FileList|null) {
+    if(!files?.length)return;
+    if(files.length+attachments.length>2){setError('Attach up to two images per message.');return;}
+    setPreparingImage(true);setError('');
+    try{const images=await Promise.all(Array.from(files).map(prepareChatImage));setAttachments(previous=>[...previous,...images]);}
+    catch(e){setError(e instanceof Error?e.message:'Could not prepare image.');}
+    finally{setPreparingImage(false);if(imageInput.current)imageInput.current.value='';}
+  }
+  function rememberEvidence(){evidence.current.set(draftKey,{analysis,attachments});}
+  function restoreEvidence(id:string){const saved=evidence.current.get(id);setAnalysis(saved?.analysis);setAttachments(saved?.attachments??[]);}
   useEffect(() => () => controller.current?.abort(), []);
   const preferredModel = archive.document?.data.preferredModel;
   useEffect(() => {
@@ -199,12 +242,14 @@ export function CityChat({
   }, [messages, pending]);
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!draft.trim() || pending || !model) return;
-    const content = draft.trim();
+    if ((!draft.trim()&&!attachments.length) || pending || preparingImage || !model) return;
+    const content = draft.trim() || "Analyze the attached image in the workspace context.";
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
       content,
+      ...(analysis?{analysis}:{}),
+      ...(attachments.length?{attachments}:{}),
     };
     const session: ChatSession = conversation ?? {
       id: crypto.randomUUID(),
@@ -225,7 +270,9 @@ export function CityChat({
     try {
       await archive.append({ ...session, model }, message);
       if (sequence !== operation.current) return;
-      drafts.current.delete(sessionId ?? "new");
+      drafts.current.delete(draftKey);
+      evidence.current.delete(draftKey);
+      setAnalysis(undefined);setAttachments([]);
       setSessionId(session.id);
       setDraft("");
       setOptimistic(null);
@@ -245,6 +292,9 @@ export function CityChat({
         const received = { plan: result.plan, userMessageId: message.id };
         plans.current.set(session.id, received);
         setPlan(received);
+      } else if (!session.context?.sku && result.campaignPlan?.campaignId === session.context?.campaignId && result.campaignPlan) {
+        const received = { campaignPlan: result.campaignPlan, userMessageId: message.id };
+        plans.current.set(session.id, received); setPlan(received);
       }
       setChangeReference(undefined);
       await archive.reload();
@@ -309,6 +359,9 @@ export function CityChat({
         const received = { plan: result.plan, userMessageId: conversation.messages.at(-1)!.id };
         plans.current.set(conversation.id, received);
         setPlan(received);
+      } else if (!conversation.context?.sku && result.campaignPlan?.campaignId === conversation.context?.campaignId && result.campaignPlan) {
+        const received = { campaignPlan: result.campaignPlan, userMessageId: conversation.messages.at(-1)!.id };
+        plans.current.set(conversation.id, received); setPlan(received);
       }
     } catch (e) {
       if (sequence !== operation.current) return;
@@ -320,6 +373,7 @@ export function CityChat({
     }
   }
   function newChat() {
+    rememberEvidence();restoreEvidence(draftScope(context));
     operation.current++;
     controller.current?.abort();
     setPending(false);
@@ -327,11 +381,11 @@ export function CityChat({
     setSelectedContext(context);
     setPlan(null);
     setReview(false);
-    references.current.set(sessionId ?? "new", changeReference);
-    setChangeReference(references.current.get("new"));
-    drafts.current.set(sessionId ?? "new", draft);
+    references.current.set(draftKey, changeReference);
+    setChangeReference(references.current.get(draftScope(context)));
+    drafts.current.set(draftKey, draft);
     setSessionId(null);
-    setDraft(drafts.current.get("new") ?? "");
+    setDraft(drafts.current.get(draftScope(context)) ?? "");
     setHistory(false);
     setError("");
     setTimeout(() => input.current?.focus(), 0);
@@ -362,11 +416,12 @@ export function CityChat({
   );
 
   return (
-    <div className="city-pm">
+    <div className={`city-pm ${launcherAnchor ? "" : "pm-global-launcher"}`}>
       {launcherAnchor ? createPortal(launcher, launcherAnchor) : launcher}
-      <Sheet open={open} onOpenChange={setOpen} modal={mobile}>
+      <Sheet open={open} onOpenChange={setOpen} modal={mobile} disablePointerDismissal={!mobile}>
         <SheetContent
           id="city-pm-chat"
+          side="left"
           style={panel.style}
           className={`city-chat city-sheet ${expanded ? "chat-expanded" : ""}`}
           showCloseButton={false}
@@ -375,7 +430,7 @@ export function CityChat({
           initialFocus={tab === "chat" ? input : undefined}
           aria-labelledby="chat-title"
         >
-          <div className="panel-resize-grip" {...panel.grip} />
+          <div className="panel-resize-grip panel-resize-right" {...panel.grip} />
           <header>
             <div className="chat-identity">
               <MiloAvatar
@@ -404,7 +459,7 @@ export function CityChat({
               className="city-icon"
               aria-label="New chat"
               title="New chat"
-              disabled={pending}
+              disabled={pending||preparingImage}
               onClick={newChat}
             >
               <Plus />
@@ -469,20 +524,21 @@ export function CityChat({
                 <ChatHistory
                   sessions={archive.document?.data.sessions ?? []}
                   activeId={sessionId}
-                  busy={pending}
+                  busy={pending||preparingImage}
                   onBack={() => {
                     setHistory(false);
                     setTimeout(() => input.current?.focus(), 0);
                   }}
                   onSelect={(id) => {
+                    rememberEvidence();restoreEvidence(id);
                     operation.current++;
                     controller.current?.abort();
                     setPending(false);
                     setOptimistic(null);
                     setReview(false);
                     setPlan(plans.current.get(id) ?? null);
-                    drafts.current.set(sessionId ?? "new", draft);
-                    references.current.set(sessionId ?? "new", changeReference);
+                    drafts.current.set(draftKey, draft);
+                    references.current.set(draftKey, changeReference);
                     setChangeReference(references.current.get(id));
                     setSessionId(id);
                     setDraft(drafts.current.get(id) ?? "");
@@ -504,12 +560,12 @@ export function CityChat({
                       {conversation.title}
                     </div>
                   )}
-                  {(context?.sku || context?.scenarioId) && (
+                  {(context?.sku || context?.scenarioId || context?.campaignId) && (
                     <div className="milo-context" role="status">
-                      <span>Đang trao đổi về <strong>{context.sku ?? context.campaignId}</strong>{context.scenarioId && <small> · Mô phỏng {context.scenarioId}</small>}</span>
+                      <span>Discussing <strong>{context.sku ?? context.campaignId}</strong>{context.scenarioId && <small> · Scenario {context.scenarioId}</small>}</span>
                       <button type="button" disabled={pending} onClick={() => {
                         newChat(); setSelectedContext(screenContext?.sku ? { screen: screenContext.screen } : screenContext);
-                      }}>Bỏ chọn {context.scenarioId ? "phương án" : "SKU"}</button>
+                      }}>Clear {context.scenarioId ? "scenario" : context.sku ? "SKU" : "campaign"}</button>
                     </div>
                   )}
                   <div
@@ -521,12 +577,12 @@ export function CityChat({
                   >
                     {!visibleMessages.length ? (
                       <div className="chat-welcome">
-                        <h3>{context?.sku ? `Bạn muốn đạt điều gì với ${context.sku}?` : "Mình có thể giúp gì cho buổi sale?"}</h3>
+                        <h3>{context?.sku ? `What would you like to achieve with ${context.sku}?` : "What are we working on?"}</h3>
                         <div>
-                          {(context?.sku ? ["Mình muốn đẩy nhanh lượng bán của sản phẩm này", "Mình muốn giải phóng tồn kho", "Giúp mình xem mục tiêu nào phù hợp với dữ liệu hiện tại"] : [
-                            "Dữ liệu hiện tại đã đủ để lập phương án chưa?",
-                            "Giải thích giúp mình tình hình tồn kho",
-                            "Mình muốn lập mục tiêu cho buổi sale",
+                          {(context?.sku ? ["Help increase sales for this product", "Help clear remaining inventory", "Review goals supported by the current data"] : [
+                            "Is the data ready for a scenario?",
+                            "Explain current inventory",
+                            "Help plan a sale goal",
                           ]).map((prompt) => (
                             <button
                               key={prompt}
@@ -550,6 +606,8 @@ export function CityChat({
                           <span className="chat-role">
                             {message.role === "user" ? "You" : "Milo"}
                           </span>
+                          {message.analysis&&<details className="chat-context"><summary>{message.analysis.title} · {message.analysis.source}</summary><pre>{message.analysis.data}</pre></details>}
+                          {!!message.attachments?.length&&<div className="chat-images">{message.attachments.map((image,i)=><a key={i} href={image.dataUrl} download={image.name}><img src={image.dataUrl} alt={image.name}/></a>)}</div>}
                           <div className="chat-markdown">
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
@@ -583,15 +641,17 @@ export function CityChat({
                         </article>
                       ))
                     )}
-                    {plan && !pending && !draft.trim() && (
-                      <section className="milo-goal-handoff" aria-label="Bản nháp mục tiêu">
-                        <p>Milo đã ghi nhận mục tiêu. Bạn có thể kiểm tra và chỉnh thông số trước khi tính phương án.</p>
+                    {(plan || campaignPlan) && !pending && !draft.trim() && (
+                      <section className="milo-goal-handoff" aria-label="Goal draft">
+                        <p>Review and edit the goal before previewing a simulation.</p>
                         <button type="button" onClick={() => { setReview((value) => !value); setExpanded(true); }}>
-                          {review ? "Thu gọn bản nháp" : "Kiểm tra mục tiêu"}
+                          {review ? "Close goal draft" : "Review goal"}
                         </button>
-                        {review && <SaleGoalPlanner key={`${sessionId}-${messages.at(-1)?.id}`} embedded
+                        {review && plan && <SaleGoalPlanner key={`${sessionId}-${messages.at(-1)?.id}`} embedded
                           initialInterpretation={plan.interpretation} focusSku={plan.context.sku.sku}
                           campaignIds={plan.context.campaigns.map((campaign) => campaign.id)} allowRun={plan.context.canPlan} />}
+                        {review && campaignPlan && <SaleGoalPlanner key={`${sessionId}-${messages.at(-1)?.id}`} embedded
+                          initialInterpretation={campaignPlan.interpretation} campaignIds={[campaignPlan.campaignId]} />}
                       </section>
                     )}
                     {pending && (
@@ -629,11 +689,13 @@ export function CityChat({
                       </button>
                     </div>
                   )}
+                  {analysis&&<div className="change-attached"><span>{analysis.title} · {analysis.source}</span><button type="button" aria-label="Remove analysis context" onClick={()=>setAnalysis(undefined)}><X size={14}/></button></div>}
+                  {!!attachments.length&&<div className="chat-images chat-attachments">{attachments.map((image,i)=><figure key={i}><img src={image.dataUrl} alt={image.name}/><button aria-label={`Remove ${image.name}`} disabled={pending} onClick={()=>setAttachments(previous=>previous.filter((_,index)=>index!==i))}><X size={14}/></button></figure>)}</div>}
                   <form className="chat-form" onSubmit={(e) => void send(e)}>
                     <div className="chat-composer">
                       <textarea
                         aria-label="Message Milo"
-                        placeholder="Nói với Milo điều bạn muốn đạt được…"
+                        placeholder="Message Milo…"
                         ref={input}
                         value={draft}
                         maxLength={4000}
@@ -666,7 +728,7 @@ export function CityChat({
                           className="chat-send"
                           aria-label="Send message"
                           disabled={
-                            !draft.trim() || !model || !archive.document
+                            (!draft.trim()&&!attachments.length) || !model || !archive.document || preparingImage
                           }
                         >
                           <ArrowUp size={18} />
@@ -674,6 +736,8 @@ export function CityChat({
                       )}
                     </div>
                     <footer>
+                      <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={e=>void attachImages(e.target.files)}/>
+                      <button type="button" className="city-icon" aria-label="Attach images" title="Attach images" disabled={pending||preparingImage||attachments.length>=2} onClick={()=>imageInput.current?.click()}><ImagePlus size={18}/></button>
                       <label>
                         <span className="sr-only">OpenAI model</span>
                         <select
@@ -690,7 +754,7 @@ export function CityChat({
                         </select>
                       </label>
                       <span className="chat-save-status" role="status">
-                        {pending
+                        {preparingImage?"Preparing image…":pending
                           ? "Working…"
                           : error || archive.error
                             ? "Needs attention"

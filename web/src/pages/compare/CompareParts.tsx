@@ -1,3 +1,4 @@
+import { evidenceText } from '../../lib/evidence-text';
 // Building blocks of the 3-tier Compare screen (09 §2.3).
 import { ChevronDown, ChevronRight, CircleSlash, RotateCcw, Star } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -166,6 +167,7 @@ export function ZoneBarBlock({
 
 function ReasonItem({ text, rec, index, computedAt }: { text: string; rec: Recommendation; index: number; computedAt?: string }) {
   const citation = reasonCitation(rec, index, computedAt);
+  text=evidenceText(text);
   const parts = splitFirstNumber(text);
   if (!parts) {
     return (
@@ -203,7 +205,7 @@ export function FlipList({ rec }: { rec: Recommendation }) {
       {rec.flip_conditions.length ? (
         <ul className="list-disc space-y-1 pl-5">
           {rec.flip_conditions.map((fc) => (
-            <li key={`${fc.factor}:${fc.flip_at}`}>{fc.text}</li>
+            <li key={`${fc.factor}:${fc.flip_at}`}>{evidenceText(fc.text)}</li>
           ))}
         </ul>
       ) : (

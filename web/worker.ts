@@ -7,16 +7,13 @@ import {
   sessionExpiry,
   type AccessEnv,
 } from "./server/auth";
+import { workspaceQuotaFailure } from "./server/workspace-errors";
 import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
-import { savedChat } from "./server/chat-store";
-import { studioImport } from "./server/studio-import";
 import type { StudioModelEnv } from "./server/model-json";
-import { productLabels } from "./server/product-labels";
-import { getProductLabelProvider } from "./server/product-label-provider";
 import { explainCampaign } from "./server/campaign-explain";
 import { backendFetch } from "./server/backend-fetch";
-import { plannerContext, runSalePlan } from "./server/sale-planner";
+import { plannerContext, runSalePlan, activeSalePlan, applySalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
 import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
@@ -86,7 +83,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return fail(403, "Request not allowed.");
     if (path.startsWith("/api/workspace/")) {
       // Internal labeling claims/results are never reachable through the browser proxy.
-      if (!/^\/api\/workspace\/(sources|settings|sandbox|chats|events)$/.test(path))
+      if (!/^\/api\/workspace\/(sources|settings|sandbox|chats|hq|events)$/.test(path))
         return fail(404, "Workspace document not found.");
       if (!env.WORKSPACE)
         return fail(503, "Account storage is not configured.");
@@ -99,15 +96,16 @@ async function handle(request: Request, env: Env): Promise<Response> {
     if (path === "/api/studio/import") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "studio:admin" })).success)
         return fail(429, "Studio is busy. Try again in a minute.");
-      return studioImport(request, env);
+      if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
+      return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
+        new Request(new URL("/internal/studio/import" + url.search, url), request));
     }
     if (path === "/api/product-labels") {
       if (request.method === "POST" && env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "labels:admin" })).success)
         return fail(429, "Labeling is busy. Try again in a minute.");
       if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
-      return productLabels(request,
-        env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
-        getProductLabelProvider(env));
+      return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
+        new Request(new URL("/internal/product-labels", url), request));
     }
     if (path === "/api/campaign-hq/explain" && request.method === "POST") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
@@ -116,6 +114,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/sale-planner/context" && request.method === "GET")
       return plannerContext(env);
+    if (path === "/api/sale-planner/active" && request.method === "GET")
+      return activeSalePlan(request, env);
+    if (path === "/api/sale-planner/apply" && request.method === "POST")
+      return applySalePlan(request, env);
     if (path === "/api/sale-planner/interpret" && request.method === "POST") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
         return fail(429, "Vui lòng thử lại sau ít phút.");
@@ -149,14 +151,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
         !(await env.PM_LIMITER.limit({ key: "admin" })).success
       )
         return fail(429, "PM is busy. Try again in a minute.");
-      const context = { decisionToolsConnected: !!env.DATA_BACKEND_URL };
       if (!env.WORKSPACE)
         return fail(503, "Account storage is not configured.");
-      return savedChat(
-        request,
-        env,
-        context,
-        env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
+      return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
+        new Request(new URL('/internal/milo/chat',url),request),
       );
     }
     if (path === "/api/data-backend/status")
@@ -235,8 +233,8 @@ export default {
     let response: Response;
     try {
       response = await handle(request, env);
-    } catch {
-      response = fail(
+    } catch (error) {
+      response = workspaceQuotaFailure(error) ?? fail(
         503,
         "Service temporarily unavailable. Your saved workspace is retained.",
       );

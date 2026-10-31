@@ -5,6 +5,7 @@ import { SOURCE_DEFS, MAX_BYTES, inspect, makeSource, piiColumn } from "../src/s
 import type { ImportAnalysis, ImportTable } from "../src/studio/import-types";
 import { modelJSON, ModelRequestError, type StudioModelEnv } from "./model-json";
 import { fail } from "./auth";
+import { repairSource } from "./studio-repair";
 
 class ReplayArchive extends Error {}
 
@@ -77,7 +78,9 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv, rev
   const unknown: { file: string; columns: string[]; rows: Record<string, unknown>[] }[] = [];
   for (const file of files) {
     try {
-      const source = await makeSource(file.name, file.text, file.name);
+      let source = await makeSource(file.name, file.text, file.name);
+      const fixed = review ? await repairSource(source) : { source, repairs: [] };
+      source = fixed.source;
       // Escape archive separators without collapsing distinct paths into one table.
       if (source.kind === "general") source.name = file.name.replace(/%/g, "%25").replace(/\//g, "%2F");
       const parsed = inspect(source.name, source.text);
@@ -86,6 +89,7 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv, rev
         unknown.push({ file: file.name, columns: parsed.columns, rows: parsed.rows });
       }
       tables.push({ file: file.name, source, rowCount: parsed.rows.length,
+        ...(review ? { repairs: fixed.repairs } : {}),
         method: source.kind === "general" ? "general" : "recognized",
         columns: parsed.columns.map(column => ({ source: column, target: column })) });
     } catch {
@@ -101,7 +105,7 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv, rev
         { contracts: SOURCE_DEFS, files: unknown.map(({ file, columns }) => ({ file, columns })),
           reviewTables: tables.map(table => {
             const parsed = inspections.get(table.file)!;
-            return { file: table.file, kind: table.source.kind, columns: parsed.columns, rowCount: table.rowCount,
+            return { file: table.file, kind: table.source.kind, columns: parsed.columns, rowCount: table.rowCount, appliedRepairs: table.repairs,
               checks: parsed.issues.slice(0, 8).map(issue => ({ code: issue.code, column: issue.column })),
               sample: parsed.rows.slice(0, 2).map(row => Object.fromEntries(parsed.columns.slice(0, 12).map(column => [column, String(row[column] ?? "").slice(0, 80)]))) };
           }) },
@@ -125,12 +129,15 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv, rev
         throw Error("Model mapping would overwrite an existing column.");
       const columns = [...mapping.columns, ...remaining.map(column => ({ source: column, target: column }))];
       const rows = file.rows.map(row => Object.fromEntries(columns.map(c => [c.target, row[c.source] ?? ""])));
-      const source = await makeSource(def.file, Papa.unparse(rows), file.file);
+      const fixed = await repairSource(await makeSource(def.file, Papa.unparse(rows), file.file));
+      const source = fixed.source;
       if (source.kind !== mapping.kind) throw Error("Ambiguous model mapping.");
       const index = tables.findIndex(t => t.file === file.file);
-      tables[index] = { file: file.file, source, rowCount: rows.length, method: "model", columns };
+      tables[index] = { file: file.file, source, rowCount: rows.length, method: "model", columns, repairs: fixed.repairs };
     }
     for (const review of mappings.reviews) tables.find(table => table.file === review.file)!.review = review.issues;
+    for (const table of tables) table.remainingIssues = [...new Set(inspect(table.source.name, table.source.text).issues
+      .filter(issue => issue.level !== "info").map(issue => issue.message))].slice(0, 8);
   }
   return { tables, skipped, model: review && tables.length && env.OPENAI_API_KEY ? model ?? null : null };
 }

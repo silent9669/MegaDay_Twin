@@ -15,6 +15,7 @@ from app.api import (
     health,
     ingest,
     replay_archive,
+    sale_plans,
     scenarios,
     skus,
     system,
@@ -32,6 +33,7 @@ api_router.include_router(skus.router)
 api_router.include_router(campaigns.router)
 api_router.include_router(economics.router)
 api_router.include_router(scenarios.router)
+api_router.include_router(sale_plans.router)
 api_router.include_router(ingest.router)
 api_router.include_router(ai_api.router)
 api_router.include_router(decisions_api.router)

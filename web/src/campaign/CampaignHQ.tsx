@@ -36,7 +36,7 @@ export function CampaignHQ({ watch }: { watch: { context: CampaignContext | null
       const latest = await requestJSON<CampaignContext>("/api/v1/campaign-analysis/CD002");
       if (op !== operation.current) return;
       watch.acceptContext(latest);
-      if (!latest.goal) throw Error("Campaign chưa có mục tiêu được xác nhận. Mở phần mục tiêu để thiết lập.");
+      if (!latest.goal) throw Error("Campaign chưa có mục tiêu được áp dụng. Mở phần mục tiêu, xem trước và chọn Apply để áp dụng.");
       setBusy("Đang tính các phương án theo dữ liệu mới…");
       const next = await requestJSON<CampaignRun>("/api/v1/campaign-analysis/CD002/refresh", {
         method: "POST", body: JSON.stringify({ revision: latest.revision, goal_id: latest.goal.goal_id }),
@@ -84,7 +84,7 @@ export function CampaignHQ({ watch }: { watch: { context: CampaignContext | null
       <section className="campaign-card"><h2>Mục tiêu đang áp dụng</h2>{current?.goal ? <>
         <p><strong>{goalNames[current.goal.kind] ?? current.goal.kind}</strong> · Hạn {time(current.goal.deadline)}</p>
         <p>{current.goal.target_units != null && <>Chỉ tiêu: {units(current.goal.target_units)} sản phẩm · </>}Phiên bản {current.goal.version} · Xác nhận bởi {current.goal.confirmed_by}</p>
-      </> : <p>Chưa có mục tiêu được xác nhận. Kế thừa mục tiêu từ phần lập kế hoạch trước khi tính.</p>}
+      </> : <p>Chưa có mục tiêu được áp dụng. Mở phần lập kế hoạch, xem trước rồi chọn Apply. Bản xem trước chưa thay mục tiêu đang chạy.</p>}
         <Link to="/sale-planner">Xem / chỉnh mục tiêu →</Link>
       </section>
       <section className="campaign-card"><h2>Sản phẩm trong campaign</h2><p>Ngân sách ngày hiện tại: {money(current?.campaign.daily_budget_vnd)} · Chi ads đã ghi nhận hôm nay: {money(current?.campaign.spend_today_vnd)}</p>

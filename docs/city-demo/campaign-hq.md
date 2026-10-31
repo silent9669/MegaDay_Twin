@@ -1,12 +1,13 @@
 # Campaign HQ — CD002
 
-Built on main `13d298a`; the goal planner and contextual Milo are reused. Open
+Integrated with main `19864b9`; the shared Milo, new HQ and preview/apply goal planner are reused. Open
 `/campaign-hq`, or MegaDay HQ → **CD002 · Phân tích và đề xuất**.
 
 ## Flow
 
-1. Ingest seller sources into Python and confirm a campaign goal through the existing
-   sale planner. HQ never creates or edits that goal.
+1. Ingest seller sources into Python and explicitly **Apply** a campaign goal through
+   the sale planner. A preview is inactive and does not replace the running goal. CD002
+   analysis reads only the applied goal; it never creates or edits that goal.
 2. Open CD002. Overview shows campaign SKUs, reported ad spend, active goal and separate
    source timestamps. Sources saved only in Data Studio are not yet analytical inputs.
 3. **Cập nhật & đề xuất lại** reads the latest backend revision, verifies the same active
@@ -94,7 +95,8 @@ Python separately. This serves compiled public assets; Vite's development module
 are blocked by the production login gate and its CSP, which otherwise leaves the
 login page blank. Keep the production authentication policy unchanged.
 
-Deploy both Python and web. Existing backend migration 5 is sufficient; no new migration.
+Deploy both Python and web. Main now includes migration 6 for isolated sale-plan previews;
+normal backend startup applies it. The campaign/replay feature adds no further migration.
 Configure the same `DATA_BACKEND_URL` (including `/api/v1/`), `DATA_BACKEND_USER` and
 `DATA_BACKEND_ROLE` used by the planner. AI uses `OPENAI_MODEL_DECISION` or `OPENAI_MODEL`
 and the existing API key. No secrets are required to inspect the UI or run the tests.

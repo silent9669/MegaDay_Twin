@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent, type KeyboardEvent } from "react";
-export function usePanelResize(preferredWidth: number, minimumWidth: number) {
+export function usePanelResize(preferredWidth: number, minimumWidth: number, side: "right" | "left" = "right", reserve = 0) {
   const [viewport, setViewport] = useState(window.innerWidth);
   const [width, setWidth] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -9,12 +9,12 @@ export function usePanelResize(preferredWidth: number, minimumWidth: number) {
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
-  const maximum = Math.max(minimumWidth, viewport - 112);
+  const maximum = Math.max(minimumWidth, viewport - 112 - reserve);
   const clamp = (value: number) => Math.min(maximum, Math.max(minimumWidth, value));
   const currentWidth = expanded ? maximum : clamp(width ?? preferredWidth);
   return {
-    expanded, setExpanded,
-    style: viewport >= 900 ? { width: currentWidth, left: "auto" } : undefined,
+    expanded, setExpanded, viewport, width: currentWidth,
+    style: viewport >= 1024 ? { width: currentWidth, left: side === "left" ? 94 : "auto", right: side === "left" ? "auto" : 18 } : undefined,
     grip: {
       role: "separator" as const, tabIndex: 0,
       "aria-orientation": "vertical" as const,
@@ -29,12 +29,12 @@ export function usePanelResize(preferredWidth: number, minimumWidth: number) {
       onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
         if (!drag.current) return;
         setExpanded(false);
-        setWidth(clamp(drag.current.width + drag.current.x - event.clientX));
+        setWidth(clamp(drag.current.width + (side === "left" ? event.clientX - drag.current.x : drag.current.x - event.clientX)));
       },
       onPointerUp: () => { drag.current = null; },
       onLostPointerCapture: () => { drag.current = null; },
       onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
-        const next = event.key === "ArrowLeft" ? currentWidth + 32 : event.key === "ArrowRight" ? currentWidth - 32 : event.key === "Home" ? minimumWidth : event.key === "End" ? maximum : null;
+        const next = event.key === "ArrowLeft" ? currentWidth + (side === "left" ? -32 : 32) : event.key === "ArrowRight" ? currentWidth + (side === "left" ? 32 : -32) : event.key === "Home" ? minimumWidth : event.key === "End" ? maximum : null;
         if (next === null) return;
         event.preventDefault(); setExpanded(false); setWidth(clamp(next));
       },
