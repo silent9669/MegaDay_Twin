@@ -274,6 +274,16 @@ describe("label route boundaries", () => {
     ASSETS: { fetch: async () => new Response("static app") },
     SESSION_SECRET: secret, ADMIN_PASSWORD_HASH: "configured",
   };
+  it("serves the deployed shop baseline only after authentication", async () => {
+    const assets = vi.fn<(request: Request) => Promise<Response>>(async () => Response.json({ schema: "hackathon.sources.v1", files: [] }));
+    const env = { ...base, ASSETS: { fetch: assets } };
+    expect((await worker.fetch(new Request(origin + "/api/studio/shop"), env)).status).toBe(401);
+    expect((await worker.fetch(new Request(origin + "/shop-baseline.json"), env)).status).toBe(307);
+    expect(assets).not.toHaveBeenCalled();
+    const response = await worker.fetch(new Request(origin + "/api/studio/shop", { headers: { Cookie: cookie() } }), env);
+    expect(response.status).toBe(200);
+    expect(new URL(assets.mock.calls[0]![0].url).pathname).toBe("/shop-baseline.json");
+  });
   it("keeps the Python multipart contract and excludes general tables and derived labels", async () => {
     const files = await Promise.all([
       makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế,Demand label\nA,Cup,17,Normal", "upload"),

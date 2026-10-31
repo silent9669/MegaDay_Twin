@@ -29,6 +29,7 @@ Thumbs.db
 
 # Generated sanitized source fallback (built from this repo)
 web/server/repository-sources.json
+web/public/shop-baseline.json
 web/.dev.vars
 web/.wrangler/
 qa/runs/

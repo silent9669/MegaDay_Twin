@@ -21,7 +21,6 @@ import { useAccountDocument, requestJSON } from "./account";
 import {
   SOURCE_DEFS,
   makeSource,
-  selectUploads,
   validatePack,
   sourceKey, mergeSources, DEMAND_COLUMN,
   type Source,
@@ -54,6 +53,7 @@ export function DataStudio() {
     [dirty, setDirty] = useState(false),
     [saving, setSaving] = useState(false),
     [busy, setBusy] = useState(false),
+    [importingShop, setImportingShop] = useState(false),
     [message, setMessage] = useState(""),
     [saveError, setSaveError] = useState("");
   const [sourceParams, setSourceParams] = useSearchParams();
@@ -78,7 +78,6 @@ export function DataStudio() {
   const archive = useRef<ArchiveImportHandle>(null);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null),
-    folder = useRef<HTMLInputElement>(null),
     edit = useRef<HTMLDialogElement>(null);
   const latest = useRef({ draft, base, dirty });
   useEffect(() => {
@@ -153,13 +152,26 @@ export function DataStudio() {
   useEffect(() => {
     if (cell) edit.current?.showModal();
   }, [cell]);
-  const importFiles = async (list: FileList | null, isFolder = false) => {
+  const importShop = async () => {
+    if (busy || dirty || saving || conflict || !cloud.document) return;
+    setBusy(true); setImportingShop(true); setMessage(""); setSaveError("");
+    try {
+      const pack = await validatePack(await requestJSON<SourcePack>("/api/studio/shop"));
+      await saveCloud({ schema: "hackathon.sources.v1", files: mergeSources(files, pack.files) }, revision);
+      setDraft(null); setDirty(false);
+      setSelected(sourceKey(pack.files[0]!));
+      setPage(0); setQuery(""); setFocusRow(null); setTab("records");
+      setMessage(`${pack.files.length} shop tables loaded.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not load shop data.");
+    } finally { setBusy(false); setImportingShop(false); }
+  };
+  const importFiles = async (list: FileList | null) => {
     if (!list?.length || busy) return;
     setBusy(true);
     setMessage("");
     try {
-      let incoming = Array.from(list);
-      if (isFolder) incoming = selectUploads(incoming).map((i) => incoming[i]!);
+      const incoming = Array.from(list);
       if (incoming.length > 24)
         throw Error(`Selected ${incoming.length} files; choose at most 24 tables. Nothing was imported; existing sources are unchanged.`);
       const bytes = incoming.reduce((sum, f) => sum + f.size, 0);
@@ -210,7 +222,6 @@ export function DataStudio() {
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
-      if (folder.current) folder.current.value = "";
     }
   };
   const deleteTables = async (all = false) => {
@@ -284,6 +295,10 @@ export function DataStudio() {
               "Loading sources…"
             )}
           </span>
+          <button onClick={() => void importShop()} disabled={busy || dirty || saving || conflict || !cloud.document}>
+            <FolderOpen size={16} />
+            {importingShop ? "Importing shop…" : "Import shop folder"}
+          </button>
           <button onClick={exportPack} disabled={busy || !files.length}>
             <Download size={16} />
             Export pack
@@ -312,15 +327,6 @@ export function DataStudio() {
         hidden
         aria-label="Import source files"
         onChange={(e) => void importFiles(e.target.files)}
-      />
-      <input
-        type="file"
-        ref={folder}
-        multiple
-        hidden
-        aria-label="Import shop folder"
-        {...{ webkitdirectory: "" }}
-        onChange={(e) => void importFiles(e.target.files, true)}
       />
       {(message || cloud.error || saveError) && (
         <div className="studio-notice" role="status">
@@ -412,13 +418,6 @@ export function DataStudio() {
             );
           })}
           <div className="source-list-tools">
-            <button
-              onClick={() => folder.current?.click()}
-              disabled={busy || !files.length}
-            >
-              <FolderOpen size={16} />
-              Import shop folder
-            </button>
             <button onClick={() => void deleteTables(true)} disabled={busy || dirty || saving || conflict}>
               <Trash2 size={16} /> Delete all data
             </button>
