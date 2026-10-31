@@ -233,7 +233,9 @@ export function ScenarioWorksheet({
                   ],
                 }),
               },
-              "Explain this product comparison in English. Cite matching source values and distinguish them from edited inputs. Trace each result through its formula and explain the difference. Treat demand and ad spend as assumptions, not a forecast or an optimized recommendation.",
+              currentModel
+                ? "Explain this backend model comparison in English. Cite the scenario and source values, trace the simulated outcomes, and explain the continue/pause difference. Distinguish forecast estimates from observed data and allocated advertising spend from measured SKU advertising impact. Do not imply guaranteed results or an optimized recommendation."
+                : "Explain this product comparison in English. Cite matching source values and distinguish them from edited inputs. Trace each result through its formula and explain the difference. Treat demand and ad spend as assumptions, not a forecast or an optimized recommendation.",
             )
           }
         >
