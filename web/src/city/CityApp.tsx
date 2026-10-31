@@ -282,7 +282,7 @@ export function CityApp({ studio = false, campaignHQ = false }: { studio?: boole
               : "Commerce city"}
         </span>
         <div className="city-account">
-          <button className="city-appearance" aria-label="Thông báo Milo"
+          <button className="city-appearance" aria-label="Milo notifications"
             onClick={() => window.dispatchEvent(new Event("workspace:updates"))}>
             <Bell size={16} /><span>{assistant.unread ? assistant.unread : "Milo"}</span>
           </button>
@@ -468,7 +468,7 @@ export function CityApp({ studio = false, campaignHQ = false }: { studio?: boole
                     {district === "hq" ? (
                       <>
                         <div className="workspace-tabs">
-                          <Link to="/campaign-hq">CD002 · Phân tích và đề xuất <ArrowRight aria-hidden size={16} /></Link>
+                          <Link className="btn-secondary" to="/campaign-hq">CD002 · Analysis & recommendations <ArrowRight aria-hidden size={16} /></Link>
                         </div>
                         <HQWorkspace pack={sources.document?.data ?? null} revision={sources.document?.revision ?? 0} />
                       </>

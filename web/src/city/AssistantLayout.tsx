@@ -15,6 +15,7 @@ export function AssistantLayout() {
     [launcherAnchor, setLauncherAnchor] = useState<HTMLElement | null>(null);
   const location = useLocation();
   const [params, setParams] = useSearchParams();
+  const campaignId = params.get("campaign") ?? (location.pathname === "/campaign-hq" ? "CD002" : undefined);
   const open = localOpen || params.get("assistant") === "open";
   const setOpen = useCallback(
     (value: boolean) => {
@@ -62,9 +63,9 @@ export function AssistantLayout() {
             location.pathname === "/mock-data"
               ? "data-studio"
               : location.pathname.slice(1),
-          ...(selectedSku.success ? { sku: selectedSku.data } : {}),
-          ...(params.get("campaign")
-            ? { campaignId: params.get("campaign")! }
+          ...(selectedSku.success && !campaignId ? { sku: selectedSku.data } : {}),
+          ...(campaignId
+            ? { campaignId }
             : {}),
         }}
         open={open}

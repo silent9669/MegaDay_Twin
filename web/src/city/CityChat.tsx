@@ -138,7 +138,7 @@ export function CityChat({
   const boundContext = conversation?.context ?? selectedContext;
   const boundScope = boundContext ? draftScope(boundContext) : null;
   const openCurrentChat = useCallback(() => {
-    if (screenContext?.sku && boundScope !== draftScope(screenContext)) window.dispatchEvent(new CustomEvent("workspace:milo-sku", { detail: screenContext }));
+    if ((screenContext?.sku || screenContext?.campaignId) && boundScope !== draftScope(screenContext)) window.dispatchEvent(new CustomEvent("workspace:milo-sku", { detail: screenContext }));
     else { setOpen(true); setTab("chat"); setHistory(false); }
   }, [screenContext, boundScope, setOpen]);
   useEffect(() => {

@@ -128,6 +128,21 @@ describe("account chat", () => {
     act(()=>openMiloForSku("SKU-A"));
     expect(screen.getByRole("textbox",{name:"Message Milo"})).toHaveValue("Draft for A");
   });
+  it("opens the current campaign without inheriting the previously tracked SKU", async () => {
+    const view = render(<CityChat context={{ screen: "hq", sku: "SKU-A" }} />);
+    await open();
+    fireEvent.change(screen.getByRole("textbox", { name: "Message Milo" }), { target: { value: "Draft for A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close chat" }));
+    view.rerender(<CityChat context={{ screen: "campaign-hq", campaignId: "C1" }} />);
+    act(() => window.dispatchEvent(new Event("workspace:chat")));
+    expect(screen.getByRole("textbox", { name: "Message Milo" })).toHaveValue("");
+    fireEvent.change(screen.getByRole("textbox", { name: "Message Milo" }), { target: { value: "Review campaign" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await screen.findByText("source timestamps");
+    expect(document.data.sessions[0]?.context).toEqual({ screen: "campaign-hq", campaignId: "C1" });
+    act(() => openMiloForSku("SKU-A"));
+    expect(screen.getByRole("textbox", { name: "Message Milo" })).toHaveValue("Draft for A");
+  });
   it("reviews a campaign-only Milo draft without inventing a SKU and invalidates it on edits", async () => {
     replyCampaignPlan = { campaignId: "C1", name: "Sale test", interpretation: { method: "ai", notices: [], draft: {
       text: "Tối ưu lợi nhuận, ngân sách 2 triệu", kind: "profit", targetUnits: null, maxSpendVnd: 2000000,

@@ -1546,6 +1546,7 @@
 @media(max-width:600px) {
   .city-appearance {padding:0;}
   .city-appearance span {display:none;}
+  .city-topbar .city-demo-badge {display:none;}
 }
 [data-city-appearance="night"] :is(.city-app, .city-sheet) {--surface:#182a2b;--surface-2:#263e3e;--accent:#9ccfb5;}
 [data-city-appearance="night"] .district-workspace tr:hover {background:var(--city-soft);}

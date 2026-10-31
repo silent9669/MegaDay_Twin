@@ -22,6 +22,7 @@ for (const [name, engine] of Object.entries({chromium, webkit})) {
       return route.fulfill({json:{revision:1,updatedAt:'2026-10-31T00:00:00Z',data:documents[key]}});
     });
     await page.route('**/api/pm/models',route=>route.fulfill({json:{configured:true,models:['qa-model'],defaultModel:'qa-model'}}));
+    await page.route('**/api/v1/campaign-analysis/CD002',route=>route.fulfill({json:{campaign:{campaign_id:'CD002'},goal:null,revision:'qa',dataAsOf:null,sources:{},canRun:false,history:[]}}));
     let requests=0;
     await page.route('**/api/pm/chat',route=>{
       requests++;const body=route.request().postDataJSON(),session=documents.chats.sessions.find(s=>s.id===body.sessionId);
