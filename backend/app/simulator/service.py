@@ -6,7 +6,8 @@
 ``scenarios`` / ``scenario_results`` / ``recommendations``.
 
 Results are cached in memory by ``(campaign_id, forecast_ids, estimate_id, param_version,
-goal_id, as_of, start, horizon, actions, overrides, samples, seed, session_id)`` (05 §5.5, 06 §3);
+goal_id, goal_active, as_of, start, horizon, actions, overrides, samples, seed, session_id)``
+(05 §5.5, 06 §3);
 a hit returns the stored output with ``cache_hit = True`` and writes nothing.
 
 A **what-if** run (:func:`is_what_if`: ``param_overrides``, ``session_id`` or an action list
@@ -81,6 +82,7 @@ def _key(inp: SimInputs, req: SimRequest, actions: Sequence[ActionSpec]) -> str:
             tuple(sorted(inp.params.versions.items())),
             inp.goal.goal_id,
             inp.goal.version,
+            inp.goal.active,  # deactivation changes recommendation semantics without a version bump
             to_utc(inp.data_as_of).isoformat() if inp.data_as_of else None,
             to_utc(inp.start).isoformat(),
             inp.T,
@@ -140,7 +142,8 @@ def run_simulation(
         return out
     default = default_action_list(inp)
     actions = list(req.actions) if req.actions else default
-    what_if = is_what_if(req, actions, default)
+    # Historical and preview goals must never replace the campaign's active recommendation.
+    what_if = not goal.active or is_what_if(req, actions, default)
     key = _key(inp, req, actions)
     if use_cache:
         hit = engine.cache_get(key)

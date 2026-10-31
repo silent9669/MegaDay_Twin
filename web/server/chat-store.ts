@@ -65,7 +65,7 @@ export async function savedChat(
     value?.sku ?? null, value?.campaignId ?? null, value?.scenarioId ?? null,
   ]);
   if (requestedContext && scope(requestedContext) !== scope(conversation.context))
-    return fail(409, "Ngữ cảnh đã thay đổi. Mở cuộc trò chuyện của sản phẩm đang chọn rồi thử lại.");
+    return fail(409, "Ngữ cảnh đã thay đổi. Mở cuộc trò chuyện đúng chiến dịch hoặc sản phẩm đang chọn rồi thử lại.");
   const originalMessages = JSON.stringify(conversation.messages);
   const current = (s: ChatSession) =>
     s.messages.at(-1)?.id === body.lastMessageId &&
@@ -82,10 +82,14 @@ export async function savedChat(
   const [facts, interpretation] = await Promise.all([
     buildMiloContext(selection, env, storage, request.url),
     interpretMiloGoal(conversation.messages, { ...env, OPENAI_MODEL: conversation.model }, undefined,
-      { discoverGoal: !!selection.sku }),
+      { discoverGoal: !!selection.sku || !!selection.campaignId }),
   ]);
   const plan = interpretation && facts.skuContext
     ? { interpretation, context: facts.skuContext }
+    : undefined;
+  const campaignPlan = interpretation && !selection.sku && selection.campaignId &&
+    facts.campaign?.campaign_id === selection.campaignId
+    ? { campaignId: facts.campaign.campaign_id, name: facts.campaign.name, interpretation }
     : undefined;
   const response = await pmChat(
     new Request(request.url, {
@@ -102,7 +106,7 @@ export async function savedChat(
     {
       workspaceMetadata: context, ...facts,
       goal: interpretation ?? null,
-      canReviewGoal: !!plan,
+      canReviewGoal: !!plan || !!campaignPlan,
       ...(change ? { change } : {}),
     },
   );
@@ -141,7 +145,7 @@ export async function savedChat(
       }),
     );
     if (saved.ok)
-      return Response.json({ ...result, plan, document: await saved.json() });
+      return Response.json({ ...result, plan, campaignPlan, document: await saved.json() });
     if (saved.status !== 409)
       return fail(
         503,

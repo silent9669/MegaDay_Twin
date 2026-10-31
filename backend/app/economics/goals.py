@@ -109,6 +109,7 @@ def create_goal(
     target_units: int | None = None,
     params: dict[str, Any] | None = None,
     goal_id: str | None = None,
+    active: bool = True,
 ) -> Goal:
     validate_target_units(target_units, required=kind == "sell_target")
     now = utcnow()
@@ -122,13 +123,14 @@ def create_goal(
         params=params or {},
         confirmed_by=confirmed_by,
         created_at=now,
+        active=active,
     )
     _validate(goal)
     validate_focus_sku(conn, goal.scope, goal.scope_id, goal.params)
     conn.execute(
         "INSERT INTO goals (goal_id, scope, scope_id, kind, deadline, target_units, params,"
         " confirmed_by, created_at, active, version, valid_from) VALUES"
-        " (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, 1, ?)",
+        " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
         [
             goal.goal_id,
             goal.scope,
@@ -139,6 +141,7 @@ def create_goal(
             json.dumps(goal.params),
             goal.confirmed_by,
             now,
+            active,
             now,
         ],
     )

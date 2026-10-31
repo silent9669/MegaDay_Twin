@@ -1,15 +1,19 @@
 import { z } from "zod";
 import { goalDraftSchema } from "../src/planner/goal-contract";
 import type { PlannerContext, PlannerRunError } from "../src/planner/planner-api";
-import { hashText } from "../src/studio/sources";
 import { assistantSkuSchema } from "../src/planner/assistant-contract";
 
 export type PlannerEnv = { DATA_BACKEND_URL?: string; DATA_BACKEND_USER?: string; DATA_BACKEND_ROLE?: string };
-const constraints = ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"];
+const constraints = ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return", "preview_apply"];
+const identifier = z.string().regex(/^[\w.-]{1,150}$/);
+const revisionSchema = z.strictObject({ goal_id: identifier, version: z.number().int().positive() });
+const goalSchema = z.object({ goal_id: identifier, scope: z.literal("campaign"), scope_id: identifier,
+  kind: z.string(), deadline: z.string(), target_units: z.number().nullable(),
+  params: z.record(z.string(), z.unknown()), active: z.boolean(), version: z.number().int(), label: z.string().optional() });
 const confirmedSchema = z.object({
   campaignId: z.string().regex(/^[\w.-]{1,150}$/), draft: goalDraftSchema,
   confirmed: z.literal(true), acknowledgedUnresolved: z.boolean(),
-  goalId: z.string().regex(/^[\w.-]{1,150}$/).optional(),
+  expectedGoal: revisionSchema.nullable(),
   focusSku: assistantSkuSchema.optional(),
 }).strict();
 export class BackendFailure extends Error {
@@ -48,16 +52,19 @@ function supportsPlanner(result: Record<string, unknown>) {
 export async function plannerContext(env: PlannerEnv): Promise<Response> {
   const api = plannerBackend(env);
   const context: PlannerContext = {
-    backendConfigured: !!api, canCreateGoals: false, referenceTime: new Date().toISOString(), dataAsOf: null, campaigns: [],
+    backendConfigured: !!api, canCreateGoals: false, canPreview: false, canApply: false, referenceTime: new Date().toISOString(), dataAsOf: null, campaigns: [],
     notice: api ? null : "Backend mô phỏng chưa kết nối. Bạn vẫn có thể soạn và chỉnh mục tiêu; chưa thể tính phương án từ dữ liệu thật.",
   };
   if (api) {
     try {
       const [capability, me] = await Promise.all([api("goal-planner/capabilities"), api("me")]);
       if (!supportsPlanner(capability)) throw new BackendFailure(409, "BACKEND_UPGRADE_REQUIRED", "Backend cần cập nhật để áp dụng đầy đủ ràng buộc mục tiêu.");
-      context.canCreateGoals = (me.data as { can_edit_goals?: boolean; can_run_scenarios?: boolean } | undefined)?.can_edit_goals === true &&
-        (me.data as { can_run_scenarios?: boolean } | undefined)?.can_run_scenarios === true;
-      if (!context.canCreateGoals) context.notice = "Tài khoản backend cần quyền đặt mục tiêu và chạy mô phỏng (lead).";
+      const permissions = me.data as { can_edit_goals?: boolean; can_run_scenarios?: boolean } | undefined;
+      context.canPreview = permissions?.can_run_scenarios === true;
+      context.canApply = permissions?.can_edit_goals === true;
+      context.canCreateGoals = context.canApply;
+      if (!context.canPreview) context.notice = "Tài khoản backend chưa có quyền mô phỏng.";
+      else if (!context.canApply) context.notice = "Bạn có thể mô phỏng thử; cần quyền lead để áp dụng mục tiêu.";
       let cursor: string | null = null;
       for (let page = 0; page < 20; page++) {
         const result = await api(`campaigns?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
@@ -70,6 +77,7 @@ export async function plannerContext(env: PlannerEnv): Promise<Response> {
       }
     } catch (error) {
       context.canCreateGoals = false;
+      context.canPreview = false; context.canApply = false;
       context.notice = error instanceof BackendFailure
         ? error.status === 404 ? "Backend cần cập nhật tính năng mục tiêu sale trước khi chạy." : error.message
         : "Không đọc được danh sách chiến dịch từ backend.";
@@ -78,10 +86,10 @@ export async function plannerContext(env: PlannerEnv): Promise<Response> {
   return Response.json(context, { headers: { "Cache-Control": "no-store" } });
 }
 export async function runSalePlan(request: Request, env: PlannerEnv): Promise<Response> {
-  let goalId: string | null = null;
+  let previewId: string | null = null;
   let stage: PlannerRunError["stage"] = "validation";
   const failure = (status: number, code: string, message: string, details?: Record<string, unknown>) =>
-    Response.json({ error: { code, message, details }, goalId, stage } satisfies PlannerRunError, { status });
+    Response.json({ error: { code, message, details }, goalId: null, previewId, stage } satisfies PlannerRunError, { status });
   try {
     const raw = await request.text();
     if (raw.length > 24000) return failure(413, "TOO_LARGE", "Mục tiêu quá dài.");
@@ -118,11 +126,10 @@ export async function runSalePlan(request: Request, env: PlannerEnv): Promise<Re
         return failure(422, "SKU_CAMPAIGN_MISMATCH", "SKU đã chọn không thuộc chiến dịch này. Hãy tải lại dữ liệu và chọn đúng chiến dịch.");
     }
     const me = (await api("me")).data as { can_edit_goals?: boolean; can_run_scenarios?: boolean } | undefined;
-    if (!me?.can_edit_goals || !me.can_run_scenarios)
-      return failure(403, "FORBIDDEN", "Tài khoản backend chưa có quyền đặt mục tiêu và chạy mô phỏng.");
-    const signature = await hashText(JSON.stringify({ campaignId, draft, ...(focusSku ? { focusSku } : {}) }));
+    if (!me?.can_run_scenarios)
+      return failure(403, "FORBIDDEN", "Tài khoản backend chưa có quyền mô phỏng thử.");
     const params: Record<string, unknown> = {
-      planner_request_hash: signature, planner_source_text: draft.text,
+      planner_source_text: draft.text,
       planner_excluded_requirements: draft.unresolved, planner_start: draft.start,
     };
     if (focusSku) params.focus_sku = focusSku;
@@ -130,53 +137,101 @@ export async function runSalePlan(request: Request, env: PlannerEnv): Promise<Re
     if (draft.maxLossVnd !== null) params.max_loss_vnd = draft.maxLossVnd;
     if (draft.sellTargetProbability !== null) params.sell_target_prob = draft.sellTargetProbability;
     if (draft.minMarginalReturn !== null) params.min_marginal_return = draft.minMarginalReturn;
-    const matches = (goal: Record<string, unknown>) => {
-      const stored = goal.params as Record<string, unknown> | undefined;
-      return goal.scope === "campaign" && goal.scope_id === campaignId && goal.active === true &&
-        goal.kind === draft.kind && goal.target_units === draft.targetUnits &&
-        typeof goal.deadline === "string" && Date.parse(goal.deadline) === end &&
-        stored?.planner_request_hash === signature && stored?.focus_sku === params.focus_sku && constraints.every((key) => stored?.[key] === params[key]);
-    };
-    stage = "goal";
-    if (parsed.data.goalId) {
-      const existing = (await api(`goals/${encodeURIComponent(parsed.data.goalId)}`)).data as Record<string, unknown>;
-      if (!matches(existing))
-        return failure(409, "GOAL_CHANGED", "Mục tiêu đã thay đổi hoặc không khớp bản xác nhận. Hãy xem lại và tạo mục tiêu mới.");
-      goalId = parsed.data.goalId;
-    } else {
-      // Recover a saved goal when an earlier response was lost; never blindly create on retry.
-      const goals = await api(`goals?scope=campaign&scope_id=${encodeURIComponent(campaignId)}&active=true&limit=200`);
-      const previous = (goals.data as Record<string, unknown>[]).find(matches);
-      if (previous) goalId = z.string().min(1).parse(previous.goal_id);
-      else {
-        const saved = await api("goals", { scope: "campaign", scope_id: campaignId, kind: draft.kind,
-          deadline: draft.deadline, target_units: draft.targetUnits, params });
-        goalId = z.string().min(1).parse((saved.data as { goal_id?: unknown } | undefined)?.goal_id);
-      }
-    }
-    stage = "simulation";
-    const scenario = await api("scenarios/run", { campaign_id: campaignId, goal_id: goalId, start: draft.start,
-      horizon_hours: horizon, samples: 1000, seed: 20261111 });
+    stage = "preview";
+    // The backend owns inactive draft storage, constraint inheritance and CAS checks.
+    // This gateway must never POST /goals or run a standard (active) recommendation.
+    const preview = await api("sale-plans/preview", { campaign_id: campaignId,
+      goal: { kind: draft.kind, deadline: draft.deadline, target_units: draft.targetUnits, params },
+      expected_goal: parsed.data.expectedGoal, ...(focusSku ? { focus_sku: focusSku } : {}),
+      start: draft.start, horizon_hours: horizon, samples: 1000, seed: 20261111 });
+    const saved = z.object({ preview_id: identifier, base_goal: goalSchema.nullable(), effective_goal: goalSchema,
+      scenario: z.record(z.string(), z.unknown()), changes: z.array(z.object({ field: z.string(), before: z.unknown(), after: z.unknown() })),
+      notices: z.array(z.string()), can_apply: z.boolean(), applied_goal_id: identifier.nullable() }).parse(preview.data);
+    previewId = saved.preview_id;
+    const goalId = saved.effective_goal.goal_id;
+    if (saved.effective_goal.scope_id !== campaignId || saved.effective_goal.active ||
+      (saved.effective_goal.params.focus_sku ?? null) !== (focusSku ?? null))
+      return failure(502, "PREVIEW_MISMATCH", "Bản mô phỏng không khớp phạm vi đã chọn. Mục tiêu đang áp dụng không bị thay đổi.");
+    const expected = parsed.data.expectedGoal;
+    if ((saved.base_goal && (!saved.base_goal.active || saved.base_goal.scope_id !== campaignId)) ||
+      (saved.base_goal?.goal_id ?? null) !== (expected?.goal_id ?? null) ||
+      (saved.base_goal?.version ?? null) !== (expected?.version ?? null))
+      return failure(502, "PREVIEW_BASE_MISMATCH", "Bản mô phỏng không khớp mục tiêu bạn đã xem. Hãy tải lại kế hoạch.");
+    const scenario = { data: saved.scenario, meta: preview.meta };
     const actual = z.object({ data: z.object({ scenario_id: z.string().min(1),
       request: z.object({ campaign_id: z.string(), goal_id: z.string() }), results: z.array(z.unknown()),
     }) }).parse(scenario);
     if (actual.data.request.campaign_id !== campaignId || actual.data.request.goal_id !== goalId)
       return failure(502, "SCENARIO_MISMATCH", "Kết quả không khớp mục tiêu đã xác nhận. Không sử dụng kết quả này.");
-    if (focusSku) {
+    if (saved.scenario.recommendation != null && !z.object({ active: z.literal(false), what_if: z.literal(true) }).safeParse(saved.scenario.recommendation).success)
+      return failure(502, "PREVIEW_RECOMMENDATION_MISMATCH", "Backend chưa xác nhận đây là đề xuất mô phỏng thử. Hãy tải lại kế hoạch hiện tại trước khi tiếp tục.");
+    {
       const traced = z.object({ data: z.object({ input_hash: z.string().trim().min(1),
         calculation_trace: z.object({ version: z.literal(1), input_hash: z.string().trim().min(1),
-          campaign_id: z.string(), focus_sku: z.string() }),
+          campaign_id: z.string(), focus_sku: z.string().nullable() }),
       }) }).safeParse(scenario);
-      if (!traced.success || traced.data.data.calculation_trace.focus_sku !== focusSku ||
+      if (!traced.success || traced.data.data.calculation_trace.focus_sku !== (focusSku ?? null) ||
           traced.data.data.calculation_trace.campaign_id !== campaignId ||
           traced.data.data.calculation_trace.input_hash !== traced.data.data.input_hash)
-        return failure(502, "CALCULATION_TRACE_MISMATCH", "Dấu vết tính toán thiếu hoặc không khớp SKU, chiến dịch và dữ liệu của lần tính. Không sử dụng kết quả này; mục tiêu đã lưu để thử lại.");
+        return failure(502, "CALCULATION_TRACE_MISMATCH", "Dấu vết tính toán thiếu hoặc không khớp lần mô phỏng. Mục tiêu đang áp dụng không bị thay đổi.");
     }
-    return Response.json({ goalId, scenario }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ previewId, goalId, scenario, baseGoal: saved.base_goal, effectiveGoal: saved.effective_goal,
+      changes: saved.changes, notices: saved.notices, canApply: saved.can_apply && me.can_edit_goals === true,
+      appliedGoalId: saved.applied_goal_id }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof BackendFailure) return failure(error.status, error.code, error.message, error.details);
     return failure(stage === "validation" ? 422 : 502, "PLANNER_ERROR", stage === "validation"
       ? "Yêu cầu chưa hợp lệ. Hãy kiểm tra lại mục tiêu."
-      : "Không xác nhận được kết quả từ backend. Mục tiêu có thể đã lưu; thử lại với cùng nội dung để khôi phục.");
+      : "Không xác nhận được bản mô phỏng từ backend. Mục tiêu đang áp dụng không bị thay đổi; bạn có thể mô phỏng lại.");
+  }
+}
+
+function plannerFailure(error: unknown, stage: "validation" | "apply") {
+  const known = error instanceof BackendFailure;
+  return Response.json({ error: { code: known ? error.code : "INVALID_PLAN",
+    message: known ? error.message : "Yêu cầu hoặc phản hồi kế hoạch chưa hợp lệ.", ...(known && error.details ? { details: error.details } : {}) },
+    goalId: null, previewId: null, stage }, { status: known ? error.status : 422 });
+}
+export async function activeSalePlan(request: Request, env: PlannerEnv): Promise<Response> {
+  try {
+    const campaignId = identifier.parse(new URL(request.url).searchParams.get("campaignId"));
+    const api = plannerBackend(env);
+    if (!api) throw new BackendFailure(503, "BACKEND_UNCONFIGURED", "Backend chưa kết nối.");
+    if (!supportsPlanner(await api("goal-planner/capabilities")))
+      throw new BackendFailure(409, "BACKEND_UPGRADE_REQUIRED", "Backend cần hỗ trợ mô phỏng thử và áp dụng riêng.");
+    const result = await api(`sale-plans/context?campaign_id=${encodeURIComponent(campaignId)}`);
+    const data = z.object({ campaign_id: identifier, active_goal: goalSchema.nullable(), base_goal: revisionSchema.nullable() }).parse(result.data);
+    if (data.campaign_id !== campaignId || (data.active_goal && (!data.active_goal.active || data.active_goal.scope_id !== campaignId)) ||
+      (data.active_goal?.goal_id ?? null) !== (data.base_goal?.goal_id ?? null) ||
+      (data.active_goal?.version ?? null) !== (data.base_goal?.version ?? null))
+      throw new BackendFailure(502, "GOAL_CONTEXT_MISMATCH", "Mục tiêu trả về không khớp chiến dịch. Hãy tải lại.");
+    return Response.json({ campaignId, activeGoal: data.active_goal, baseGoal: data.base_goal }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) { return plannerFailure(error, "validation"); }
+}
+export async function applySalePlan(request: Request, env: PlannerEnv): Promise<Response> {
+  let previewId: string | null = null;
+  let applying = false;
+  try {
+    const raw = await request.text();
+    if (raw.length > 3000) throw new BackendFailure(413, "TOO_LARGE", "Yêu cầu áp dụng quá dài.");
+    const body = z.strictObject({ previewId: identifier, confirmed: z.literal(true), expectedGoal: revisionSchema.nullable() }).parse(JSON.parse(raw));
+    previewId = body.previewId;
+    const api = plannerBackend(env);
+    if (!api) throw new BackendFailure(503, "BACKEND_UNCONFIGURED", "Backend chưa kết nối.");
+    if (!supportsPlanner(await api("goal-planner/capabilities")))
+      throw new BackendFailure(409, "BACKEND_UPGRADE_REQUIRED", "Backend cần hỗ trợ áp dụng bản mô phỏng có kiểm tra phiên bản.");
+    const me = (await api("me")).data as { can_edit_goals?: boolean } | undefined;
+    if (!me?.can_edit_goals) throw new BackendFailure(403, "FORBIDDEN", "Cần quyền lead để áp dụng mục tiêu.");
+    applying = true;
+    const result = await api(`sale-plans/${encodeURIComponent(body.previewId)}/apply`, { confirmed: true, expected_goal: body.expectedGoal });
+    const data = z.object({ preview_id: identifier, goal: goalSchema, already_applied: z.boolean() }).parse(result.data);
+    if (data.preview_id !== body.previewId || !data.goal.active)
+      throw new BackendFailure(502, "APPLY_RESPONSE_MISMATCH", "Chưa xác nhận được kết quả áp dụng. Hãy tải lại mục tiêu hiện tại trước khi tiếp tục.");
+    return Response.json({ previewId: data.preview_id, goal: data.goal, alreadyApplied: data.already_applied }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if (applying && (!(error instanceof BackendFailure) || error.status >= 500))
+      return Response.json({ error: { code: "APPLY_OUTCOME_UNKNOWN", message: "Chưa xác nhận được kết quả áp dụng. Hãy tải lại mục tiêu hiện tại hoặc thử lại cùng bản mô phỏng; không tạo yêu cầu mới." },
+        goalId: null, previewId, stage: "apply" }, { status: 502 });
+    return plannerFailure(error, "apply");
   }
 }

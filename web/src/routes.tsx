@@ -1,4 +1,5 @@
 import { Navigate } from "react-router";
+import { LegacySkuPlanning } from "./planner/LegacySkuPlanning";
 import type { RouteObject } from "react-router";
 import { CityApp } from "./city/CityApp";
 import { Login } from "./city/Login";
@@ -19,7 +20,7 @@ export const routes: RouteObject[] = [
   { path: "/city-demo", element: <CityApp /> },
   { path: "/mock-data", element: <CityApp studio /> },
   { path: "/sale-planner", element: <CityApp planner /> },
-  { path: "/sku-assistant", element: <CityApp skuAssistant /> },
+  { path: "/sku-assistant", element: <LegacySkuPlanning /> },
   { path: "/login", element: <Login /> },
   {
     element: <AppShell />,

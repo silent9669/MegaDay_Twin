@@ -73,6 +73,15 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         "CREATE TABLE IF NOT EXISTS scenario_calculation_traces ("
         " scenario_id VARCHAR PRIMARY KEY, trace JSON NOT NULL, results JSON NOT NULL)",
     ),
+    (
+        6,
+        "durable sale plan previews and explicit goal activation",
+        "CREATE TABLE IF NOT EXISTS sale_plan_previews ("
+        " preview_id VARCHAR PRIMARY KEY, campaign_id VARCHAR NOT NULL,"
+        " goal_id VARCHAR NOT NULL, scenario_id VARCHAR NOT NULL,"
+        " snapshot JSON NOT NULL, created_at TIMESTAMPTZ NOT NULL,"
+        " applied_goal_id VARCHAR, applied_at TIMESTAMPTZ)",
+    ),
 ]
 
 _TABLE_RE = re.compile(r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)", re.IGNORECASE)

@@ -43,8 +43,7 @@ import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
-import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
-import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
+import { SalePlanningWorkspace } from "../planner/SalePlanningWorkspace";
 import { CityChat } from "./CityChat";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import type { createCity, District, WorldState } from "./world";
@@ -277,7 +276,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
         </Link>
         <span className="city-route">
           /{" "}
-          {skuAssistant ? "Trợ lý theo SKU" : planner ? "Mục tiêu buổi sale" : studio
+          {skuAssistant || planner ? "Lập kế hoạch sale" : studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
@@ -325,13 +324,9 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
           ))}
         </div>
         <div className="city-nav-tools">
-          <Link to="/sku-assistant" title="Trợ lý theo SKU" aria-label="Trợ lý theo SKU" aria-current={skuAssistant ? "page" : undefined}>
-            <MessageCircle />
-            <span>Trợ lý theo SKU</span>
-          </Link>
-          <Link to="/sale-planner" title="Mục tiêu buổi sale" aria-label="Mục tiêu buổi sale" aria-current={planner ? "page" : undefined}>
+          <Link to="/sale-planner" title="Lập kế hoạch sale" aria-label="Lập kế hoạch sale" aria-current={planner || skuAssistant ? "page" : undefined}>
             <Target />
-            <span>Mục tiêu buổi sale</span>
+            <span>Lập kế hoạch sale</span>
           </Link>
           <Link
             to="/mock-data"
@@ -387,7 +382,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
       </nav>
       {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
-        {skuAssistant ? <SkuGoalAssistant /> : planner ? <SaleGoalPlanner /> : studio ? (
+        {skuAssistant || planner ? <SalePlanningWorkspace /> : studio ? (
           <DataStudio />
         ) : (
           <>
@@ -524,8 +519,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
                     {district === "hq" ? (
                       <>
                         <div className="workspace-tabs">
-                          <Link to="/sale-planner">Mục tiêu buổi sale <ArrowRight aria-hidden size={16} /></Link>
-                          <Link to="/sku-assistant">Trao đổi mục tiêu với Milo <ArrowRight aria-hidden size={16} /></Link>
+                          <Link to="/sale-planner">Lập kế hoạch sale <ArrowRight aria-hidden size={16} /></Link>
                         </div>
                         <SourceWorkspace pack={sources.document?.data ?? null} district="hq" />
                       </>
@@ -627,7 +621,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
         )}
       </main>
       <footer className="city-footer">
-        <span>{planner || skuAssistant ? "Mục tiêu được xác nhận bởi người dùng · Mô phỏng từ backend" : "Sandbox data · Motion illustrates observations"}</span>
+        <span>{planner || skuAssistant ? "Mô phỏng thử · Chỉ áp dụng khi bạn xác nhận riêng" : "Sandbox data · Motion illustrates observations"}</span>
         <span>
           {sources.document
             ? `Source revision ${sources.document.revision}`

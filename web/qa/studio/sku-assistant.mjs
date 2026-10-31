@@ -54,9 +54,13 @@ try {
     throw Error(`Unexpected legacy assistant mutation: ${url}`);
   });
   await context.route('**/api/sale-planner/**', (route) => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { backendConfigured: true, canCreateGoals: true, campaigns, dataAsOf: timestamp, referenceTime: timestamp, notice: null } });
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/active')) return route.fulfill({ json: { campaignId: url.searchParams.get('campaignId'), activeGoal: null, baseGoal: null } });
+    if (route.request().method() === 'GET') return route.fulfill({ json: { backendConfigured: true, canCreateGoals: true, canPreview: true, canApply: true, campaigns, dataAsOf: timestamp, referenceTime: timestamp, notice: null } });
     const body = route.request().postDataJSON(); runs.push(body);
-    return route.fulfill({ json: { goalId: 'goal-qa', scenario: { data: {
+    return route.fulfill({ json: { previewId: 'preview-qa', goalId: 'goal-qa', baseGoal: null,
+      effectiveGoal: { goal_id: 'goal-qa', scope: 'campaign', scope_id: body.campaignId, kind: draft.kind, deadline: draft.deadline, target_units: 100, params: { focus_sku: 'SKU1', max_spend_vnd: 2000000 }, active: false, version: 1 },
+      changes: [], notices: ['Chưa đạt mục tiêu SKU, chưa thể áp dụng.'], canApply: false, appliedGoalId: null, scenario: { data: {
       scenario_id: 'scenario-qa', blocked: false, cache_hit: false, input_hash: trace.input_hash,
       request: { campaign_id: body.campaignId, goal_id: 'goal-qa', start: draft.start, horizon_hours: 12, samples: 1000, seed: 123 }, recommendation: null,
       results: [{ key: 'continue', action: { kind: 'continue' }, feasible: true, goal_eligible: false, violations: [], objective: dist(20000), contribution: dist(50000), spend: dist(30000), units_sold: dist(103), goal_units_sold: dist(3), goal_sku: 'SKU1', leftover_units: dist(0), leftover_value: dist(0), p_target: 0 }], calculation_trace: trace,
@@ -67,6 +71,8 @@ try {
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/sku-assistant?sku=SKU1`);
   await page.getByRole('heading', { name: 'Bình giữ nhiệt QA', exact: true }).waitFor();
+  assert.equal(new URL(page.url()).pathname, '/sale-planner');
+  assert.equal(new URL(page.url()).searchParams.get('sku'), 'SKU1');
   assert.equal(runs.length, 0);
   await page.getByLabel('Message Milo', { exact: true }).fill('Bán 100 sản phẩm, ngân sách 2 triệu.');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
@@ -82,11 +88,13 @@ try {
   assert.equal(await campaign.inputValue(), '', 'Multiple campaign memberships must never auto-select');
   assert.equal(runs.length, 0);
   await campaign.selectOption('CD1');
-  await page.getByRole('checkbox', { name: /Tôi xác nhận các thông số trên/ }).check();
-  await page.getByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng', exact: true }).click();
+  await page.getByRole('checkbox', { name: /Tôi xác nhận các thông số để mô phỏng thử/ }).check();
+  await page.getByRole('button', { name: 'Mô phỏng thử', exact: true }).click();
   await page.getByRole('heading', { name: 'Phương án cho Chiến dịch QA' }).waitFor();
   assert.equal(runs[0].focusSku, 'SKU1');
   assert.equal(runs[0].confirmed, true);
+  assert.equal(runs[0].expectedGoal, null);
+  assert.equal(await page.getByRole('button', { name: 'Áp dụng mục tiêu', exact: true }).isDisabled(), true);
   await page.getByText('Sản phẩm bán · SKU1 (kỳ vọng)', { exact: true }).waitFor();
   await page.getByText('Sản phẩm bán · toàn chiến dịch (kỳ vọng)', { exact: true }).waitFor();
   await page.getByText('Cách tính và đối chiếu con số', { exact: true }).click();
@@ -124,11 +132,11 @@ try {
   await hq.waitFor();
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    const goalLink = hq.getByRole('link', { name: 'Mục tiêu buổi sale', exact: true });
+    const goalLink = hq.getByRole('link', { name: 'Lập kế hoạch sale', exact: true });
     await goalLink.scrollIntoViewIfNeeded();
     const box = await goalLink.boundingBox();
     assert.ok(box && box.height >= 44 && box.x >= 0 && box.x + box.width <= width, `HQ goal link touch target at ${width}`);
-    await hq.getByRole('link', { name: 'Trao đổi mục tiêu với Milo', exact: true }).waitFor();
+    assert.equal(await hq.getByRole('link', { name: 'Lập kế hoạch sale', exact: true }).count(), 1);
     await page.screenshot({ path: fileURLToPath(new URL(`hq-goals-${width}.png`, out)) });
   }
   assert.deepEqual(errors, []);

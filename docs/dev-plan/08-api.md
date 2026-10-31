@@ -664,18 +664,29 @@ Worker routes require the existing authenticated account; POSTs require the
 same-origin mutation guard. Backend identity remains server-configured through
 `DATA_BACKEND_USER/ROLE`; it is never accepted from request JSON.
 
-- `GET /api/sale-planner/context`: `{backendConfigured, canCreateGoals,
+- `GET /api/sale-planner/context`: `{backendConfigured, canCreateGoals, canPreview, canApply,
   referenceTime, dataAsOf, campaigns:[{id,name}], notice}`. Checks backend
   capabilities and `me` permissions; reads up to 2,000 campaigns with pagination.
 - `POST /api/sale-planner/interpret`: `{text}` (1–4,000 characters) returns
   `{draft, method:"ai"|"rules", notices}`. Uses the PM rate limit. No goal or
   scenario is created. AI failure produces an explicit rules fallback.
-- `POST /api/sale-planner/run`: `{campaignId, draft, confirmed:true,
-  acknowledgedUnresolved:boolean, goalId?:string}` saves a campaign goal and
-  calls the real scenario API. Returns `{goalId, scenario:Envelope<ScenarioRun>}`.
-  Errors contain `{error:{code,message,details?}, goalId:null|string,
-  stage:"validation"|"goal"|"simulation"}`. A simulation error can follow a
-  successful goal save; clients must retain the returned ID for retry.
+- `GET /api/sale-planner/active?campaignId=...`: returns
+  `{campaignId,activeGoal,baseGoal:{goal_id,version}|null}` for review.
+- `POST /api/sale-planner/run`: `{campaignId,draft,confirmed:true,
+  acknowledgedUnresolved,expectedGoal:{goal_id,version}|null,focusSku?}` now
+  creates only an isolated preview. The former save-and-run contract is rejected.
+  Response: `{previewId,goalId,baseGoal,effectiveGoal,changes,notices,canApply,
+  appliedGoalId,scenario:Envelope<ScenarioRun>}`. Here `goalId` is an inactive draft;
+  the campaign's active goal and recommendation remain unchanged.
+- `POST /api/sale-planner/apply`: `{previewId,confirmed:true,expectedGoal}` applies
+  the stored preview, returning `{previewId,goal,alreadyApplied}`. No editable
+  draft or client numerical results are accepted at apply time. A changed baseline
+  or stale inputs returns 409 and requires a fresh preview. Uncertain network
+  outcomes retain the preview ID for an idempotent retry.
+
+Errors contain `{error:{code,message,details?},goalId:null,previewId:null|string,
+stage:"validation"|"preview"|"apply"}`. Missing data or a failed preview cannot
+activate its goal. Operators can preview; only leads can apply.
 
 `GoalDraft` includes the original `text`, nullable `kind` (`profit`, `sell_target`,
 `clear_stock`, `efficiency`), `targetUnits`, `start`, `deadline`, `maxSpendVnd`,
@@ -689,19 +700,31 @@ probability is in (0,1]. Null means not explicitly supplied; zero is meaningful.
 
 Python adds authenticated `GET /api/v1/goal-planner/capabilities`, returning
 `{data:{version:1,constraints:["max_spend_vnd","max_loss_vnd","sell_target_prob",
-"min_marginal_return"]},meta}`. Worker refuses unsupported backends before writes.
-No database migration: confirmed constraints use existing goal `params`.
+"min_marginal_return","focus_sku","calculation_trace","preview_apply"]},meta}`.
+Worker refuses unsupported backends before writes. Migration 6 stores preview
+snapshots; constraints continue to use existing goal `params`.
 `max_spend_vnd` caps total simulated spend over the requested horizon, including
 efficiency fallback candidates. `max_loss_vnd` bounds expected J for every kind;
 clear_stock keeps its existing default when absent. Existing goal API validates
 numeric parameters and rejects conflicting constraints/params values.
 
-Goal params also retain `planner_request_hash`, `planner_source_text`,
-`planner_excluded_requirements`, `planner_start` for audit/recovery. Retry reuses
-an active goal only when campaign/kind/target/deadline, hash and all confirmed
-numeric parameters match; otherwise 409. When no ID was received, Worker can
-recover the matching active goal. This handles sequential retries, not a
-transactional idempotency guarantee for simultaneous independent requests.
+Goal params retain `planner_source_text`, `planner_excluded_requirements`,
+`planner_start`, plus server-owned preview/parent provenance. Python endpoints:
+`GET /api/v1/sale-plans/context?campaign_id=...`, `POST /sale-plans/preview`,
+`GET /sale-plans/{preview_id}`, and `POST /sale-plans/{preview_id}/apply`.
+Preview accepts `{campaign_id,goal:{kind,deadline,target_units,params},start,
+horizon_hours,samples,seed,expected_goal,focus_sku?}`. Apply accepts only
+`{confirmed:true,expected_goal}`. Responses use the standard Envelope and
+snake_case fields. Preview uses an inactive goal and what-if session; apply checks
+the stored base token under the same lock used by legacy goal writers, then changes
+the active goal and records application atomically. Repeating a successful apply
+returns that goal, unless it has since been replaced (409).
+
+SKU previews inherit the tighter campaign budget/loss limits. Profit plus an SKU
+quantity target retains J ranking subject to the quantity requirement; unsupported
+priority/scope changes are visible but cannot be applied. No joint multi-SKU budget
+optimization is implied. Input freshness checking is conservative: source/model
+changes elsewhere in the warehouse can also require a fresh preview.
 Scenario runs use 1,000 samples and seed 20261111. No fixture fallback or ad execution.
 
 ## SKU goal assistant and calculation evidence
@@ -721,8 +744,8 @@ The authenticated Worker adds:
   is saved by this endpoint. Session, same-origin writes and PM rate limit apply.
 
 `POST /api/sale-planner/run` now accepts optional `focusSku`. The gateway verifies
-membership and backend `focus_sku` capability before saving; the confirmed SKU
-participates in goal matching and retry recovery. It is stored as `params.focus_sku`.
+membership and backend `focus_sku`/`preview_apply` capabilities before previewing;
+the selected SKU is stored as `params.focus_sku` in the inactive draft.
 Python also validates membership, including direct API callers. For sell_target
 and clear_stock the quantity metric is the selected SKU's sold units. Budgets,
 loss limits and J remain campaign-wide; profit/efficiency optimize the campaign.
@@ -775,7 +798,8 @@ draft inform Milo's natural-language reply. Absolute dates remain subject to
 review; no relative sale date is silently guessed.
 
 Successful replies can include `plan: {interpretation, context}` for the selected
-SKU. This is a draft for the existing review form, not a saved goal or permission
+SKU, or `campaignPlan: {campaignId,name,interpretation}` for a verified selected
+campaign. Both open the same preview/review form. This is a draft, not an active goal or permission
 to run a scenario. Chat performs no backend mutations. Review still requires a
 campaign choice, valid time window, unresolved-item acknowledgement and explicit
 confirmation. A stale conversation or changed scope during generation prevents
