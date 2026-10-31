@@ -10,6 +10,8 @@ import {
 import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
 import { savedChat } from "./server/chat-store";
+import { productLabels } from "./server/product-labels";
+import { getProductLabelProvider } from "./server/product-label-provider";
 import { SOURCE_DEFS, type SourcePack } from "./src/studio/sources";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
@@ -76,6 +78,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
     )
       return fail(403, "Request not allowed.");
     if (path.startsWith("/api/workspace/")) {
+      // Internal labeling claims/results are never reachable through the browser proxy.
+      if (!/^\/api\/workspace\/(sources|settings|sandbox|chats|events)$/.test(path))
+        return fail(404, "Workspace document not found.");
       if (!env.WORKSPACE)
         return fail(503, "Account storage is not configured.");
       const headers = new Headers(request.headers);
@@ -83,6 +88,12 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
         new Request(request, { headers }),
       );
+    }
+    if (path === "/api/product-labels") {
+      if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
+      return productLabels(request,
+        env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
+        getProductLabelProvider(env));
     }
     if (path === "/api/repository-sources" && request.method === "GET") {
       const result = await repositorySources();

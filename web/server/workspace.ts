@@ -11,6 +11,11 @@ import {
   defaultChatArchive,
 } from "../src/studio/workspace-types";
 import { validatePack, MAX_BYTES } from "../src/studio/sources";
+import type { SourcePack } from "../src/studio/sources";
+import {
+  labelRunSchema, sourceFingerprint, type LabelRun,
+} from "../src/studio/product-labels";
+import { LABEL_LEASE_MS } from "./product-label-provider";
 import { repositorySources } from "./repository";
 import { fail } from "./auth";
 declare const WebSocketPair: { new (): { 0: WorkerSocket; 1: WorkerSocket } };
@@ -74,9 +79,73 @@ export class AccountWorkspace {
       return { revision, updatedAt, data };
     });
   }
+  private notify(name: string, revision: number) {
+    for (const socket of this.ctx.getWebSockets()) {
+      try {
+        if ((socket.deserializeAttachment() as { expires: number }).expires <= Date.now())
+          socket.close(1008, "Sign in again");
+        else socket.send(JSON.stringify({ name, revision }));
+      } catch {
+        socket.close(1011, "Reconnect");
+      }
+    }
+  }
+  /** Internal binding calls only. Worker must never proxy browser requests here. */
+  private async productLabels(request: Request, operation: string): Promise<Response> {
+    if ((operation === "snapshot" ? "GET" : "POST") !== request.method)
+      return fail(405, "Method not allowed.");
+    if (!this.read("sources")) {
+      const initialized = await this.fetch(new Request(new URL("/api/workspace/sources", request.url)));
+      if (!initialized.ok) return initialized;
+    }
+    const sources = this.read("sources")!;
+    const archive = this.read("product-labels");
+    if (operation === "snapshot")
+      return Response.json({ sources, run: archive?.data.run ?? null });
+    let candidate: LabelRun;
+    try {
+      const raw = await request.text();
+      if (new TextEncoder().encode(raw).length > MAX_BYTES) return fail(413, "Label result too large.");
+      candidate = labelRunSchema.parse(JSON.parse(raw));
+    } catch {
+      return fail(422, "Invalid labeling run.");
+    }
+    const fingerprint = await sourceFingerprint(sources.data as SourcePack);
+    // No awaits after this check: source comparison and run write share one DO turn.
+    if (this.read("sources")?.revision !== sources.revision ||
+        candidate.sourceRevision !== sources.revision || candidate.sourceFingerprint !== fingerprint)
+      return fail(409, "Sources changed. Save and label the latest sources.", "LABEL_SOURCES_CHANGED");
+    const current = this.read("product-labels");
+    const previous = current?.data.run as LabelRun | undefined;
+    if (operation === "claim") {
+      if (candidate.status !== "running" || candidate.results.length || candidate.error || candidate.completedAt)
+        return fail(422, "Invalid labeling claim.");
+      if (previous?.sourceRevision === sources.revision && previous.sourceFingerprint === fingerprint) {
+        if (previous.status === "running" && Date.parse(previous.startedAt) + LABEL_LEASE_MS > Date.now())
+          return fail(409, "Labeling is already running. Refresh its status shortly.", "LABEL_RUN_ACTIVE");
+        if (previous.status === "completed" && previous.provider === candidate.provider)
+          return Response.json({ acquired: false, run: previous });
+      }
+      // Start time comes from this object, not from the caller's clock.
+      candidate.startedAt = new Date().toISOString();
+    } else {
+      if (!previous || previous.id !== candidate.id || previous.status !== "running" ||
+          previous.provider !== candidate.provider || previous.sourceRevision !== candidate.sourceRevision ||
+          previous.sourceFingerprint !== candidate.sourceFingerprint || candidate.status === "running")
+        return fail(409, "A newer labeling run superseded this result.", "LABEL_RUN_SUPERSEDED");
+      candidate.startedAt = previous.startedAt;
+      candidate.completedAt = new Date().toISOString();
+    }
+    const saved = this.write("product-labels", { run: candidate }, current?.revision ?? 0);
+    if (!saved) return fail(409, "Labeling status changed. Refresh and try again.");
+    this.notify("product-labels", saved.revision);
+    return Response.json({ acquired: true, run: candidate });
+  }
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url),
       name = url.pathname.split("/").pop() ?? "";
+    const labelOperation = /^\/internal\/product-labels\/(snapshot|claim|finish)$/.exec(url.pathname)?.[1];
+    if (labelOperation) return this.productLabels(request, labelOperation);
     if (name === "events") {
       if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket")
         return fail(426, "WebSocket upgrade required.");
@@ -139,18 +208,7 @@ export class AccountWorkspace {
           "Another device saved a newer version. Your draft has been kept.",
           "REVISION_CONFLICT",
         );
-      for (const socket of this.ctx.getWebSockets()) {
-        try {
-          if (
-            (socket.deserializeAttachment() as { expires: number }).expires <=
-            Date.now()
-          )
-            socket.close(1008, "Sign in again");
-          else socket.send(JSON.stringify({ name, revision: saved.revision }));
-        } catch {
-          socket.close(1011, "Reconnect");
-        }
-      }
+      this.notify(name, saved.revision);
       return Response.json(saved, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       return fail(

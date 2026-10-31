@@ -28,6 +28,7 @@ import {
 } from "./sources";
 import { SandboxControl } from "./SandboxControl";
 import { SourceDiagnostics } from "./SourceDiagnostics";
+import { ProductLabels } from "./ProductLabels";
 import "./studio.css";
 function download(name: string, text: string) {
   const url = URL.createObjectURL(
@@ -75,6 +76,8 @@ export function DataStudio() {
   const input = useRef<HTMLInputElement>(null),
     folder = useRef<HTMLInputElement>(null),
     edit = useRef<HTMLDialogElement>(null);
+  const pendingImportLabels = useRef(false);
+  const [autoLabelRevision, setAutoLabelRevision] = useState<number | null>(null);
   const latest = useRef({ draft, base, dirty });
   useEffect(() => {
     latest.current = { draft, base, dirty };
@@ -123,6 +126,10 @@ export function DataStudio() {
       if (latest.current.draft === pending.draft) {
         setDirty(false);
         setDraft(null);
+        if (pendingImportLabels.current) {
+          pendingImportLabels.current = false;
+          setAutoLabelRevision(saved.revision);
+        }
       }
       setSaveError("");
     } catch (e) {
@@ -188,6 +195,7 @@ export function DataStudio() {
         throw Error(
           "Duplicate source type in this upload. Choose one file per source.",
         );
+      pendingImportLabels.current = true;
       change({
         schema: "hackathon.sources.v1",
         files: files.map((f) => imported.find((v) => v.kind === f.kind) ?? f),
@@ -214,7 +222,9 @@ export function DataStudio() {
       const result = await requestJSON<{ pack: SourcePack; notice: string }>(
         "/api/repository-sources",
       );
-      change(await validatePack(result.pack));
+      const pack = await validatePack(result.pack);
+      pendingImportLabels.current = false;
+      change(pack);
       setMessage(result.notice);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "GitHub unavailable.");
@@ -339,6 +349,7 @@ export function DataStudio() {
           <button onClick={exportPack}>Export draft</button>
           <button
             onClick={() => {
+              pendingImportLabels.current = false;
               setDraft(null);
               setDirty(false);
               setSaveError("");
@@ -348,6 +359,11 @@ export function DataStudio() {
           </button>
         </div>
       )}
+      <ProductLabels
+        sourceRevision={cloud.document?.revision ?? 0}
+        autoRunRevision={autoLabelRevision}
+        blocked={dirty || saving || conflict || busy || !!saveError}
+      />
       <SandboxControl />
       <section className="studio-body" aria-label="Source files">
         <aside className="source-list">

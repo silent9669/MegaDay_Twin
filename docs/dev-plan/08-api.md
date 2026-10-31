@@ -6,6 +6,26 @@ Module: `backend/app/api/` (một router mỗi nhóm), schema Pydantic trong `ba
 
 ---
 
+## Bổ sung: nhãn tool tại Data Studio (31/10/2026)
+
+Gateway Worker có `GET /api/product-labels` và `POST /api/product-labels` cho
+workspace đã đăng nhập. Đây là API workspace, không thay thế endpoint Python
+`/api/v1/skus/{sku}/demand-group`. POST chỉ nhận `sourceRevision`; server đọc sáu
+nguồn đã lưu, rút candidates, gọi adapter và kiểm tra kết quả. DTO và giới hạn
+ở `web/src/studio/product-labels.ts`; hướng nối adapter ở `web/README.md`.
+
+Response chứa `configured`, `provider`, `sourceRevision`, `sourceFingerprint`,
+`products`, `run`, `stale`. Run có ID, nguồn dữ liệu, provider, trạng thái
+`running|completed|partial|failed`, thời gian, `results` và lỗi đã làm sạch.
+Mỗi kết quả có `productId`, `group` (năm nhóm hiện tại hoặc null), `reason`,
+`confidence` tùy chọn. Không nhận kết quả từ browser để ghi vào kho nhãn.
+Mã chưa được canonical-SKU matching không được áp dụng thẳng vào forecast.
+
+Chưa cấu hình trả trạng thái rõ ở GET và 503 ở POST; revision cũ hoặc job bị
+thay thế trả 409; request/đầu vào không hợp lệ trả 422. Không có fallback nhãn
+giả từ tool. Classifier Python cũ được giữ đến khi API thật và luồng áp dụng
+nhãn đã hoàn thành. Hợp đồng chi tiết của provider ngoài chưa được chọn.
+
 ## 1. Quy ước chung
 
 | Mục | Quy ước |
