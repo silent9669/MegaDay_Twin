@@ -32,7 +32,7 @@ it("reviews current saved tables and preserves general-table identity", async ()
   const onLoad = vi.fn(async () => {});
   render(<ArchiveImport sources={[source]} blocked={false} onLoad={onLoad} />);
   fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
-  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("No safe changes needed"));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("No repairs needed"));
   expect(onLoad).not.toHaveBeenCalled();
   expect(requestJSON).toHaveBeenCalledWith("/api/studio/import?review=1", expect.objectContaining({ body: expect.any(File) }));
 });
@@ -59,4 +59,27 @@ it("keeps all saved tables when review skips a table or fails", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("AI unavailable"));
   expect(onLoad).not.toHaveBeenCalled();
+});
+
+it("does not describe unresolved repairs as no changes needed", async () => {
+  const source = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,-2", "upload");
+  vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: source.name, source, rowCount: 1, method: "recognized", columns: [], remainingIssues: ["Confirm negative stock"] }], skipped: [], model: "test" });
+  const onLoad = vi.fn(async () => {});
+  render(<ArchiveImport sources={[source]} blocked={false} onLoad={onLoad} />);
+  fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 issue needs input"));
+  expect(screen.getByRole("status")).not.toHaveTextContent("No repairs needed");
+  expect(onLoad).not.toHaveBeenCalled();
+});
+
+it("saves AI cell patches directly through the existing table save flow", async () => {
+  const source = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cupp,2", "upload");
+  const fixed = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "upload");
+  vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: source.name, source: fixed, rowCount: 1, method: "recognized", columns: [], repairs: ["AI corrected row 1, Tên hàng: Typo"], remainingIssues: [], review: [] }], skipped: [], model: "test" });
+  const onLoad = vi.fn(async () => {});
+  render(<ArchiveImport sources={[source]} blocked={false} onLoad={onLoad} />);
+  fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
+  await waitFor(() => expect(onLoad).toHaveBeenCalledWith([fixed], true));
+  expect(screen.getByRole("status")).toHaveTextContent("AI fixes saved");
+  expect(screen.getByText(/AI corrected row 1/)).toBeInTheDocument();
 });

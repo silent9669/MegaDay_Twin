@@ -28,8 +28,10 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
       sources.some(source => sourceKey(source) === sourceKey(table.source) && source.hash === table.source.hash));
     if (!unchanged) await onLoad(tables.map(table => table.source), reviewing.current);
     setNeedsSelection(false);
+    const unresolved = tables.reduce((sum, table) => sum + (table.remainingIssues?.length ?? 0) + (table.review?.length ?? 0), 0);
+    const reviewStatus = unresolved ? `${unresolved} issue${unresolved === 1 ? " needs" : "s need"} input` : "No repairs needed";
     setNotice(reviewing.current
-      ? unchanged ? `AI checked ${tables.length} tables · No safe changes needed` : `AI fixes saved · ${tables.length} tables`
+      ? unchanged ? `AI checked ${tables.length} tables · ${reviewStatus}` : `AI fixes saved · ${tables.length} tables${unresolved ? ` · ${reviewStatus}` : ""}`
       : `${tables.length} tables loaded · ${tables.reduce((sum, table) => sum + table.rowCount, 0).toLocaleString()} records`);
   }
   async function analyze(file?: File, review = false) {

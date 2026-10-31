@@ -10,7 +10,7 @@ import {
 import { sourceView } from "./source-view";
 const pack = rawPack as SourcePack;
 describe("six-source workspace contract", () => {
-  it("only requests timezone review for ads timestamps without an explicit zone", () => {
+  it("preserves timezone-free ads timestamps as information rather than a repair warning", () => {
     const header = "Mã chiến dịch,Chi phí,Lượt click,Thời gian\n";
     const explicit = inspect(
       "ads.csv",
@@ -21,7 +21,11 @@ describe("six-source workspace contract", () => {
       "ads.csv",
       header + "A,100,1,2026-11-11T01:00:00+07:00\nB,200,2,2026-11-11 01:00",
     );
-    expect(mixed.issues.filter((i) => i.code === "TIMEZONE_REVIEW")).toHaveLength(1);
+    expect(mixed.issues.filter((i) => i.code === "TIMEZONE_REVIEW")).toEqual([
+      expect.objectContaining({ level: "info" }),
+    ]);
+    expect(mixed.issues.filter(i => i.level !== "info")).toEqual([]);
+    expect(mixed.rows[1]?.["Thời gian"]).toBe("2026-11-11 01:00");
   });
   it("uses JSON record numbers rather than CSV line numbers in diagnostics", () => {
     const result = inspect(
