@@ -55,3 +55,27 @@ it("coalesces a burst and reconnects against its last baseline without fetching 
   expect(fetch).not.toHaveBeenCalled();
   fetch.mockRestore();
 });
+
+it("Read all clears every notice and bubble while allowing future changes", () => {
+  vi.useFakeTimers();
+  const { result, rerender } = renderHook(
+    ({ revision, stock }) => useWorkspaceMonitor(source(revision, stock), sandbox, true),
+    { initialProps: { revision: 1, stock: 10 } },
+  );
+  act(() => vi.advanceTimersByTime(1000));
+  rerender({ revision: 2, stock: 0 });
+  act(() => vi.advanceTimersByTime(1000));
+  expect(result.current.notices.length).toBeGreaterThan(1);
+  expect(result.current.toast?.kind).toBe("stock-zero");
+  act(() => result.current.readAll());
+  expect(result.current.notices).toEqual([]);
+  expect(result.current.toast).toBeNull();
+  expect(result.current.unread).toBe(0);
+  rerender({ revision: 2, stock: 0 });
+  act(() => vi.advanceTimersByTime(1000));
+  expect(result.current.notices).toEqual([]);
+  rerender({ revision: 3, stock: 8 });
+  act(() => vi.advanceTimersByTime(1000));
+  expect(result.current.notices.some(notice => notice.kind === "stock-recovered")).toBe(true);
+  expect(result.current.unread).toBeGreaterThan(0);
+});

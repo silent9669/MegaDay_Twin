@@ -202,6 +202,10 @@ try {
   results.reducedMotionStatic =
     createHash("sha256").update(a).digest("hex") ===
     createHash("sha256").update(b).digest("hex");
+  if (!results.reducedMotionStatic) {
+    await writeFile(out + "reduced-motion-before.png", a);
+    await writeFile(out + "reduced-motion-after.png", b);
+  }
   assert(results.reducedMotionStatic, "Reduced motion still animates");
   await page.screenshot({ path: out + "city-reduced-motion.png" });
   await setNight(false);
@@ -268,6 +272,13 @@ try {
       "Update opened chat",
     );
     assert.equal(calls.length, 0, "Update called AI");
+    await page.getByRole("complementary", { name: "Workspace update" }).getByRole("button", { name: "Read all", exact: true }).click();
+    await page.getByRole("complementary", { name: "Workspace update" }).waitFor({ state: "hidden" });
+    assert.equal(await page.locator(".pm-unread").count(), 0);
+    assert.equal(await saveInventory(8), 200);
+    await page.waitForTimeout(1300);
+    assert.equal(await saveInventory(0), 200);
+    await page.getByRole("complementary", { name: "Workspace update" }).getByText("Stock reached zero").waitFor();
     assert.equal(await page.locator('.pm-companion[data-speaking="true"]').count(), 1);
     const bubble = await page.getByRole("complementary", { name: "Workspace update" }).boundingBox();
     assert(bubble.x >= 0 && bubble.y >= 0 && bubble.x + bubble.width <= 1440 && bubble.y + bubble.height <= 900, "Milo speech bubble outside viewport");
@@ -337,7 +348,12 @@ try {
     (await page.locator(".milo-updates article").count()) > 0,
     "Updates lost during navigation",
   );
+  await page.getByRole("button", { name: "Read all", exact: true }).click();
+  assert.equal(await page.locator(".milo-updates article").count(), 0);
+  await page.getByRole("heading", { name: "No changes yet" }).waitFor();
   await page.getByRole("button", { name: "Close chat" }).click();
+  assert.equal(await page.getByRole("complementary", { name: "Workspace update" }).count(), 0);
+  results.monitor.readAll = true;
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.waitForURL("**/login");
   for (const [width, height] of [

@@ -13,6 +13,7 @@ export function Updates({
 }) {
   return (
     <section className="milo-updates" aria-label="Workspace updates">
+      {!!updates.notices.length && <div className="updates-actions"><button onClick={updates.readAll}>Read all</button></div>}
       {!updates.notices.length && (
         <div className="updates-empty">
           <h3>No changes yet</h3>

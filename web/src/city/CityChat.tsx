@@ -285,6 +285,7 @@ export function CityChat({
           <strong>{updates.toast.title}</strong>
           <p>{updates.toast.detail}</p>
           <button className="milo-review" onClick={() => { setTab("updates"); setOpen(true); updates.dismissToast(); }}>Review update <ArrowRight size={14} /></button>
+          <button onClick={updates.readAll}>Read all</button>
         </aside>
       )}
     </div>
