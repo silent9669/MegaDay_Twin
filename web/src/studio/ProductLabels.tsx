@@ -1,3 +1,4 @@
+import { Button } from "../components/ui/button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Tags } from "lucide-react";
 import type { StockRow } from "./source-view";
@@ -71,9 +72,9 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
   return <section className="product-label-panel" aria-labelledby="product-label-title">
     <header><h3 id="product-label-title"><Tags size={18} aria-hidden /> Inventory</h3>
       <div className="product-label-actions">
-        <button disabled={blocked || !current || !data?.configured || running || !products.length} onClick={() => void run()}>
+        <Button variant="outline" disabled={blocked || !current || !data?.configured || running || !products.length} onClick={() => void run()}>
           {running ? "Labeling…" : "Label data"}
-        </button>
+        </Button>
       </div>
     </header>
     {!data && !error && <p role="status">Loading product labels…</p>}
@@ -95,9 +96,9 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
     </table></div>
     {!rows.length && <p>No products in stock.</p>}
     {pages > 1 && <nav className="product-label-pagination" aria-label="Product label pages">
-      <button disabled={activePage === 0} onClick={() => setPage(activePage - 1)}>Previous</button>
+      <Button variant="outline" disabled={activePage === 0} onClick={() => setPage(activePage - 1)}>Previous</Button>
       <span>{activePage + 1} / {pages}</span>
-      <button disabled={activePage + 1 >= pages} onClick={() => setPage(activePage + 1)}>Next</button>
+      <Button variant="outline" disabled={activePage + 1 >= pages} onClick={() => setPage(activePage + 1)}>Next</Button>
     </nav>}
 
   </section>;
