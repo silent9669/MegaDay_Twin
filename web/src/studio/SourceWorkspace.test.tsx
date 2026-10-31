@@ -15,4 +15,10 @@ it("uses all uploaded orders in HQ and searchable neighborhood records without d
   fireEvent.change(screen.getByLabelText("Search orders"), { target: { value: "Cup" } });
   expect(screen.getByText("Cup")).toBeInTheDocument();
   expect(screen.queryByText("Lamp")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Search orders"), { target: { value: "2026-11-12" } });
+  expect(screen.getByText("Lamp")).toBeInTheDocument();
+  expect(screen.queryByText("Cup")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Search orders"), { target: { value: "" } });
+  expect(screen.getByText("Lamp")).toBeInTheDocument();
+  expect(screen.getByText("Cup")).toBeInTheDocument();
 });

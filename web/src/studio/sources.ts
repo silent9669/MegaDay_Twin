@@ -186,10 +186,10 @@ export function inspect(
         keyHas(columns, d.required),
     )?.kind;
     rows = parsed.data;
+    const noteColumns = columns.filter(column => /ghi chu|note/.test(normalize(column)));
     for (const row of rows) {
       for (const column of removed) delete row[column];
-      for (const column of columns)
-        if (/ghi chu|note/.test(normalize(column))) row[column] = mask(String(row[column] ?? ""));
+      for (const column of noteColumns) row[column] = mask(String(row[column] ?? ""));
     }
     addIssues(
       ...parsed.errors
@@ -206,6 +206,7 @@ export function inspect(
   if (!columns.length || columns.length > 100 || columns.some(c => !c || c.length > 200))
     throw Error(`${name}: expected 1–100 named columns (at most 200 characters each).`);
   const definition = SOURCE_DEFS.find((d) => d.kind === kind);
+  const noteColumns = new Set(columns.filter(column => /ghi chu|note/.test(normalize(column))));
   const seen = new Map<string, Record<string, unknown>[]>();
   rows.forEach((row, i) => {
     const rowNumber = i + (payload === undefined ? 2 : 1);
@@ -221,7 +222,7 @@ export function inspect(
     for (const [column, value] of Object.entries(row)) {
       if (typeof value !== "string") continue;
       if (
-        /ghi chu|note/.test(normalize(column)) &&
+        noteColumns.has(column) &&
         /ignore.*instructions|system prompt|bo qua.*huong dan|tat (toan bo|het|tat ca)/.test(
           normalize(value),
         )
