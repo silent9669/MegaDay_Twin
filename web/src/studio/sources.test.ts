@@ -50,7 +50,19 @@ describe("six-source workspace contract", () => {
       b = await validatePack(JSON.parse(JSON.stringify(a)));
     expect(b.files.map((f) => f.hash)).toEqual(a.files.map((f) => f.hash));
     const cost = inspect(a.files[3]!.name, a.files[3]!.text);
-    expect(cost.issues.some((i) => i.code === "MONEY_FORMAT")).toBe(true);
+    expect(cost.issues.some((i) => i.code === "MONEY_NORMALIZATION")).toBe(true);
+  });
+  it("separates recognized money previews from amounts needing review without rewriting data", async () => {
+    const source = await makeSource("cost.csv", "tên sp,giá vốn\nA,45k\nB,abc\nC,   \nD,-3k", "upload");
+    const result = inspect(source.name, source.text);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "MONEY_NORMALIZATION", level: "info", row: 2, value: "45k", normalizedVnd: 45000 }),
+      expect.objectContaining({ code: "MONEY_FORMAT", level: "warning", row: 3, value: "abc" }),
+      expect.objectContaining({ code: "MISSING_COST", level: "error", row: 4 }),
+      expect.objectContaining({ code: "MONEY_FORMAT", level: "warning", row: 5, normalizedVnd: -3000 }),
+    ]));
+    expect(result.rows[0]?.["giá vốn"]).toBe("45k");
+    expect(source.text).not.toContain("45000");
   });
   it("strips contact columns and masks contacts in notes before persistence", async () => {
     const source = await makeSource(
@@ -62,6 +74,12 @@ describe("six-source workspace contract", () => {
     expect(source.text).not.toContain("0900123456");
     expect(source.text).not.toContain("x@example.com");
     expect(source.text).toContain("***");
+  });
+  it("does not let repeated money notices hide a missing cost after the display limit", () => {
+    const csv = "tên sp,giá vốn\n" + Array.from({ length: 501 }, (_, i) => `Item${i},45k`).join("\n") + "\nMissing,";
+    const result = inspect("cost.csv", csv);
+    expect(result.issues[0]).toMatchObject({ code: "MISSING_COST", level: "error", row: 503 });
+    expect(result.issues.find((i) => i.code === "LOG_LIMIT")?.message).toContain("500 of 502");
   });
   it("keeps missing and negative stock unknown in city projections", () => {
     const testPack: SourcePack = {

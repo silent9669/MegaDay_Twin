@@ -615,6 +615,42 @@
 .source-diagnostics article > div {
   min-width: 0;
 }
+.studio-source-summary {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid #d5e6c7;
+  border-radius: 8px;
+  color: #3f563e;
+  background: #f9fcf3;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.source-list .source-origin-label {
+  margin-top: 4px;
+  color: #486047;
+}
+.source-diagnostics summary {
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: #304f39;
+  overflow-wrap: anywhere;
+}
+.source-diagnostics summary:focus-visible {
+  outline: 2px solid #42633a;
+  outline-offset: 2px;
+}
+.diagnostic-occurrence + .diagnostic-occurrence {
+  border-top: 1px solid #e7ecdf;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.source-diagnostics .diagnostic-value,
+.source-diagnostics .diagnostic-value strong {
+  font-size: 13px;
+  color: #304136;
+}
 .source-diagnostics article h4 {
   font-size: 14px;
   font-weight: 600;
@@ -1007,12 +1043,14 @@
     overflow: visible;
   }
   .source-diagnostics article {
-    gap: 10px;
+    display: block;
   }
   .source-diagnostics article > span {
+    display: inline-block;
+    margin-bottom: 8px;
     font-size: 11px;
-    min-width: 78px;
-    max-width: 90px;
+    min-width: 0;
+    max-width: none;
   }
   .source-diagnostics strong {
     font-size: 9px;

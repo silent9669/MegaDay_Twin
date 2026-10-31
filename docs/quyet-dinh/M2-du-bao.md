@@ -231,3 +231,26 @@ Test hồi quy chạy qua `select_champions`: WAPE bằng nhau/gần nhau, WAPE 
 pinball bằng 0 hoặc thiếu, nhóm dùng pinball thay WAPE, và trường hợp ngoài
 ngưỡng phân xử. Mỗi trường hợp chạy cả hai thứ tự đầu vào (20 ca). Trước sửa:
 11 lỗi / 9 đạt; sau sửa: toàn bộ 43 test trong `test_pure.py` đạt.
+
+## J. Hướng chuyển phân nhóm nhu cầu sang tool bên ngoài (31/10/2026)
+
+Theo yêu cầu người dùng, đích đến là import sáu nguồn, nhận diện sản phẩm và
+gửi sang tool bên ngoài để nhận năm nhóm hiện có: `moi`, `ban_thua`, `mua_vu`,
+`trend`, `on_dinh`. Đây là nhóm nhu cầu, không phải ngành hàng.
+
+**Chưa triển khai kết nối:** người dùng sẽ cung cấp API sau và đã chọn giữ tạm
+cơ chế phân nhóm hiện tại. Bản sửa Diagnostics không tắt classifier, không gọi
+dịch vụ ngoài và không ghi nhãn giả là kết quả của tool.
+
+Khi có API, chốt hợp đồng rồi mới thực hiện adapter phía server: lấy tên kèm
+SKU/product ID đã đối soát (không ghép chỉ theo tên), gắn yêu cầu với phiên bản
+dữ liệu import, kiểm tra năm nhãn hợp lệ, lưu nguồn và lý do nếu tool cung cấp,
+và giữ quyền sửa của người dùng. Kết quả trả chậm cho dữ liệu cũ không được ghi
+đè dữ liệu mới. Tên sản phẩm một mình không chứng minh được nhãn như bán thưa
+hay trend; cần xác minh tool sử dụng lịch sử/tín hiệu nào.
+
+Trước khi chuyển chế độ, bổ sung trạng thái chờ/lỗi/thử lại trong luồng import,
+kiểm tra ảnh hưởng chọn mô hình và backtest, và quyết định cách xử lý nhãn cũ.
+Trong chế độ tool, trường hợp không có kết quả hợp lệ phải thể hiện chưa phân
+loại thay vì âm thầm gán ổn định hoặc giả vờ đã gọi tool. Hợp đồng API, timeout
+và chính sách fallback sẽ chốt khi có tài liệu của nhà cung cấp.

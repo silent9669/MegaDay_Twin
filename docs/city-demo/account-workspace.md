@@ -91,6 +91,19 @@ Advertising timestamps with explicit timezone offsets do not trigger the missing
 timezone warning. These checks preserve original values and do not certify
 forecast or profit accuracy.
 
+Repeated checks are grouped by severity and code, with expandable record details.
+Recognized nonnegative VND formats (for example `45k` -> `45.000 ₫`) are information
+notices with display-only previews, not hundreds of manual correction tasks.
+Unreadable/negative amounts still require review; missing cost remains an error.
+Previews never mutate source text or certify ingestion. The bounded check list
+prioritizes errors and warnings after scanning all rows so repeated format notices
+cannot hide an error later in a file.
+
+The workspace shows demo versus uploaded/edited provenance per source. The six
+source formats are four CSV files and two JSON files, not six arbitrary CSVs.
+Rejected imports report file-count or size limits separately and retain existing
+sources. Partial imports replace only the matching source kinds.
+
 For the focused browser regression check, run `npm run prepare:sources`, start
 Vite on port 5186, then run `node qa/studio/check.mjs` from `web/`.
 `STUDIO_QA_URL` overrides the target URL and `STUDIO_QA_CHANNEL=msedge` selects

@@ -22,8 +22,12 @@ const guidance: Record<string, { title: string; action: string }> = {
     action: "Add the required field shown below and import the corrected file.",
   },
   MONEY_FORMAT: {
-    title: "Money value needs normalization",
-    action: "Confirm the amount and currency. Values such as 45k or 45.000đ need normalization before calculations.",
+    title: "Money value needs review",
+    action: "Check the original amount and currency. Correct an unreadable or unexpected negative value before calculations.",
+  },
+  MONEY_NORMALIZATION: {
+    title: "Money formats ready for normalization",
+    action: "No manual rewrite is needed for recognized VND formats. These are previews, not saved corrections; backend ingestion performs normalization.",
   },
   DUP_ORDER: {
     title: "Repeated order line",
@@ -47,7 +51,7 @@ const guidance: Record<string, { title: string; action: string }> = {
   },
   LOG_LIMIT: {
     title: "Check list shortened",
-    action: "Only the first checks are shown. Use the full ingestion report to review the remaining rows.",
+    action: "Errors and warnings take priority over information notices. Use the full ingestion report to review the remaining rows.",
   },
 };
 
@@ -79,6 +83,41 @@ export function SourceDiagnostics({
           .toLowerCase()
           .includes(search)),
   );
+  const groups = new Map<string, Issue[]>();
+  for (const issue of filtered) {
+    const key = `${issue.level}:${issue.code}`;
+    groups.set(key, [...(groups.get(key) ?? []), issue]);
+  }
+  const entries = [...groups.values()].sort((a, b) =>
+    levels.indexOf(a[0]!.level) - levels.indexOf(b[0]!.level),
+  );
+  const renderRecord = (issue: Issue, index: number) => {
+    const record = issue.row == null ? -1 : issue.row - (format === "csv" ? 2 : 1);
+    return (
+      <div className="diagnostic-occurrence" key={`${issue.row}-${issue.column}-${index}`}>
+        <p>{issue.message}</p>
+        {issue.value !== undefined && (
+          <p className="diagnostic-value">
+            <code>{issue.value}</code>
+            {issue.normalizedVnd !== undefined && (
+              <> → <strong>{issue.normalizedVnd.toLocaleString("vi-VN")} ₫</strong> (preview)</>
+            )}
+          </p>
+        )}
+        <small>
+          {issue.code} · {issue.row != null
+            ? `${format === "csv" ? "CSV row" : "JSON record"} ${issue.row}`
+            : "File-level check"}
+          {issue.column ? ` · ${issue.column}` : ""}
+        </small>
+        {record >= 0 && record < rowCount && (
+          <button className="diagnostic-record" onClick={() => onViewRecord(record)}>
+            View record {record + 1}
+          </button>
+        )}
+      </div>
+    );
+  };
   return (
     <div className="source-diagnostics">
       <header className="diagnostics-explanation">
@@ -113,27 +152,21 @@ export function SourceDiagnostics({
       <p className="diagnostics-count" role="status">
         Showing {filtered.length} of {issues.length} checks in this file
       </p>
-      {filtered.map((issue, index) => {
+      {entries.map((group) => {
+        const issue = group[0]!;
         const help = guidance[issue.code];
-        const record = issue.row == null ? -1 : issue.row - (format === "csv" ? 2 : 1);
         return (
-          <article key={`${issue.code}-${issue.row}-${issue.column}-${index}`} data-level={issue.level}>
+          <article key={`${issue.level}-${issue.code}`} data-level={issue.level}>
             <span>{labels[issue.level]}</span>
             <div>
               <h4>{help?.title ?? issue.code}</h4>
-              <p>{issue.message}</p>
               {help && <p className="diagnostic-action">{help.action}</p>}
-              <small>
-                {issue.code} · {issue.row != null
-                  ? `${format === "csv" ? "CSV line" : "JSON record"} ${issue.row}`
-                  : "File-level check"}
-                {issue.column ? ` · ${issue.column}` : ""}
-              </small>
-              {record >= 0 && record < rowCount && (
-                <button className="diagnostic-record" onClick={() => onViewRecord(record)}>
-                  View record {record + 1}
-                </button>
-              )}
+              {group.length > 1 ? (
+                <details key={`${query}-${level}-${group.length}`}>
+                  <summary>Inspect {group.length} checks · affected records: {new Set(group.flatMap((i) => i.row == null ? [] : [i.row])).size}</summary>
+                  {group.map(renderRecord)}
+                </details>
+              ) : renderRecord(issue, 0)}
             </div>
           </article>
         );
