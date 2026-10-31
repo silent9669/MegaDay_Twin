@@ -26,9 +26,10 @@ export const changeReferenceSchema = z
     sandboxRevision: z.number().int().nonnegative(),
     hour: z.number().int().min(0).max(24),
     source: z
-      .enum(["inventory", "orders", "ads", "cost", "campaigns", "sale_program"])
+      .enum(["inventory", "orders", "ads", "cost", "campaigns", "sale_program", "general"])
       .optional(),
     entity: z.string().max(200).optional(),
+    sourceName: z.string().max(1000).optional(),
     before: z.union([z.number().finite(), z.string().max(200), z.null()]),
     after: z.union([z.number().finite(), z.string().max(200), z.null()]),
   })
@@ -55,7 +56,7 @@ export type MonitorSnapshot = {
   stock: StockRow[];
   orders: number;
   campaigns: number;
-  sources: { kind: SourceKind; hash: string; issues: string[] }[];
+  sources: { kind: SourceKind; name: string; hash: string; issues: string[] }[];
 };
 export function snapshot(
   sources: Doc<SourcePack>,
@@ -71,6 +72,7 @@ export function snapshot(
     campaigns: view.campaignCount,
     sources: sources.data.files.map((file) => ({
       kind: file.kind,
+      name: file.name,
       hash: file.hash,
       issues: inspect(file.name, file.text)
         .issues.filter((i) => i.level !== "info")
@@ -122,14 +124,15 @@ export class WorkspaceMonitor {
         href:
           source === "inventory"
             ? `/city-demo?district=warehouse${entity ? `&stock=${encodeURIComponent(entity)}` : ""}`
-            : `/mock-data${source ? `?source=${source}` : ""}`,
+            : `/mock-data${source ? `?source=${encodeURIComponent(source === "general" ? `general:${entity}` : source)}` : ""}`,
         reference: {
           kind,
           sourceRevision: next.sourceRevision,
           sandboxRevision: next.sandboxRevision,
           hour: next.hour,
           source,
-          entity,
+          entity: source === "general" ? undefined : entity,
+          sourceName: source === "general" ? entity : undefined,
           before,
           after,
         },
@@ -145,8 +148,9 @@ export class WorkspaceMonitor {
       );
     if (next.hour < previous.hour) return notices;
     for (const source of next.sources) {
-      const old = previous.sources.find((s) => s.kind === source.kind);
-      const name = SOURCE_DEFS.find((s) => s.kind === source.kind)!.name;
+      const old = previous.sources.find((s) => s.kind === source.kind && (s.kind !== "general" || s.name === source.name));
+      const name = SOURCE_DEFS.find((s) => s.kind === source.kind)?.name ?? source.name;
+      const entity = source.kind === "general" ? source.name : undefined;
       if (!old || old.hash !== source.hash)
         add(
           "source",
@@ -155,6 +159,7 @@ export class WorkspaceMonitor {
           old?.hash ?? null,
           source.hash,
           source.kind,
+          entity,
         );
       const newIssues = source.issues.filter(
         (i) => !old?.issues.includes(i),
@@ -169,7 +174,7 @@ export class WorkspaceMonitor {
           old?.issues.length ?? 0,
           source.issues.length,
           source.kind,
-          undefined,
+          entity,
           true,
         );
       if (resolved)
@@ -180,17 +185,19 @@ export class WorkspaceMonitor {
           old?.issues.length ?? 0,
           source.issues.length,
           source.kind,
+          entity,
         );
     }
     for (const old of previous.sources) {
-      if (!next.sources.some((s) => s.kind === old.kind))
+      if (!next.sources.some((s) => s.kind === old.kind && (s.kind !== "general" || s.name === old.name)))
         add(
           "source",
-          `${SOURCE_DEFS.find((s) => s.kind === old.kind)!.name} removed`,
+          `${SOURCE_DEFS.find((s) => s.kind === old.kind)?.name ?? old.name} removed`,
           "This source is no longer in the workspace.",
           old.hash,
           null,
           old.kind,
+          old.kind === "general" ? old.name : undefined,
         );
     }
     const oldStock = new Map(

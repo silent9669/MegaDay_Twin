@@ -4,6 +4,7 @@ import type { DurableObjectState } from "@cloudflare/workers-types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountWorkspace } from "../../server/workspace";
 import { savedChat } from "../../server/chat-store";
+import { makeSource } from "./sources";
 import { defaultSettings } from "./workspace-types";
 function setup() {
   const database = new DatabaseSync(":memory:");
@@ -53,6 +54,36 @@ const req = (name: string, data?: unknown, revision = 1) =>
   );
 afterEach(() => vi.unstubAllGlobals());
 describe("persistent account documents", () => {
+  it("starts empty, stores general and inventory rows, and keeps them across reconstruction", async () => {
+    const { workspace, reconstruct, database } = setup();
+    expect(await (await workspace.fetch(req("sources"))).json()).toMatchObject({ revision: 1, data: { files: [] } });
+    const files = await Promise.all([
+      makeSource("notes.csv", "item,value\nA,1", "upload"),
+      makeSource("events.json", '[{"event":"Tet"},{"event":"Summer","month":6}]', "upload"),
+      makeSource("inventory.csv", "Mã nội bộ,Tên hàng,Tồn thực tế,Demand label\nA,Cup,7,Trendy", "upload"),
+    ]);
+    const response = await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files }));
+    expect(response.status).toBe(200);
+    const stored = await response.json();
+    expect(stored.data.files[2].text).not.toContain("Demand label");
+    expect(database.prepare("SELECT * FROM studio_tables").all()).toHaveLength(3);
+    expect(database.prepare("SELECT * FROM studio_rows").all()).toHaveLength(4);
+    expect(await (await reconstruct().fetch(req("sources"))).json()).toEqual(stored);
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [] }))).status).toBe(409);
+    expect(database.prepare("SELECT * FROM studio_rows").all()).toHaveLength(4);
+    database.close();
+  });
+  it("rolls source documents and rows back together if materialization fails", async () => {
+    const { workspace, database } = setup();
+    await workspace.fetch(req("sources"));
+    database.exec("CREATE TRIGGER reject_rows BEFORE INSERT ON studio_rows BEGIN SELECT RAISE(ABORT, 'test failure'); END");
+    const file = await makeSource("test.csv", "item,value\nA,1", "upload");
+    expect((await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [file] }))).status).toBe(422);
+    expect(await (await workspace.fetch(req("sources"))).json()).toMatchObject({ revision: 1, data: { files: [] } });
+    expect(database.prepare("SELECT * FROM studio_tables").all()).toHaveLength(0);
+    database.close();
+  });
+
   it("persists settings across object reconstruction and sends revision updates", async () => {
     const { workspace, database, sent } = setup();
     const initial = await workspace.fetch(req("settings"));

@@ -10,7 +10,7 @@ Milo monitoring is deterministic, session-local and in-app. The existing source/
 
 “Explain” attaches a bounded change reference and fills an empty draft; an existing draft is preserved. Only Send calls the assistant. The server loads current source values from authenticated account storage and explicitly marks client-provided historical observations as unverified. A revision mismatch is reported as stale evidence. An explanation is advisory and cannot perform a decision.
 
-No production deployment or merge is part of this PR. Validation evidence and its limitations are recorded in `docs/city-demo/saigon-validation.md`.
+Pre-merge validation evidence and its limitations are recorded in `docs/city-demo/saigon-validation.md`.
 
 Morning/Night is a revisioned account view preference, defaulting to Morning for older documents. It changes the current scene in place: sky/fog, hemisphere and directional lighting, glass/lamp emission, water and instanced streetlight pools. It also themes the shell, native settings dialog and portaled panels. Source time and data remain unchanged. Reduced motion freezes traffic and ripples in both modes; mode changes themselves are immediate. Named glass/lamp materials are retained during GLB optimization and covered by an asset contract test.
 

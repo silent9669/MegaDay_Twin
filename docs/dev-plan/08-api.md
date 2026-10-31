@@ -637,6 +637,24 @@ bounds, synchronization and frontend/backend boundaries.
 
 ### In-app workspace change context
 
-`changeReference` is optional and strict: `{kind, sourceRevision, sandboxRevision, hour, source?, entity?, before, after}`. Allowed kinds are `source`, `stock-zero`, `stock-unknown`, `stock-recovered`, `diagnostics`, `diagnostics-resolved`, `orders`, `campaigns`, and `clock`. Revisions are nonnegative integers; hour is 0–24; source uses the existing six source kinds; entity and string values are limited to 200 characters. Before/after accept a finite number, bounded string, or null. Unknown fields return 422; the complete request is limited to 3,000 characters (413 otherwise).
+`changeReference` is optional and strict: `{kind, sourceRevision, sandboxRevision, hour, source?, entity?, sourceName?, before, after}`. Allowed kinds are `source`, `stock-zero`, `stock-unknown`, `stock-recovered`, `diagnostics`, `diagnostics-resolved`, `orders`, `campaigns`, and `clock`. Revisions are nonnegative integers; hour is 0–24; source uses the six business source kinds or `general`; general tables are identified by `sourceName` (up to 1,000 characters). Entity and before/after string values are limited to 200 characters. Before/after accept a finite number, bounded string, or null. Unknown fields return 422; the complete request is limited to 3,000 characters (413 otherwise).
 
 The authenticated server resolves current stock/counts/source diagnostics from account documents. Historical before/after values remain explicitly unverified; revision differences mark the reference stale. No client-supplied chat history is accepted. This adds no database schema, account document, or WebSocket event. Monitoring and Explain alone make no AI call; Send retains the existing rate-limited `/api/pm/chat` flow.
+## Data Studio Worker APIs (2026-10-31)
+
+These account-scoped routes run in the Cloudflare Worker, separately from the
+Python `/api/v1` analytics API:
+
+- `POST /api/studio/import`: raw ZIP, maximum 20 MiB compressed and expanded.
+  Returns `{ tables: [{ file, source, rowCount, method, columns }], skipped, model }`.
+  Analysis does not persist changes; the reviewed selection is saved through
+  the existing revision-checked `PUT /api/workspace/sources` contract.
+- `GET /api/product-labels`: inventory candidates and the latest persisted run.
+- `POST /api/product-labels`: `{ sourceRevision, context: { market, asOf,
+  evidence: [{ productCode, observedAt, source, observation }] } }`.
+  Demand labels are `Trendy | Seasonal | Normal | null`. Null requires a reason
+  explaining missing evidence. Context, provider/prompt version and source
+  fingerprint accompany each run. Labels remain separate from forecast groups.
+
+Authentication and same-origin checks apply. Model inputs are untrusted data.
+See `web/README.md` for configuration, limits, failure semantics and validation.

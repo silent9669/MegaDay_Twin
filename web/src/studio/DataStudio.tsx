@@ -23,12 +23,13 @@ import {
   selectUploads,
   validatePack,
   MAX_BYTES,
+  sourceKey, mergeSources, DEMAND_COLUMN,
   type Source,
   type SourcePack,
 } from "./sources";
 import { SandboxControl } from "./SandboxControl";
 import { SourceDiagnostics } from "./SourceDiagnostics";
-import { ProductLabels } from "./ProductLabels";
+import { ArchiveImport } from "./ArchiveImport";
 import "./studio.css";
 function download(name: string, text: string) {
   const url = URL.createObjectURL(
@@ -76,19 +77,17 @@ export function DataStudio() {
   const input = useRef<HTMLInputElement>(null),
     folder = useRef<HTMLInputElement>(null),
     edit = useRef<HTMLDialogElement>(null);
-  const pendingImportLabels = useRef(false);
-  const [autoLabelRevision, setAutoLabelRevision] = useState<number | null>(null);
   const latest = useRef({ draft, base, dirty });
   useEffect(() => {
     latest.current = { draft, base, dirty };
   }, [draft, base, dirty]);
-  const current = files.find((f) => f.kind === selected) ?? files[0];
+  const current = files.find((f) => sourceKey(f) === selected) ?? files[0];
   const parsed = useMemo(
     () => files.map((f) => ({ source: f, parsed: inspect(f.name, f.text) })),
     [files],
   );
   const currentParsed = parsed.find(
-    (f) => f.source.kind === current?.kind,
+    (f) => current && sourceKey(f.source) === sourceKey(current),
   )?.parsed;
   const logs = parsed.flatMap(({ source, parsed }) =>
     parsed.issues.map((i) => ({ ...i, kind: source.kind, file: source.name })),
@@ -126,10 +125,6 @@ export function DataStudio() {
       if (latest.current.draft === pending.draft) {
         setDirty(false);
         setDraft(null);
-        if (pendingImportLabels.current) {
-          pendingImportLabels.current = false;
-          setAutoLabelRevision(saved.revision);
-        }
       }
       setSaveError("");
     } catch (e) {
@@ -156,14 +151,14 @@ export function DataStudio() {
     if (cell) edit.current?.showModal();
   }, [cell]);
   const importFiles = async (list: FileList | null, isFolder = false) => {
-    if (!list?.length || busy || !files.length) return;
+    if (!list?.length || busy) return;
     setBusy(true);
     setMessage("");
     try {
       let incoming = Array.from(list);
       if (isFolder) incoming = selectUploads(incoming).map((i) => incoming[i]!);
-      if (incoming.length > 6)
-        throw Error(`Selected ${incoming.length} files; choose at most 6 (one per source). Nothing was imported; existing sources are unchanged.`);
+      if (incoming.length > 24)
+        throw Error(`Selected ${incoming.length} files; choose at most 24 tables. Nothing was imported; existing sources are unchanged.`);
       const bytes = incoming.reduce((sum, f) => sum + f.size, 0);
       if (bytes > MAX_BYTES)
         throw Error(`Selected files total ${(bytes / 1024 / 1024).toFixed(1)} MiB; the limit is 20 MiB. Nothing was imported; existing sources are unchanged.`);
@@ -191,22 +186,21 @@ export function DataStudio() {
             ),
           );
         }
-      if (new Set(imported.map((f) => f.kind)).size !== imported.length)
+      if (new Set(imported.map(sourceKey)).size !== imported.length)
         throw Error(
           "Duplicate source type in this upload. Choose one file per source.",
         );
-      pendingImportLabels.current = true;
       change({
         schema: "hackathon.sources.v1",
-        files: files.map((f) => imported.find((v) => v.kind === f.kind) ?? f),
+        files: mergeSources(files, imported),
       });
-      setSelected(imported[0]!.kind);
+      setSelected(sourceKey(imported[0]!));
       setPage(0);
       setQuery("");
       setFocusRow(null);
-      setTab("diagnostics");
+      setTab("records");
       setMessage(
-        `${imported.length} source${imported.length === 1 ? "" : "s"} replaced. Contact data removed; review diagnostics.`,
+        `${imported.length} table${imported.length === 1 ? "" : "s"} imported.`,
       );
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Could not read files.");
@@ -223,7 +217,6 @@ export function DataStudio() {
         "/api/repository-sources",
       );
       const pack = await validatePack(result.pack);
-      pendingImportLabels.current = false;
       change(pack);
       setMessage(result.notice);
     } catch (e) {
@@ -233,7 +226,7 @@ export function DataStudio() {
     }
   };
   const exportPack = () => {
-    if (files.length === 6)
+    if (files.length)
       download(
         "hackathon.sources.json",
         JSON.stringify({ schema: "hackathon.sources.v1", files }, null, 2),
@@ -261,7 +254,7 @@ export function DataStudio() {
         <div>
           <span className="eyebrow">Workspace / Data</span>
           <h1>
-            Data Studio<span className="source-count">6 sources</span>
+            Data Studio<span className="source-count">{files.length} tables</span>
           </h1>
         </div>
         <div className="studio-actions">
@@ -285,17 +278,16 @@ export function DataStudio() {
               "Loading sources…"
             )}
           </span>
-          <button onClick={exportPack} disabled={busy || files.length !== 6}>
+          <button onClick={exportPack} disabled={busy || !files.length}>
             <Download size={16} />
             Export pack
           </button>
           <button
-            className="primary"
             onClick={() => input.current?.click()}
-            disabled={busy || saving || !files.length}
+            disabled={busy || saving || !cloud.document}
           >
             <Upload size={16} />
-            Import data
+            Import CSV / JSON
           </button>
         </div>
       </header>
@@ -304,8 +296,6 @@ export function DataStudio() {
           {demoCount === files.length
             ? `All ${files.length} sources are repository demo data.`
             : `${demoCount} demo sources · ${files.length - demoCount} uploaded or edited sources.`}
-          {" "}Import replaces matching sources; the total source count is not an upload receipt.
-          {" "}The complete set is 4 CSV files and 2 JSON files. See each source's Format tab.
         </p>
       )}
       <input
@@ -349,7 +339,6 @@ export function DataStudio() {
           <button onClick={exportPack}>Export draft</button>
           <button
             onClick={() => {
-              pendingImportLabels.current = false;
               setDraft(null);
               setDirty(false);
               setSaveError("");
@@ -359,30 +348,35 @@ export function DataStudio() {
           </button>
         </div>
       )}
-      <ProductLabels
-        sourceRevision={cloud.document?.revision ?? 0}
-        autoRunRevision={autoLabelRevision}
-        blocked={dirty || saving || conflict || busy || !!saveError}
-      />
-      <SandboxControl />
+      <ArchiveImport blocked={dirty || saving || conflict || busy || !cloud.document || !!saveError}
+        onLoad={incoming => {
+          change({ schema: "hackathon.sources.v1", files: mergeSources(files, incoming) });
+          setSelected(sourceKey(incoming[0]!));
+          setPage(0); setQuery(""); setFocusRow(null); setTab("records");
+          setMessage(`${incoming.length} tables loaded. Saving to workspace…`);
+        }} />
+      {demoCount > 0 && <SandboxControl />}
+      {!files.length && cloud.document && <p className="source-empty">No tables yet.</p>}
+      {!!files.length && <>
       <section className="studio-body" aria-label="Source files">
         <aside className="source-list">
           <div className="source-list-heading">
             <strong>Source files</strong>
-            <span>{files.length}/6</span>
+            <span>{files.length}</span>
           </div>
-          {SOURCE_DEFS.map((def) => {
-            const entry = parsed.find((f) => f.source.kind === def.kind),
+          {files.map((source) => {
+            const def = { kind: source.kind, file: source.name, name: SOURCE_DEFS.find(d => d.kind === source.kind)?.name ?? source.name };
+            const entry = parsed.find((f) => sourceKey(f.source) === sourceKey(source)),
               count =
                 entry?.parsed.issues.filter((i) => i.level !== "info").length ??
                 0;
             return (
               <button
-                key={def.kind}
-                className={current?.kind === def.kind ? "selected" : ""}
-                aria-pressed={current?.kind === def.kind}
+                key={sourceKey(source)}
+                className={current && sourceKey(current) === sourceKey(source) ? "selected" : ""}
+                aria-pressed={current && sourceKey(current) === sourceKey(source)}
                 onClick={() => {
-                  setSelected(def.kind);
+                  setSelected(sourceKey(source));
                   setPage(0);
                   setQuery("");
                   setFocusRow(null);
@@ -437,7 +431,7 @@ export function DataStudio() {
             <div>
               <h2>
                 {SOURCE_DEFS.find((d) => d.kind === current?.kind)?.name ??
-                  "Loading sources"}
+                  current?.name ?? "Tables"}
               </h2>
               <code>{current?.name}</code>
             </div>
@@ -545,6 +539,7 @@ export function DataStudio() {
                                 ) : (
                                   <button
                                     className="source-cell"
+                                    disabled={current?.kind === "inventory" && column === DEMAND_COLUMN}
                                     title={`Edit row ${index + 1}, ${column}`}
                                     onClick={() =>
                                       setCell({
@@ -642,6 +637,7 @@ export function DataStudio() {
           </footer>
         </div>
       </section>
+      </>}
       {cell && (
         <dialog
           ref={edit}
@@ -666,7 +662,7 @@ export function DataStudio() {
                   change({
                     schema: "hackathon.sources.v1",
                     files: files.map((f) =>
-                      f.kind === current.kind ? source : f,
+                      sourceKey(f) === sourceKey(current) ? source : f,
                     ),
                   });
                   setCell(null);

@@ -10,12 +10,14 @@ import {
 import { repositorySources } from "./server/repository";
 import { modelList, type PMEnv } from "./server/pm";
 import { savedChat } from "./server/chat-store";
+import { studioImport } from "./server/studio-import";
+import type { StudioModelEnv } from "./server/model-json";
 import { productLabels } from "./server/product-labels";
 import { getProductLabelProvider } from "./server/product-label-provider";
-import { SOURCE_DEFS, type SourcePack } from "./src/studio/sources";
+import { SOURCE_DEFS, withoutDemandLabels, type SourcePack } from "./src/studio/sources";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
-  PMEnv & {
+  PMEnv & StudioModelEnv & {
     DB: { prepare(sql: string): { first(): Promise<unknown> } };
     ASSETS: { fetch(request: Request): Promise<Response> };
     WORKSPACE?: {
@@ -89,7 +91,14 @@ async function handle(request: Request, env: Env): Promise<Response> {
         new Request(request, { headers }),
       );
     }
+    if (path === "/api/studio/import") {
+      if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "studio:admin" })).success)
+        return fail(429, "Studio is busy. Try again in a minute.");
+      return studioImport(request, env);
+    }
     if (path === "/api/product-labels") {
+      if (request.method === "POST" && env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "labels:admin" })).success)
+        return fail(429, "Labeling is busy. Try again in a minute.");
       if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
       return productLabels(request,
         env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")),
@@ -176,7 +185,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
         ).fetch(new Request(new URL("/api/workspace/sources", url)));
         const doc = (await stored.json()) as { data: SourcePack };
         const form = new FormData();
-        for (const f of doc.data.files)
+        const supported = (await withoutDemandLabels(doc.data)).files.filter(f => f.kind !== "general");
+        if (!supported.length) return fail(422, "Import a supported business table first.");
+        for (const f of supported)
           form.append(
             "files",
             new Blob([f.text], {

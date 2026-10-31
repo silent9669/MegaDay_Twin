@@ -1,6 +1,6 @@
 import { fail } from "./auth";
 import {
-  buildLabelInput, validateLabelResponse, type LabelInput, type LabelResponse, type LabelRun,
+  labelContextSchema, buildLabelInput, validateLabelResponse, type LabelInput, type LabelResponse, type LabelRun,
 } from "../src/studio/product-labels";
 import type { Doc } from "../src/studio/workspace-types";
 import type { SourcePack } from "../src/studio/sources";
@@ -29,7 +29,7 @@ export async function productLabels(
     return fail(422, error instanceof Error ? error.message : "Review product identities before labeling.");
   }
   const response = (run: LabelRun | null): Response => {
-    const stale = !!run && (run.sourceRevision !== input.sourceRevision ||
+    const stale = !!run && (!run.context || run.sourceRevision !== input.sourceRevision ||
       run.sourceFingerprint !== input.sourceFingerprint || (!!provider && run.provider !== provider.id));
     const expired = run?.status === "running" && Date.parse(run.startedAt) + LABEL_LEASE_MS <= Date.now();
     const body: LabelResponse = {
@@ -42,19 +42,23 @@ export async function productLabels(
   let revision: number;
   try {
     const raw = await request.text();
-    if (raw.length > 1000) return fail(413, "Request too large.");
+    if (raw.length > 250000) return fail(413, "Request too large.");
     const body = JSON.parse(raw);
-    if (!body || Object.keys(body).some((key) => key !== "sourceRevision") ||
+    if (!body || Object.keys(body).some((key) => !["sourceRevision", "context"].includes(key)) ||
         !Number.isSafeInteger(body.sourceRevision) || body.sourceRevision < 0)
       return fail(422, "A saved source revision is required.");
     revision = body.sourceRevision;
-  } catch { return fail(422, "A saved source revision is required."); }
+    input.context = labelContextSchema.parse(body.context);
+    const codes = new Set(input.products.map(p => p.reference));
+    if (input.context.evidence.some(e => !codes.has(e.productCode)))
+      return fail(422, "Evidence must refer to an inventory product code.");
+  } catch { return fail(422, "Provide a saved source revision, market, assessment date, and valid dated evidence."); }
   if (revision !== input.sourceRevision)
     return fail(409, "Sources changed. Save and label the latest sources.", "LABEL_SOURCES_CHANGED");
   if (!provider) return fail(503, "The labeling tool is not connected yet. Existing forecasting remains unchanged.", "LABEL_PROVIDER_UNCONFIGURED");
   if (!input.products.length) return fail(422, "No named products were found in these sources.");
   const run: LabelRun = {
-    id: crypto.randomUUID(), sourceRevision: input.sourceRevision,
+    id: crypto.randomUUID(), context: input.context, sourceRevision: input.sourceRevision,
     sourceFingerprint: input.sourceFingerprint, provider: provider.id,
     status: "running", startedAt: new Date().toISOString(), completedAt: null,
     results: [], error: null,
@@ -87,5 +91,9 @@ export async function productLabels(
   const finished = await internal("finish", run);
   if (!finished.ok) return finished;
   const saved = await finished.json() as { run: LabelRun };
-  return response(saved.run);
+  const latestResponse = await internal("snapshot");
+  if (!latestResponse.ok) return latestResponse;
+  const latest = await latestResponse.json() as Snapshot;
+  input = await buildLabelInput(latest.sources.data, latest.sources.revision);
+  return response(latest.run ?? saved.run);
 }

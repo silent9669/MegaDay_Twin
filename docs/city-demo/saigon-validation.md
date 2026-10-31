@@ -4,13 +4,17 @@ Validated locally against the Cloudflare production build, including its content
 
 ## Checks
 
-- `NODE_OPTIONS=--no-experimental-webstorage node scripts/check.mjs web`: deployment regression tests, lint, 227 Vitest tests, typechecked Cloudflare build, deployment dry run.
+- `NODE_OPTIONS=--no-experimental-webstorage node scripts/check.mjs web`: deployment regression tests, lint, 238 Vitest tests, typechecked Cloudflare build, deployment dry run.
 - `node web/qa/saigon.mjs`: 1440×900, 1024×768, 768×1024, 390×844, and 844×390; bounded panels, keyboard containment on mobile, retained drafts, login layout, seven-step tutorial with river/lighting actions, quiet two-tab Milo speech bubbles, source-row navigation, and persistence across city/Data Studio navigation.
 - Supplemental checks: all four ad brands, three city/Data Studio navigation cycles with one canvas remaining, failed-GLB fallback, and district navigation with WebGL disabled.
 - Morning/Night survives reload, themes portaled panels, leaves the source clock unchanged and reuses the canvas. Reduced motion: scene screenshots taken apart have identical hashes in both modes.
 - Floating map labels navigate to HQ and Landmark 81; the Explore menu retains landmark access on narrow screens.
 - No console errors in the production-preview browser checks. The final mobile selected-label adjustment was additionally verified with a focused narrow-screen landmark check. Live model replies are covered by mocked request/storage integration tests; no paid OpenAI call was made in this QA run.
 - glTF validation: no errors or warnings. The validator reports that it cannot inspect `EXT_meshopt_compression`; actual decoding and rendering were verified in Chrome.
+
+## Main-branch integration
+
+The ZIP import and warehouse demand-label workflow from `f34ba26` is preserved. Regression tests cover Milo source selection after search/pagination and independent monitoring/server resolution of general tables by filename. Warehouse assessment and evidence controls use the city appearance tokens. The complete city browser suite passed again after the merge resolution, including night-mode controls at five viewports; the separate ZIP import → persisted tables → warehouse/model UI contract suite passed at four widths. Chrome DevTools inspection found no console errors or warnings.
 
 ## Render measurements
 

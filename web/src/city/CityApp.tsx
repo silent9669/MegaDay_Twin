@@ -35,6 +35,8 @@ import {
   type Sandbox,
 } from "../studio/workspace-types";
 import type { SourcePack } from "../studio/sources";
+import { ProductLabels } from "../studio/ProductLabels";
+import "../studio/studio.css";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
 import { ShiftOverviewPage } from "../pages/ShiftOverviewPage";
@@ -521,57 +523,17 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                     ) : district === "warehouse" ? (
                       <>
                         <div className="warehouse-title">
-                          <h3>Source inventory</h3>
                           <Link to="/mock-data">
                             Manage sources
                             <ArrowRight size={16} />
                           </Link>
                         </div>
-                        <div className="warehouse-table">
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>Internal code</th>
-                                <th>Available units</th>
-                                <th>Product</th>
-                                <th>Source timestamp</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {feed.stock.map((row) => (
-                                <tr
-                                  key={row.code}
-                                  className={
-                                    params.get("stock") === row.code
-                                      ? "stock-highlight"
-                                      : undefined
-                                  }
-                                >
-                                  <td>
-                                    <code>{row.code}</code>
-                                  </td>
-                                  <td>
-                                    {row.stock === null ? (
-                                      <span className="stock-unknown">
-                                        Unknown
-                                      </span>
-                                    ) : (
-                                      row.stock.toLocaleString()
-                                    )}
-                                  </td>
-                                  <td>{row.name}</td>
-                                  <td>{row.asOf}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          {!feed.stock.length && (
-                            <p>
-                              No inventory observations at this clock. Change
-                              the source clock in Data Studio.
-                            </p>
-                          )}
-                        </div>
+                        <ProductLabels
+                          sourceRevision={sources.document?.revision ?? 0}
+                          inventory={feed.stock}
+                          blocked={!sources.document || !!sources.error}
+                          selectedCode={selectedStock ?? undefined}
+                        />
                       </>
                     ) : district === "ads" ? (
                       <>

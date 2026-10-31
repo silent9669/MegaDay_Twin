@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WorkspaceMonitor, snapshot } from "./changes";
+import { WorkspaceMonitor, snapshot, changeReferenceSchema } from "./changes";
 import type { SourcePack } from "../../studio/sources";
 import type { Doc, Sandbox } from "../../studio/workspace-types";
 function data(stock: string, revision = 1, hour = 1) {
@@ -22,6 +22,24 @@ function data(stock: string, revision = 1, hour = 1) {
   } as Doc<Sandbox>);
 }
 describe("workspace monitor", () => {
+  it("tracks imported general tables separately and links the exact source", () => {
+    const m = new WorkspaceMonitor();
+    const first = data("10");
+    first.sources.push(
+      { kind: "general", name: "first.csv", hash: "first", issues: [] },
+      { kind: "general", name: "second & third.csv", hash: "second", issues: [] },
+    );
+    m.observe(first);
+    const next = { ...first, sourceRevision: 2, sources: first.sources.map(s => s.name === "second & third.csv" ? { ...s, hash: "changed" } : s) };
+    const notices = m.observe(next);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.title).toBe("second & third.csv updated");
+    expect(notices[0]!.href).toBe("/mock-data?source=general%3Asecond%20%26%20third.csv");
+    expect(changeReferenceSchema.parse(notices[0]!.reference).sourceName).toBe("second & third.csv");
+    const removed = m.observe({ ...next, sourceRevision: 3, sources: next.sources.filter(s => s.name !== "first.csv") });
+    expect(removed).toHaveLength(1);
+    expect(removed[0]!.title).toBe("first.csv removed");
+  });
   it("establishes a silent baseline and ignores duplicate/old revisions", () => {
     const m = new WorkspaceMonitor();
     expect(m.observe(data("10"))).toEqual([]);

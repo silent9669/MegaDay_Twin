@@ -30,6 +30,13 @@ it("bounds historical evidence and rejects injected fields", () => {
     changeReferenceSchema.safeParse({ ...reference, hour: 25 }).success,
   ).toBe(false);
 });
+it("resolves a general table by its exact filename instead of the first table", async () => {
+  const storage = { fetch: vi.fn(async (r: Request) => Response.json(r.url.endsWith("/sources")
+    ? { revision: 1, data: { schema: "hackathon.sources.v1", files: ["first.csv", "second.csv"].map(name => ({ kind: "general", name, hash: name, origin: "upload", text: "item,value\nA,1\n" })) } }
+    : { revision: 1, data: { hour: 1, event: "observe" } })) };
+  const result = await resolveChange({ ...reference, kind: "source", source: "general", entity: undefined, sourceName: "second.csv" }, storage, "https://test");
+  expect(result.current.source?.hash).toBe("second.csv");
+});
 it("resolves current stock from account storage and marks stale observations", async () => {
   const storage = {
     fetch: vi.fn(async (r: Request) =>

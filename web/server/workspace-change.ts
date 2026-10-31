@@ -19,7 +19,7 @@ export async function resolveChange(
   )) as [Doc<SourcePack>, Doc<Sandbox>];
   const current = snapshot(sources, sandbox);
   const stock = current.stock.find((s) => s.code === reference.entity);
-  const source = current.sources.find((s) => s.kind === reference.source);
+  const source = current.sources.find((s) => s.kind === reference.source && (s.kind !== "general" || s.name === reference.sourceName));
   return {
     historicalEvidence: {
       trust: "unverified client observation",

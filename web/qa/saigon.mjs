@@ -104,6 +104,15 @@ try {
     );
     await page.screenshot({ path: out + `warehouse-${width}.png` });
     assert.equal(await page.locator(".district-workspace").evaluate(el => getComputedStyle(el).colorScheme), "dark");
+    await page.getByLabel("Market", { exact: true }).waitFor();
+    assert.deepEqual(await page.getByLabel("Market", { exact: true }).evaluate(el => ({
+      color: getComputedStyle(el).color,
+      background: getComputedStyle(el).backgroundColor,
+    })), { color: "rgb(224, 233, 226)", background: "rgb(24, 42, 43)" });
+    await page.locator(".label-evidence summary").click();
+    await page.getByLabel("Evidence source", { exact: true }).fill("Local QA observation");
+    assert(await page.getByRole("button", { name: "Add evidence", exact: true }).isVisible());
+    await page.screenshot({ path: out + `warehouse-evidence-${width}.png` });
     results.appearance.panels.push({ width, scheme: "dark" });
 
     await page.getByRole("button", { name: "Close workspace" }).click();
@@ -297,6 +306,7 @@ try {
       await page.locator(".stock-highlight code").innerText(),
       "QA-SKU",
     );
+    assert.equal(await page.getByLabel("Search products", { exact: true }).inputValue(), "QA-SKU");
     results.monitor = {
       crossTab: true,
       quiet: true,

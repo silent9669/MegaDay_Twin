@@ -8,7 +8,7 @@ import { AccountWorkspace } from "./workspace";
 import { productLabels } from "./product-labels";
 import { getProductLabelProvider, LABEL_LEASE_MS, LABEL_TIMEOUT_MS, type ProductLabelProvider } from "./product-label-provider";
 import { buildLabelInput, type LabelInput, type LabelResponse, type LabelRun } from "../src/studio/product-labels";
-import type { SourcePack } from "../src/studio/sources";
+import { makeSource, type SourcePack } from "../src/studio/sources";
 import type { Doc } from "../src/studio/workspace-types";
 import rawPack from "./repository-sources.json";
 
@@ -16,6 +16,7 @@ const origin = "https://example.test";
 const databases: DatabaseSync[] = [];
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   databases.splice(0).forEach((database) => database.close());
 });
 const pack: SourcePack = {
@@ -30,9 +31,9 @@ const pack: SourcePack = {
   })),
 };
 const request = (sourceRevision?: number) => new Request(origin + "/api/product-labels",
-  sourceRevision === undefined ? {} : { method: "POST", body: JSON.stringify({ sourceRevision }) });
+  sourceRevision === undefined ? {} : { method: "POST", body: JSON.stringify({ sourceRevision, context: { market: "Vietnam", asOf: "2026-10-31", evidence: [] } }) });
 const labels = (input: LabelInput) => ({
-  labels: input.products.map((product) => ({ productId: product.id, group: "on_dinh", reason: "Provider evidence", confidence: 0.8 })),
+  labels: input.products.map((product) => ({ productId: product.id, group: "Normal", reason: "Provider evidence", confidence: 0.8 })),
 });
 async function setup() {
   const database = new DatabaseSync(":memory:");
@@ -64,13 +65,13 @@ async function setup() {
   expect((await saveSources(0)).status).toBe(200);
   const sourceDoc = await (await workspace.fetch(new Request(origin + "/api/workspace/sources"))).json() as Doc<SourcePack>;
   const input = await buildLabelInput(sourceDoc.data, sourceDoc.revision);
-  return { workspace, input, saveSources, sent, reconstruct: () => new AccountWorkspace(state) };
+  return { workspace, database, input, saveSources, sent, reconstruct: () => new AccountWorkspace(state) };
 }
 
 describe("product label workflow", () => {
   it("stays honestly unconfigured and never writes fake labels", async () => {
     const { workspace } = await setup();
-    expect(getProductLabelProvider({ PRODUCT_LABEL_API_KEY: "must-not-enable-it" })).toBeNull();
+    expect(getProductLabelProvider({ OPENAI_API_KEY: "must-not-enable-without-decision-model" })).toBeNull();
     const response = await productLabels(request(), workspace, null);
     expect(await response.json()).toMatchObject({ configured: false, provider: null, sourceRevision: 1, run: null, stale: false });
     const disabled = await productLabels(request(1), workspace, null);
@@ -78,19 +79,27 @@ describe("product label workflow", () => {
     expect(await disabled.json()).toHaveProperty("error.code", "LABEL_PROVIDER_UNCONFIGURED");
   });
   it("persists valid labels across reconstruction and deduplicates completed requests", async () => {
-    const { workspace, reconstruct, sent } = await setup();
+    const { workspace, reconstruct, sent, database, saveSources } = await setup();
     const classify = vi.fn(async (input: LabelInput) => labels(input));
     const provider = { id: "test-adapter-v1", classify };
     const first = await productLabels(request(1), workspace, provider);
     expect(first.status).toBe(200);
     const result = await first.json() as LabelResponse;
     expect(result.run?.status).toBe("completed");
-    expect(result.run?.results).toHaveLength(3);
+    expect(result.run?.results).toHaveLength(1);
     expect(result.run?.provider).toBe("test-adapter-v1");
-    const second = await productLabels(request(1), reconstruct(), provider);
+    expect(result).toMatchObject({ sourceRevision: 2, stale: false });
+    const sourceDoc = await (await workspace.fetch(new Request(origin + "/api/workspace/sources"))).json() as Doc<SourcePack>;
+    expect(sourceDoc.data.files.find(f => f.kind === "inventory")?.text).toContain("Demand label");
+    const row = database.prepare("SELECT record_json FROM studio_rows WHERE table_id = 'inventory'").get() as { record_json: string };
+    expect(JSON.parse(row.record_json)).toMatchObject({ "Demand label": "Normal", "Tồn thực tế": "5" });
+    const second = await productLabels(request(result.sourceRevision), reconstruct(), provider);
     expect((await second.json() as LabelResponse).run?.id).toBe(result.run?.id);
     expect(classify).toHaveBeenCalledTimes(1);
     expect(sent.some((message) => JSON.parse(message).name === "product-labels")).toBe(true);
+    expect((await saveSources(2, sourceDoc.data)).status).toBe(200);
+    const edited = await (await workspace.fetch(new Request(origin + "/api/workspace/sources"))).json() as Doc<SourcePack>;
+    expect(edited.data.files.find(f => f.kind === "inventory")?.text).not.toContain("Demand label");
   });
   it("retains partial/unclassified results and permits retry", async () => {
     const { workspace, input } = await setup();
@@ -99,7 +108,7 @@ describe("product label workflow", () => {
     ] })) };
     const response = await productLabels(request(1), workspace, provider);
     expect(await response.json()).toMatchObject({ run: { status: "partial", results: [{ group: null }] } });
-    await productLabels(request(1), workspace, provider);
+    await productLabels(request(2), workspace, provider);
     expect(provider.classify).toHaveBeenCalledTimes(2);
   });
   it.each(["unknown-id", "duplicate-id", "unknown-group", "bad-confidence", "bad-envelope"])(
@@ -115,6 +124,22 @@ describe("product label workflow", () => {
       expect(await response.json()).toMatchObject({ run: { status: "failed", results: [] } });
     },
   );
+  it("reclassifies when the assessment changes and rejects future or unrelated evidence", async () => {
+    const { workspace } = await setup();
+    const provider = { id: "test", classify: vi.fn(async (input: LabelInput) => labels(input)) };
+    await productLabels(request(1), workspace, provider);
+    const post = (context: unknown) => new Request(origin + "/api/product-labels", {
+      method: "POST", body: JSON.stringify({ sourceRevision: 2, context }),
+    });
+    const context = { market: "Thailand", asOf: "2026-10-31", evidence: [] };
+    expect((await productLabels(post(context), workspace, provider)).status).toBe(200);
+    expect(provider.classify).toHaveBeenCalledTimes(2);
+    for (const evidence of [
+      { productCode: "Internal1", observedAt: "2026-11-01", source: "Report", observation: "future" },
+      { productCode: "Other", observedAt: "2026-10-30", source: "Report", observation: "unrelated" },
+    ]) expect((await productLabels(post({ ...context, evidence: [evidence] }), workspace, provider)).status).toBe(422);
+    expect(provider.classify).toHaveBeenCalledTimes(2);
+  });
   it("redacts provider errors and lets a failed job retry", async () => {
     const { workspace } = await setup();
     const provider = { id: "test", classify: vi.fn(async (input: LabelInput) => labels(input)) };
@@ -206,8 +231,33 @@ describe("label route boundaries", () => {
     ASSETS: { fetch: async () => new Response("static app") },
     SESSION_SECRET: secret, ADMIN_PASSWORD_HASH: "configured",
   };
+  it("keeps the Python multipart contract and excludes general tables and derived labels", async () => {
+    const files = await Promise.all([
+      makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế,Demand label\nA,Cup,17,Normal", "upload"),
+      makeSource("custom.csv", "event,month\nTet,2", "upload"),
+    ]);
+    const upstream = vi.fn<typeof fetch>(async (_url, init) => {
+      const form = init?.body as FormData;
+      const forwarded = form.getAll("files") as File[];
+      expect(forwarded).toHaveLength(1);
+      expect(forwarded[0]!.name).toBe("ton_kho_google_sheet.csv");
+      expect(await forwarded[0]!.text()).toBe("Mã nội bộ,Tên hàng,Tồn thực tế\r\nA,Cup,17");
+      return Response.json({ accepted: true });
+    });
+    vi.stubGlobal("fetch", upstream);
+    const env = { ...base, DATA_BACKEND_URL: "https://python.test/", DATA_BACKEND_USER: "operator", DATA_BACKEND_ROLE: "operator",
+      WORKSPACE: { idFromName: () => "admin", get: () => ({ fetch: async () => Response.json({ data: { schema: "hackathon.sources.v1", files } }) }) } };
+    const post = () => new Request(origin + "/api/data-backend/import", { method: "POST", headers: { Cookie: cookie(), Origin: origin } });
+    expect((await worker.fetch(post(), env)).status).toBe(200);
+    expect(upstream).toHaveBeenCalledTimes(1);
+    files.shift();
+    expect((await worker.fetch(post(), env)).status).toBe(422);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
   it("requires auth and same-origin writes", async () => {
     expect((await worker.fetch(request(), base)).status).toBe(401);
+    expect((await worker.fetch(new Request(origin + "/api/studio/import", { method: "POST" }), base)).status).toBe(401);
+    expect((await worker.fetch(new Request(origin + "/api/studio/import", { method: "POST", headers: { Cookie: cookie(), Origin: "https://other.test" } }), base)).status).toBe(403);
     const response = await worker.fetch(new Request(origin + "/api/product-labels", {
       method: "POST", headers: { Cookie: cookie(), Origin: "https://other.test" }, body: "{}",
     }), base);

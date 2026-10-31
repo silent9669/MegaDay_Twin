@@ -12,24 +12,27 @@ normalization, SKU matching, forecasting, simulation, permissions and economics.
 - View settings contains Signal core and motion/render controls. No manual
   Accessible map option. A WebGL failure still leaves district controls usable.
 - No 11.11 monitor or Engine workspace in the product navigation or Data Studio.
-- Data Studio has six source slots, records, diagnostics, import/export and a
-  Live sandbox clock. The clock filters source observations; it never executes
+- Data Studio starts empty and supports up to 24 business/general tables, records,
+  diagnostics and ZIP/CSV/JSON imports. A sandbox clock appears for repository demo
+  sources only. The clock filters demo observations; it never executes
   campaigns, changes source inventory or fabricates economic conclusions.
 - Chat has one compact identity/header, readable Markdown, contained table/code
   scrolling, prompt chips and one composer focus ring. The assistant is advisory.
 
-## Six sources
+## Imported tables and six business formats
 
-Default observations are the three files under `mock-data/out/demo/live_11_11`;
+Optional demo observations are the three files under `mock-data/out/demo/live_11_11`;
 costs, campaign structure and sale rules are their three parent reference files.
 Sources are fetched server-side from this GitHub repository at one resolved main
 commit. Paths are fixed, not user-controlled. A sanitized build-time pack from
-the same repository is the offline GitHub fallback. Initial load creates the
-account workspace only if it does not exist. Refreshing repository sources is
+the same repository is the offline GitHub fallback. Initial load creates an empty
+account workspace only if it does not exist. Existing saved sources are preserved. Refreshing repository sources is
 explicit and uses the current revision, never overwrites a saved upload silently.
 
 CSV headers/JSON shape determine the source type. Uploads replace one matching
-slot; duplicate source types in one batch are rejected. Shop-folder imports prefer
+business table; general tables are keyed by filename. ZIP analysis retains general
+CSV/JSON tables and uses the configured import model to map unambiguous headers.
+Duplicate business source types in one batch require selection. Shop-folder imports prefer
 the live observation files and parent references, excluding history, ground truth
 and replay metadata. Canonical six-file packs round-trip. Contact columns/keys
 are stripped and contacts in notes masked before cloud storage. Original files
@@ -43,7 +46,8 @@ owned by Worker `megadaytwin`. Sources, settings and sandbox clock are independe
 revisioned documents. Writes require a signed HttpOnly session and same-origin
 request, validate input server-side and use compare-and-swap revisions. A stale
 write returns 409. Sources are chunked below SQLite's row limit and committed in
-one transaction. Maximum source transport is 20 MiB.
+one transaction with the `studio_tables` catalog and `studio_rows` records.
+Maximum source transport is 20 MiB.
 
 Authenticated WebSockets broadcast revision notifications immediately. Other
 devices refetch the changed document. An open editor with local changes keeps its
@@ -83,19 +87,16 @@ and existing API fixtures honestly; no live ingestion or causal iROAS is claimed
 
 ## Verification
 
-Product labels has a server-side provider seam, disabled by default. Data Studio
-extracts named candidates from saved orders/inventory/cost sources, keeping
-platform SKUs, internal codes and name-only records separate. It shows provider
-availability, unknown/pending/partial/failed/stale outcomes, reasons and optional
-confidence. Successful imports request labels only after account persistence;
-opening demo data or reloading does not trigger paid provider work.
-
-Label runs are separate server-owned Durable Object records tied to source
-revision and six-source fingerprint. Source changes invalidate prior labels;
-late results cannot overwrite newer inputs. Browser writes to the label archive
-are rejected. Current Python forecast classification remains unchanged: wiring
-the real adapter and applying confirmed canonical-SKU labels to forecasting are
-separate integration tasks. See `web/README.md` for the provider contract.
+Warehouse's **Label data** action uses the existing OpenAI secret and a separately
+configured Luna decision model. It classifies imported inventory into Trendy,
+Seasonal or Normal using market, date and supplied evidence. Insufficient evidence
+leaves the item unclassified and displays the missing evidence. Successful/partial
+runs atomically persist a read-only `Demand label` column into the inventory table
+and source CSV, plus the run's evidence/reasons. Data Studio and exports show the
+same column. Editing/reimporting sources clears derived labels. Revision checks,
+leases and fingerprints reject stale/concurrent results. Only the six business
+formats, without derived labels, are forwarded to the existing Python backend;
+its SKU matching, forecasting and economics remain unchanged.
 
 Data Studio's Diagnostics tab describes source-data checks, not application
 failures. It separates errors, warnings and information, explains intentional
@@ -127,7 +128,7 @@ and 320/390/768/1440px layouts. Results and screenshots are written to the ignor
 repository directory `qa/runs/studio/`. It does not verify production persistence.
 
 Run frontend lint, typecheck, unit tests and both builds. Browser checks cover
-desktop/mobile compact navigation, six-source bootstrap/import/export/diagnostics,
+desktop/mobile compact navigation, empty/partial/general-table import/export/diagnostics,
 two-session realtime updates, optimistic conflicts, reload persistence, chat
 Markdown and responsive containment. Hash all six original inputs before/after.
 Deploy this repo to Worker `megadaytwin`; the custom domain points directly to it. No external repository or CITY_UI binding is needed by the deployment.
