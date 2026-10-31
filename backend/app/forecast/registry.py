@@ -94,7 +94,11 @@ def register_models(conn: duckdb.DuckDBPyConnection, now: datetime | None = None
 
 # ---------------------------------------------------------------------- champions
 def _best(rows: Sequence[ScoreRow]) -> ScoreRow | None:
-    cands = sorted(rows, key=lambda r: (r.key_metric, r.pinball_50 or float("inf")))
+    def pinball_score(row: ScoreRow) -> float:
+        # Zero is a valid, perfect score; only a missing metric ranks last.
+        return row.pinball_50 if row.pinball_50 is not None else float("inf")
+
+    cands = sorted(rows, key=lambda r: (r.key_metric, pinball_score(r)))
     if not cands:
         return None
     best = cands[0]
@@ -103,7 +107,7 @@ def _best(rows: Sequence[ScoreRow]) -> ScoreRow | None:
         if (
             second.wape is not None
             and second.wape - best.wape < TIE_WAPE
-            and (second.pinball_50 or float("inf")) < (best.pinball_50 or float("inf"))
+            and pinball_score(second) < pinball_score(best)
         ):
             return second
     return best
