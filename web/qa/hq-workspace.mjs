@@ -53,7 +53,7 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   await page.goto(base+'/sku-assistant?sku=QA-A');
   await hq.waitFor();await page.getByLabel('Goal quantity scope').waitFor();
   assert(new URL(page.url()).pathname==='/city-demo');
-  await page.getByRole('button',{name:'Select QA-A',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Select QA-A',exact:true}).last().waitFor();
   await page.getByLabel('Goal description',{exact:true}).fill('Sell 100 units');
   await page.getByRole('button',{name:'Enter parameters manually',exact:true}).click();
   await page.getByText('Goal for SKU QA-A',{exact:true}).waitFor();
