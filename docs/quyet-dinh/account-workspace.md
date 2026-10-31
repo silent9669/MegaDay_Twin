@@ -6,22 +6,22 @@ reads sanitized repository sources and clearly labeled fixtures until that
 backend is configured; Milo is advisory and cannot execute business actions.
 
 Use one SQLite Durable Object per authenticated account. The current access
-model has one shared admin account. Sources, settings, playback clock and chat
+model has `admin` and `judges` logins sharing one demo workspace. Sources, settings, playback clock and chat
 history are independently revisioned documents. Same-origin authenticated writes
 use compare-and-swap; WebSocket notifications cause other devices to refetch.
 Chat messages save before generation, and assistant replies save server-side.
 A stale session tail is rejected rather than overwritten. Browser drafts remain
 local until submitted.
 
-Deploy this repository's build to the existing `megaday-hackathon` Worker to
-retain its write-only OpenAI and authentication secrets. Keep the deployed
+Deploy this repository's build to Worker `megadaytwin` with the
+`megadaytwin.dangphuc.me` custom domain and D1 `megadaytwin-db`. Keep the
 scrypt password format and `megaday_session` cookie valid; local PBKDF2 hashes
-also work. Point `hackathon.dangphuc.me` directly at this Worker. Keep the prior
-`hackathon` gateway and D1 database for rollback. Rollback versions and steps are
-in `web/README.md`; no database or secret is deleted during release.
+also work. Rollback versions and steps are in `web/README.md`.
 
-CI now generates the ignored source fallback before typechecking and uses
-Chromium to test the rendered login, private chat access and D1 health. Static
+CI generates the ignored source fallback before typechecking. After the `ci`
+gate passes on `main`, it promotes that commit to `cloudflare-production`;
+Cloudflare Workers Builds pulls that branch, builds and deploys the Worker.
+The Chromium smoke test checks rendered login, private chat access and D1 health. Static
 HTML text cannot verify controls rendered by the Vite app. Release verification
 includes unit tests, both builds, browser tests on two independent sessions and
 signed-in checks after deployment. Local browser model responses are simulated;

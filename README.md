@@ -1,5 +1,7 @@
 # MegaDay Twin
 
+[Live demo](https://megadaytwin.dangphuc.me) · [CI](https://github.com/silent9669/MegaDay_Twin/actions/workflows/ci.yml)
+
 Trợ lý ra quyết định quảng cáo cho người vận hành shop trên Shopee. Khi nhu cầu và tồn kho thay đổi giữa mùa sale, app trả lời câu hỏi **"lúc này nên tiếp tục hay tạm dừng quảng cáo?"**. Câu trả lời dựa trên tồn kho, giá vốn, lịch hàng về và mục tiêu của shop, chứ không chỉ dựa trên ROAS sàn báo.
 
 Điểm khác biệt cốt lõi: **AI không thể bịa số**. Lớp AI (OpenAI) hiểu câu hỏi tiếng Việt, điều tra và giải thích. Mọi con số nó nói ra đều đến từ công cụ đã được chấm điểm, được kiểm tự động trước khi hiển thị, và bấm vào được để xem nguồn. AI không tự bật/tắt quảng cáo; mọi hành động cần người duyệt.
@@ -171,10 +173,11 @@ node scripts/demo.mjs jump 13                           # nhảy dữ liệu t�
 cd backend; uv run python -m eval.rehearsal --base-url http://localhost:8000   # diễn tập 2 lượt, ĐẠT/LỖI từng cảnh
 ```
 
-Bản demo Cloudflare: <https://hackathon.dangphuc.me>. Deploy dùng `cf` CLI,
-Worker `megaday-hackathon` và D1 `hackathon-db`; hiện frontend dùng dữ liệu mẫu,
-backend Python/DuckDB chưa deploy. Mỗi push vào `main` tự deploy sau khi mọi
-kiểm tra CI thành công. Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
+Bản demo Cloudflare: <https://megadaytwin.dangphuc.me>. Deploy dùng `cf` CLI,
+Worker `megadaytwin` và D1 `megadaytwin-db`; hiện frontend dùng dữ liệu mẫu,
+backend Python/DuckDB chưa deploy. Nhánh `main` được bảo vệ bởi check `ci`; sau khi merge một thay đổi đã qua CI,
+workflow tự đẩy đúng commit sang nhánh `cloudflare-production`. Cloudflare Workers
+Builds tự kéo nhánh đó, build và deploy. Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
 
 
 Kiểm tra trước khi push (giống hệt CI):

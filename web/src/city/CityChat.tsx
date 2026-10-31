@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowUp,
   Maximize2,
@@ -15,7 +16,7 @@ import { useChatArchive } from "./useChatArchive";
 import { ChatHistory } from "./ChatHistory";
 import type { ChatMessage, ChatSession } from "../studio/workspace-types";
 const EMPTY_MESSAGES: ChatMessage[] = [];
-export function CityChat() {
+export function CityChat({ launcherAnchor }: { launcherAnchor?: HTMLElement | null }) {
   const archive = useChatArchive();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
@@ -196,21 +197,31 @@ export function CityChat() {
     setTimeout(() => input.current?.focus(), 0);
   }
 
-  return (
-    <div className="city-pm">
+  const launcher = (
       <button
         ref={trigger}
         className="pm-launcher"
-        title="Open PM · Alt+M"
         aria-label="Open PM assistant"
         aria-expanded={open}
+        aria-controls="city-pm-chat"
         onClick={() => setOpen(!open)}
       >
-        <img src="/pm.svg" alt="" />
-        <span>Ask your PM</span>
+        <span className="pm-avatar" aria-hidden="true">
+          <img src="/pm.svg" alt="" />
+        </span>
+        <span className="pm-preview" aria-hidden="true">
+          <img src="/pm.svg" alt="" />
+          <span className="pm-caption">Ask your PM</span>
+        </span>
       </button>
+  );
+
+  return (
+    <div className="city-pm">
+      {launcherAnchor ? createPortal(launcher, launcherAnchor) : launcher}
       {open && (
         <section
+          id="city-pm-chat"
           className={`city-chat ${expanded ? "chat-expanded" : ""}`}
           role="dialog"
           aria-modal="false"

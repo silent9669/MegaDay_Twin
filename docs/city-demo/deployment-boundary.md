@@ -1,4 +1,4 @@
-> Superseded by [account workspace](account-workspace.md): this repository now deploys its own city, storage and PM to `megaday-hackathon`, preserving that Worker’s credentials. The earlier gateway is retained for rollback.
+> Historical deployment design, superseded by [account workspace](account-workspace.md) and [current deployment](../../web/README.md#cloudflare). On 2026-10-31, the old Workers, hostname and D1 were deleted and replaced by `megadaytwin`, `megadaytwin.dangphuc.me` and `megadaytwin-db`.
 
 # City frontend and backend boundary
 

@@ -75,11 +75,8 @@ Trước khi push: `npm run lint && npm run typecheck && npm test && npm run bui
 
 ## Cloudflare
 
-Website: <https://hackathon.dangphuc.me>. This repository deploys Worker
-`megaday-hackathon`, preserving that Worker's existing OpenAI key, password hash
-and session secret. The custom domain moves directly to this Worker. The prior
-`hackathon` gateway is retained for rollback; its `hackathon-db` database is
-reused unchanged through binding `DB`.
+Website: <https://megadaytwin.dangphuc.me>. This repository deploys Worker
+`megadaytwin` with D1 `megadaytwin-db` through binding `DB`.
 
 ```bash
 cd web
@@ -90,7 +87,7 @@ npm run build:cloudflare
 npm run deploy:cloudflare -- --dry-run
 npm run deploy:cloudflare
 npx playwright install chromium
-npm run test:smoke -- https://hackathon.dangphuc.me
+npm run test:smoke -- https://megadaytwin.dangphuc.me
 ```
 
 The React/Vite city, Data Studio, account storage and Milo chat run in this
@@ -98,29 +95,36 @@ Worker. Chat history, settings, sandbox and sanitized source files persist in
 its SQLite-backed `AccountWorkspace` Durable Object. Devices reconcile saved
 changes through authenticated WebSockets. See
 [account workspace](../docs/city-demo/account-workspace.md) for contracts and
-verification. The existing `megaday_session` cookie and scrypt password hashes
-remain valid; PBKDF2 hashes are also supported for local development.
+verification. Sessions use the `megaday_session` cookie; scrypt and PBKDF2
+password hashes are supported. The fresh deployment requires a new login.
 
-Required Worker secrets are `ADMIN_PASSWORD_HASH`, `SESSION_SECRET` and
-`OPENAI_API_KEY`. They already belong to the existing Worker and survive ordinary
+Required Worker secrets are `ADMIN_PASSWORD_HASH`, `JUDGES_PASSWORD_HASH`,
+`SESSION_SECRET` and `OPENAI_API_KEY`. The `admin` and `judges` logins share the
+demo workspace. These secrets are configured on the Worker and survive ordinary
 deployments. Do not copy empty local values over production secrets. No secret
 is required to build or validate a dry run. FastAPI/DuckDB remains a separate
 service; absent `DATA_BACKEND_URL`, existing operations use clearly labeled
 fixtures and Milo does not execute campaigns or stock mutations.
 
-GitHub Actions builds and stores the checked Worker artifact. Only the latest
-`main` commit deploys, after backend, web and mock-data checks pass. The production
-smoke test opens the real login in Chromium, verifies signed-out access protection
-and checks D1 via `/healthz`. Repository Actions secrets remain
-`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`; the token must permit Worker,
-Durable Object and custom-domain deployment in this account.
+GitHub Actions runs the backend, web and mock-data checks and exposes the required
+`ci` status for `main`. After that gate passes on a push to `main`, a promotion job
+copies the exact commit to the automation-only `cloudflare-production` branch.
+Cloudflare Workers Builds watches that branch and automatically pulls, builds and
+deploys `web/`. GitHub Actions does not hold Cloudflare deployment credentials.
+The Cloudflare Build configuration uses `npm run build:cloudflare` followed by
+`npm run deploy:cloudflare`. PRs and pushes check only changed components;
+frontend CI runs one typechecked Cloudflare build. Web/config or bundled-data
+changes trigger promotion; docs-only and backend-only changes do not redeploy
+the frontend. A manual workflow run checks every component.
 
-Rollback: redeploy the prior `megaday-hackathon` version
-`80d26526-0a34-4aaf-b79e-e4d1b9cdb78e`, then restore the custom domain to the
-retained `hackathon` gateway (version
-`971e0fa4-add8-45e8-b910-5bc8d481600a`). The new Durable Object namespace and
-existing D1 remain intact; do not delete either database. Revert the release PR
-before subsequent automatic deployments.
+Teammates: open a PR to `main`, wait for the `ci` check, then merge. Do not merge
+or push to `cloudflare-production` directly. Watch GitHub Actions for CI and the
+promotion job; watch Worker `megadaytwin` → Builds in Cloudflare for deployment.
+Runtime secrets and the D1/AccountWorkspace bindings remain on the Worker.
+
+Rollback: redeploy a known-good `megadaytwin` version and keep the
+`megadaytwin.dangphuc.me` custom domain attached to it. The old Workers,
+custom domain and D1 were retired during the migration.
 
 ## Biến môi trường
 

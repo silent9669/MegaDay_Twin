@@ -3,7 +3,7 @@ import {
   login,
   logout,
   sameOrigin,
-  session,
+  sessionAccount,
   sessionExpiry,
   type AccessEnv,
 } from "./server/auth";
@@ -50,10 +50,11 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return login(request, env);
   if (path === "/api/auth/logout" && request.method === "POST")
     return logout(request);
-  const authenticated = await session(request, env);
+  const account = await sessionAccount(request, env);
+  const authenticated = !!account;
   if (path === "/api/auth/session")
     return Response.json(
-      { authenticated, account: authenticated ? "admin" : null },
+      { authenticated, account },
       { status: authenticated ? 200 : 401 },
     );
   const publicAsset =

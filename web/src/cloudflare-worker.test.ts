@@ -204,4 +204,61 @@ describe("account access", () => {
       ).status,
     ).toBe(403);
   });
+  it("permits the judges account with its own password hash", async () => {
+    const env = {
+      ...base,
+      SESSION_SECRET: "judges-test-secret-at-least-32-bytes",
+      ADMIN_PASSWORD_HASH: await passwordHash("admin-password"),
+      JUDGES_PASSWORD_HASH: await passwordHash("judges-password"),
+    };
+    const response = await login(
+      new Request(origin + "/api/auth/login", {
+        method: "POST",
+        headers: { Origin: origin },
+        body: JSON.stringify({ username: "judges", password: "judges-password" }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+    const cookie = response.headers.get("set-cookie")!.split(";")[0]!;
+    expect(await session(new Request(origin, { headers: { Cookie: cookie } }), env)).toBe(true);
+    const account = await worker.fetch(
+      new Request(origin + "/api/auth/session", { headers: { Cookie: cookie } }),
+      env,
+    );
+    expect(await account.json()).toEqual({ authenticated: true, account: "judges" });
+    const settings = await worker.fetch(new Request(origin + "/api/workspace/settings", {
+      headers: { Cookie: cookie },
+    }), {
+      ...env,
+      WORKSPACE: {
+        idFromName: (name: string) => {
+          expect(name).toBe("admin");
+          return name;
+        },
+        get: () => ({ fetch: async () => Response.json({ revision: 1 }) }),
+      },
+    });
+    expect(settings.status).toBe(200);
+    expect(await session(new Request(origin, {
+      headers: { Cookie: cookie.replace("judges.", "admin.") },
+    }), env)).toBe(false);
+    expect(await session(new Request(origin, {
+      headers: { Cookie: cookie },
+    }), { ...env, JUDGES_PASSWORD_HASH: undefined })).toBe(false);
+    for (const [username, password] of [
+      ["judges", "wrong"],
+      ["judges", "admin-password"],
+      ["admin", "judges-password"],
+      ["unknown", "judges-password"],
+    ]) {
+      const denied = await login(new Request(origin + "/api/auth/login", {
+        method: "POST",
+        headers: { Origin: origin },
+        body: JSON.stringify({ username, password }),
+      }), env);
+      expect(denied.status).toBe(401);
+      expect(denied.headers.has("set-cookie")).toBe(false);
+    }
+  });
 });

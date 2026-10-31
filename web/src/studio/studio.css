@@ -541,24 +541,24 @@
   font-size: 11px;
 }
 .source-diagnostics article > span {
-  font-size: 8px;
-  text-transform: uppercase;
+  font-size: 11px;
   border: 1px solid #e5d6ac;
   background: #fbf5e6;
-  color: #a88b48;
+  color: #72551f;
   border-radius: 4px;
   padding: 2px 5px;
-  min-width: 52px;
+  min-width: 90px;
+  max-width: 110px;
   text-align: center;
   margin-top: 2px;
 }
 .source-diagnostics article[data-level="error"] > span {
-  color: #ab6150;
+  color: #8a3f31;
   background: #f9eee3;
   border-color: #e9cbbb;
 }
 .source-diagnostics article[data-level="info"] > span {
-  color: #719366;
+  color: #3f6334;
   background: #edf5e7;
   border-color: #d5e6c7;
 }
@@ -577,6 +577,65 @@
 .source-diagnostics small {
   font-size: 9px;
   color: #68785d;
+}
+.diagnostics-explanation {
+  padding: 16px 0 8px;
+  max-width: 72ch;
+}
+.diagnostics-explanation h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.source-diagnostics .diagnostics-explanation p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #486047;
+}
+.diagnostics-sample {
+  padding: 10px 12px;
+  background: #edf3e6;
+  border-left: 3px solid #6b835a;
+}
+.diagnostics-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+.data-studio .diagnostics-filters button,
+.data-studio .diagnostic-record {
+  min-height: 44px;
+  white-space: normal;
+}
+.diagnostics-filters button[aria-pressed="true"] {
+  background: #304f39;
+  border-color: #304f39;
+  color: #fff;
+}
+.source-diagnostics article > div {
+  min-width: 0;
+}
+.source-diagnostics article h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #304136;
+}
+.source-diagnostics .diagnostic-action {
+  color: #3f563e;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.source-diagnostics .diagnostic-record {
+  display: flex;
+  margin-top: 10px;
+}
+.source-table tr.source-record-selected td {
+  background: #e5efdb;
+}
+.source-table tr:focus {
+  outline: 2px solid #42633a;
+  outline-offset: -2px;
+  scroll-margin-block: 45px;
 }
 .source-schema {
   padding: 24px;
@@ -711,6 +770,7 @@
   }
   .studio-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
   .studio-actions .sync-state {
     margin-right: auto;
@@ -775,9 +835,12 @@
   .studio-actions button {
     font-size: 10px;
     padding: 7px 9px;
+    min-height: 44px;
+    flex: 1;
   }
   .studio-actions .sync-state {
     font-size: 8px;
+    flex-basis: 100%;
   }
   .source-count {
     font-size: 8px;
@@ -936,13 +999,20 @@
   }
   .source-diagnostics {
     padding: 6px 14px;
+    overflow: visible;
+  }
+  .source-content[data-view="diagnostics"] {
+    height: auto;
+    flex: none;
+    overflow: visible;
   }
   .source-diagnostics article {
     gap: 10px;
   }
   .source-diagnostics article > span {
-    font-size: 7px;
-    min-width: 44px;
+    font-size: 11px;
+    min-width: 78px;
+    max-width: 90px;
   }
   .source-diagnostics strong {
     font-size: 9px;

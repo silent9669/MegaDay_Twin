@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
-const base = process.argv[2] || 'https://hackathon.dangphuc.me';
+const base = process.argv[2] || 'https://megadaytwin.dangphuc.me';
 const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext();
