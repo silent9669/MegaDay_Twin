@@ -454,6 +454,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                 <option value="river">River & bridge</option>
                 <option value="bitexco">Bitexco</option>
                 <option value="landmark81">Landmark 81</option>
+                <option value="benthanh">Ben Thanh Market</option>
               </select>
               <button
                 aria-label="Reset camera"

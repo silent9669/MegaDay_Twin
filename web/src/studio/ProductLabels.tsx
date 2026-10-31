@@ -67,7 +67,7 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
   const results = new Map(current && !stale && !blocked && !running && data?.run?.status !== "failed"
     ? data?.run?.results.map(r => [r.productId, r]) ?? [] : []);
   const products = current ? data?.products ?? [] : [];
-  const rows: StockRow[] = inventory?.filter(row => (row.stock ?? 0) > 0) ?? products.map(p => ({ code: p.reference, name: p.name, stock: null, asOf: "" }));
+  const rows: StockRow[] = inventory?.filter(row => (row.stock ?? 0) > 0 || row.code === selectedCode) ?? products.map(p => ({ code: p.reference, name: p.name, stock: null, asOf: "" }));
   const hasDemand = rows.some(row => row.demand !== undefined) || !!data?.run?.results.length;
   const productByCode = new Map(products.map(product => [product.reference, product]));
   const filtered = rows.filter(p => `${p.name} ${p.code}`.toLowerCase().includes(search.toLowerCase()));

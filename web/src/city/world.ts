@@ -397,12 +397,12 @@ export function createCity(
   let activePlace: MapPlace | null = null;
   const focusLandmark = (place: Landmark) => {
     activePlace = place;
-    const point = place === "river" ? [55, 1, 24] : place === "bitexco" ? [40, 9, -19] : [77, 17, -9];
+    const point = place === "river" ? [55, 1, 24] : place === "bitexco" ? [40, 9, -19] : place === "benthanh" ? [20, 4, 18] : [77, 17, -9];
     destination = new T.Vector3(...point as [number, number, number]);
     eye = destination.clone().add(place === "river" ? new T.Vector3(34, 34, 42) : place === "landmark81" ? new T.Vector3(55, 35, 65) : new T.Vector3(35, 25, 45));
   };
   const mapLabels = createMapLabels(host, place => {
-    if (place === "river" || place === "bitexco" || place === "landmark81") {
+    if (place === "river" || place === "bitexco" || place === "landmark81" || place === "benthanh") {
       pick(null); focusLandmark(place);
     } else pick(place);
   });
