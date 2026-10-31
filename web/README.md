@@ -105,6 +105,9 @@ deployments. Do not copy empty local values over production secrets. No secret
 is required to build or validate a dry run. FastAPI/DuckDB remains a separate
 service; absent `DATA_BACKEND_URL`, existing operations use clearly labeled
 fixtures and Milo does not execute campaigns or stock mutations.
+Set `DATA_BACKEND_URL`, `DATA_BACKEND_USER`, and `DATA_BACKEND_ROLE` as Worker
+secrets when connecting that service. They are intentionally omitted from the
+required-secret declarations so an unconfigured backend does not block deployment.
 
 Run `node scripts/check.mjs` from the repository root before merging. Select
 `web`, `backend`, or `mock-data` for focused feedback; omit targets for all checks.

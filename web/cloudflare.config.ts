@@ -24,9 +24,8 @@ export default defineConfig({
       ADMIN_PASSWORD_HASH: bindings.secret(),
       JUDGES_PASSWORD_HASH: bindings.secret(),
       SESSION_SECRET: bindings.secret(),
-      DATA_BACKEND_URL: bindings.secret(),
-      DATA_BACKEND_USER: bindings.secret(),
-      DATA_BACKEND_ROLE: bindings.secret(),
+      // DATA_BACKEND_* are optional, operator-managed secrets. Declaring them
+      // with bindings.secret() would require a connected backend to deploy.
       OPENAI_API_KEY: bindings.secret(),
       OPENAI_MODEL_IMPORT: bindings.text("gpt-6-luna"),
       OPENAI_MODEL_DECISION: bindings.text("gpt-6-luna"),
