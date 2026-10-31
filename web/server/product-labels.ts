@@ -1,3 +1,4 @@
+import { ModelRequestError } from "./model-json";
 import { fail } from "./auth";
 import {
   labelContextSchema, buildLabelInput, validateLabelResponse, type LabelInput, type LabelResponse, type LabelRun,
@@ -67,20 +68,27 @@ export async function productLabels(
   if (!claimed.ok) return claimed;
   const claim = await claimed.json() as { acquired: boolean; run: LabelRun };
   if (!claim.acquired) return response(claim.run);
+  const previous = snapshot.run;
+  const reusable = previous?.status === "partial" && previous.error && previous.sourceRevision === input.sourceRevision &&
+    previous.sourceFingerprint === input.sourceFingerprint && previous.provider === provider.id && JSON.stringify(previous.context) === JSON.stringify(input.context)
+    ? previous.results : [];
+  const pending = { ...input, products: input.products.filter(product => !reusable.some(result => result.productId === product.id)) };
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => { controller.abort(); reject(Error("timeout")); }, LABEL_TIMEOUT_MS);
     });
-    const raw = await Promise.race([provider.classify(input, controller.signal), timeout]);
-    const results = validateLabelResponse(raw, input);
+    const raw = await Promise.race([provider.classify(pending, controller.signal), timeout]);
+    const results = [...reusable, ...validateLabelResponse(raw, pending)];
     run.results = results;
+    if (results.length < input.products.length) run.error = `Saved ${results.length} of ${input.products.length} products. Retry to label the remaining products.`;
     run.status = results.filter((result) => result.group !== null).length === input.products.length ? "completed" : "partial";
-  } catch {
+  } catch (error) {
     // Provider errors can contain credentials, URLs or prompt payloads. Never echo them.
-    run.status = "failed";
-    run.error = controller.signal.aborted
+    run.results = reusable;
+    run.status = reusable.length ? "partial" : "failed";
+    run.error = error instanceof ModelRequestError ? error.message : controller.signal.aborted
       ? "The labeling tool timed out. Your source data is saved; retry when the tool is available."
       : "The labeling tool failed or returned invalid labels. Your source data is saved; retry or contact the integration owner.";
   } finally {

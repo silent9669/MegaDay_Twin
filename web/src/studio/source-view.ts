@@ -37,7 +37,7 @@ export function sourceView(pack: SourcePack | null, hour: number) {
   const orderRows = orders
     ? inspect(orders.name, orders.text).rows.filter(
         (row) =>
-          Number(String(row["Ngày đặt hàng"] ?? "").slice(11, 13)) < hour,
+          !orders.commit || Number(String(row["Ngày đặt hàng"] ?? "").slice(11, 13)) < hour,
       ).length
     : 0;
   // Report raw ad observations only. Timezone normalization belongs to Python.

@@ -1473,7 +1473,6 @@
 .city-sheet .product-label-panel {background:var(--city-paper);color:var(--city-ink);border-color:var(--city-line);}
 .city-sheet .product-label-panel :is(input, select, textarea, button) {background:var(--city-paper);color:var(--city-ink);border-color:var(--city-line);}
 .city-sheet .product-demand-label {background:var(--city-soft);color:var(--city-ink);}
-.city-sheet .label-evidence li {border-color:var(--city-line);}
 .city-sheet .product-label-panel :is(button, input, select, textarea, summary):focus-visible {outline-color:var(--city-green);}
 @media(min-width:900px) {
   .district-workspace:not(:has(.workspace-tabs)) {left:auto; width:min(560px,54%);}

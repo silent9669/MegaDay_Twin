@@ -1,70 +1,94 @@
-import { useRef, useState } from "react";
-import { Upload } from "lucide-react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { Upload, Sparkles } from "lucide-react";
+import { strToU8, zipSync } from "fflate";
 import { requestJSON } from "./account";
-import { MAX_BYTES, SOURCE_DEFS, inspect, sourceKey, type Source } from "./sources";
+import { MAX_BYTES, SOURCE_DEFS, sourceKey, type Source } from "./sources";
 import type { ImportAnalysis } from "./import-types";
 
-export function ArchiveImport({ blocked, onLoad }: { blocked: boolean; onLoad: (sources: Source[]) => Promise<void> }) {
+export type ArchiveImportHandle = { importFile: (file: File) => void };
+export const ArchiveImport = forwardRef<ArchiveImportHandle, {
+  blocked: boolean;
+  sources: Source[];
+  onLoad: (sources: Source[], replace?: boolean) => Promise<void>;
+  onBusyChange?: (busy: boolean) => void;
+}>(function ArchiveImport({ blocked, sources, onLoad, onBusyChange }, ref) {
   const input = useRef<HTMLInputElement>(null);
+  const reviewing = useRef(false);
+  const inFlight = useRef(false);
   const [analysis, setAnalysis] = useState<ImportAnalysis | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState<"analyzing" | "saving" | null>(null);
+  const [needsSelection, setNeedsSelection] = useState(false);
+  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  async function analyze(file?: File) {
-    if (!file || busy) return;
-    setBusy("analyzing"); setError(""); setAnalysis(null);
+  const [notice, setNotice] = useState("");
+  async function load(result: ImportAnalysis, files: string[]) {
+    setBusy("Saving tables…");
+    const tables = result.tables.filter(table => files.includes(table.file));
+    await onLoad(tables.map(table => table.source), reviewing.current);
+    setNeedsSelection(false);
+    setNotice(`${tables.length} tables loaded · ${tables.reduce((sum, table) => sum + table.rowCount, 0).toLocaleString()} records`);
+  }
+  async function analyze(file?: File, review = false) {
+    if (!file || inFlight.current || blocked) return;
+    if (!/\.zip$/i.test(file.name)) { setError("Drop one ZIP file, or use Import CSV / JSON."); return; }
+    reviewing.current = review;
+    inFlight.current = true; onBusyChange?.(true);
+    setBusy(review ? "Reviewing and fixing columns…" : "Extracting ZIP…"); setError(""); setNotice("");
+    if (!review) { setAnalysis(null); setNeedsSelection(false); }
     try {
       if (file.size > MAX_BYTES) throw Error("ZIP exceeds 20 MiB.");
-      const result = await requestJSON<ImportAnalysis>("/api/studio/import", {
+      const result = await requestJSON<ImportAnalysis>(`/api/studio/import${review ? "?review=1" : ""}`, {
         method: "POST", headers: { "Content-Type": "application/zip" }, body: file,
       });
+      if (review && result.skipped.length) throw Error("AI review could not read every saved table. Your tables are unchanged.");
+      if (review) for (const table of result.tables) {
+        const original = sources.find(source => source.name === table.file);
+        if (original && table.source.kind === "general") table.source.name = original.name;
+      }
       setAnalysis(result);
-      setSelected(result.tables.filter(table => result.tables.filter(t => sourceKey(t.source) === sourceKey(table.source)).length === 1).map(t => t.file));
-    } catch (e) { setError(e instanceof Error ? e.message : "Archive analysis failed."); }
-    finally { setBusy(null); if (input.current) input.current.value = ""; }
+      if (!result.tables.length) throw Error("No CSV or JSON tables found in this ZIP.");
+      const unique = result.tables.filter(table => result.tables.filter(t => sourceKey(t.source) === sourceKey(table.source)).length === 1).map(table => table.file);
+      setSelected(unique);
+      if (unique.length !== result.tables.length) { setNeedsSelection(true); setNotice("Choose one file per business table."); }
+      else await load(result, unique);
+    } catch (e) { setError(e instanceof Error ? e.message : "Import failed. Retry the ZIP."); }
+    finally { inFlight.current = false; setBusy(""); onBusyChange?.(false); if (input.current) input.current.value = ""; }
   }
+  useImperativeHandle(ref, () => ({ importFile: file => { void analyze(file); } }));
   return <section className="archive-import" aria-label="Archive import">
     <header>
-      <h2>Import tables</h2>
-      <button className="primary" disabled={blocked || !!busy} onClick={() => input.current?.click()}>
-        <Upload size={16} aria-hidden /> {busy === "analyzing" ? "Analyzing ZIP…" : "Import ZIP"}
-      </button>
+      <div><h2>Drop your ZIP here</h2><span>CSV and JSON tables</span></div>
+      <div className="archive-actions">
+        {!!sources.length && <button disabled={blocked || !!busy} onClick={() => {
+          if (new Set(sources.map(source => source.name)).size !== sources.length) { setError("Resolve duplicate filenames before AI repair."); return; }
+          const bytes = zipSync(Object.fromEntries(sources.map(source => [source.name, strToU8(source.text)])), { level: 1 });
+          void analyze(new File([new Uint8Array(bytes)], "workspace.zip", { type: "application/zip" }), true);
+        }}><Sparkles size={16} aria-hidden /> Review &amp; fix with AI</button>}
+        <button className="primary" disabled={blocked || !!busy} onClick={() => input.current?.click()}><Upload size={16} aria-hidden /> Import ZIP</button>
+      </div>
     </header>
     <input ref={input} type="file" accept=".zip" hidden aria-label="Upload ZIP archive" onChange={e => void analyze(e.target.files?.[0])} />
-    {busy === "analyzing" && <p role="status">Extracting files and reviewing tables…</p>}
+    {(busy || notice) && <p role="status">{busy || notice}</p>}
     {error && <p role="alert">{error}</p>}
-    {analysis && <>
-      {!analysis.tables.length && <p role="status">No supported tables found.</p>}
-      {analysis.tables.map(table => {
-        const parsed = inspect(table.source.name, table.source.text);
-        return <div className="archive-table" key={table.file}>
-          <label><input type="checkbox" checked={selected.includes(table.file)} disabled={blocked || !!busy}
-            onChange={e => setSelected(current => e.target.checked
-              ? [...current.filter(file => !analysis.tables.some(t => t.file === file && sourceKey(t.source) === sourceKey(table.source))), table.file]
-              : current.filter(file => file !== table.file))} />
-            <strong>{SOURCE_DEFS.find(d => d.kind === table.source.kind)?.name ?? table.source.name}</strong>
-            <span>{table.file} · {table.rowCount.toLocaleString()} rows</span>
-          </label>
-          {table.review && <p>{table.review.length ? table.review.join(" · ") : "Model review: no issues found in the sample."}</p>}
-          {!table.review && <p>Format checks only; model review unavailable.</p>}
-          <details><summary>Preview {table.method === "model" ? "model-mapped" : table.method} table</summary>
-            <p>{table.columns.map(c => c.source === c.target ? c.target : `${c.source} → ${c.target}`).join(" · ")}</p>
-            <div className="archive-preview" role="region" aria-label={`Preview ${table.file}`} tabIndex={0}><table><thead><tr>{parsed.columns.map(c => <th key={c}>{c}</th>)}</tr></thead>
-              <tbody>{parsed.rows.slice(0, 5).map((row, i) => <tr key={i}>{parsed.columns.map(c => <td key={c}>{String(row[c] ?? "")}</td>)}</tr>)}</tbody></table></div>
-          </details>
-        </div>;
-      })}
-      {!!analysis.skipped.length && <details><summary>{analysis.skipped.length} skipped files</summary><ul>
-        {analysis.skipped.map(item => <li key={item.file}>{item.file}: {item.reason}</li>)}
-      </ul></details>}
-      {!!analysis.tables.length && <button className="primary" disabled={blocked || !!busy || !selected.length} onClick={async () => {
-        setBusy("saving");
-        try {
-          await onLoad(analysis.tables.filter(t => selected.includes(t.file)).map(t => t.source));
-          setAnalysis(null); setError("");
-        } catch (e) { setError(e instanceof Error ? e.message : "Could not load tables."); }
-        finally { setBusy(null); }
-      }}>{busy === "saving" ? "Saving tables…" : `Load ${selected.length} ${selected.length === 1 ? "table" : "tables"} to workspace`}</button>}
-    </>}
+    {analysis && <details open={needsSelection || undefined}>
+      <summary>Import details</summary>
+      {analysis.tables.map(table => <div className="archive-table" key={table.file}>
+        {needsSelection && <input type="checkbox" aria-label={`Load ${table.file}`} checked={selected.includes(table.file)} disabled={blocked || !!busy}
+          onChange={e => setSelected(current => e.target.checked
+            ? [...current.filter(file => !analysis.tables.some(t => t.file === file && sourceKey(t.source) === sourceKey(table.source))), table.file]
+            : current.filter(file => file !== table.file))} />}
+        <strong>{SOURCE_DEFS.find(d => d.kind === table.source.kind)?.name ?? table.source.name}</strong> · {table.rowCount.toLocaleString()} records
+        {table.method === "model" && <p>{table.columns.filter(c => c.source !== c.target).map(c => `${c.source} → ${c.target}`).join(" · ")}</p>}
+        {table.review && <p>{table.review.length ? table.review.join(" · ") : "No issues found in the reviewed sample."}</p>}
+      </div>)}
+      {analysis.skipped.map(item => <p key={item.file}>{item.file}: {item.reason}</p>)}
+      {needsSelection && <button disabled={blocked || !!busy || !selected.length} onClick={async () => {
+        if (inFlight.current) return;
+        inFlight.current = true; onBusyChange?.(true); setError("");
+        try { await load(analysis, selected); }
+        catch (e) { setError(e instanceof Error ? e.message : "Could not save tables."); }
+        finally { inFlight.current = false; setBusy(""); onBusyChange?.(false); }
+      }}>Load selected tables</button>}
+    </details>}
   </section>;
-}
+});

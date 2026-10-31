@@ -37,12 +37,11 @@ import {
   type Sandbox,
 } from "../studio/workspace-types";
 import type { SourcePack } from "../studio/sources";
+import { SourceWorkspace } from "../studio/SourceWorkspace";
 import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
-import { ShiftOverviewPage } from "../pages/ShiftOverviewPage";
-import { CompareIndexPage } from "../pages/compare/ComparePage";
 import { CityChat } from "./CityChat";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import type { createCity, District, WorldState } from "./world";
@@ -106,7 +105,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   const [compact, setCompact] = useState(true),
     [district, setDistrict] = useState<District | null>(null),
     [workspace, setWorkspace] = useState(false),
-    [hqTab, setHqTab] = useState<"overview" | "compare">("overview"),
     [tour, setTour] = useState<number | null>(null),
     [ready, setReady] = useState(false),
     [failure, setFailure] = useState(""),
@@ -499,22 +497,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                     <SheetTitle>
                       {DISTRICTS.find((d) => d.id === district)?.name}
                     </SheetTitle>
-                    {district === "hq" && (
-                      <div className="workspace-tabs">
-                        <button
-                          aria-pressed={hqTab === "overview"}
-                          onClick={() => setHqTab("overview")}
-                        >
-                          Overview
-                        </button>
-                        <button
-                          aria-pressed={hqTab === "compare"}
-                          onClick={() => setHqTab("compare")}
-                        >
-                          Comparisons
-                        </button>
-                      </div>
-                    )}
                     <button className="city-icon panel-expand" aria-label={panel.expanded ? "Restore workspace" : "Expand workspace"}
                       onClick={() => panel.setExpanded(!panel.expanded)}>{panel.expanded ? <Minimize2 /> : <Maximize2 />}</button>
                     <button
@@ -528,11 +510,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                   {tour !== null && <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />}
                   <div className="district-workspace-body">
                     {district === "hq" ? (
-                      hqTab === "overview" ? (
-                        <ShiftOverviewPage />
-                      ) : (
-                        <CompareIndexPage />
-                      )
+                      <SourceWorkspace pack={sources.document?.data ?? null} district="hq" />
                     ) : district === "warehouse" ? (
                       <>
                         <div className="warehouse-title">
@@ -620,17 +598,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                         </Link>
                       </>
                     ) : (
-                      <>
-                        <h3>Order observations</h3>
-                        <p>
-                          {feed.orderRows.toLocaleString()} rows through the
-                          shared source clock.
-                        </p>
-                        <Link to="/mock-data">
-                          Inspect order sources
-                          <ArrowRight size={16} />
-                        </Link>
-                      </>
+                      <SourceWorkspace pack={sources.document?.data ?? null} district="residential" />
                     )}
                   </div>
                 </SheetContent>

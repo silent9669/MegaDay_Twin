@@ -35,11 +35,8 @@ try {
   const csv = 'Mã nội bộ,Tên hàng,Tồn thực tế,Thời điểm cập nhật\nQA-CUP,Ceramic cup,17,2026-10-31 18:00\nQA-TET,Đèn trang trí Tết,24,2026-10-31 18:00\nQA-ZERO,Sold-out item,0,2026-10-31 18:00\nQA-UNKNOWN,Unknown stock,,2026-10-31 18:00';
   const zip = zipSync({ 'shop/inventory.csv': strToU8(csv), 'events.csv': strToU8('event,month\nTet,2'), 'notes.json': strToU8('[{"item":"General record","value":3}]'), 'readme.txt': strToU8('Synthetic test fixture') });
   await page.getByLabel('Upload ZIP archive').setInputFiles({ name: 'inventory.zip', mimeType: 'application/zip', buffer: Buffer.from(zip) });
-  await page.getByRole('button', { name: 'Load 3 tables to workspace' }).waitFor();
-  await page.getByText('Preview recognized table').click();
-  assert.equal(await page.locator('.archive-preview').getByText('17', { exact: true }).count(), 1);
+  await page.getByText('3 tables loaded · 6 records', { exact: true }).waitFor();
   await page.screenshot({ path: new URL('archive-review.png', out).pathname });
-  await page.getByRole('button', { name: 'Load 3 tables to workspace' }).click();
   await page.getByRole('button', { name: 'Inventory 4 records Uploaded / edited', exact: true }).waitFor();
   await page.reload();
   await page.getByRole('button', { name: 'Inventory 4 records Uploaded / edited', exact: true }).click();
@@ -75,7 +72,8 @@ try {
       posts++;
       const body = route.request().postDataJSON();
       assert.equal(body.context.market, 'Vietnam');
-      assert.equal(body.context.evidence[0].productCode, 'QA-TET');
+      assert.deepEqual(body.context.evidence, []);
+      assert.match(body.context.asOf, /^\d{4}-\d{2}-\d{2}$/);
       run = { id: '11111111-1111-4111-8111-111111111111', provider: 'QA structured output', context: body.context,
         sourceRevision: saved.revision, sourceFingerprint: original.sourceFingerprint, status: 'partial',
         startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), error: null,
@@ -85,27 +83,16 @@ try {
     return route.fulfill({ json: { ...original, configured: true, provider: 'QA structured output', run } });
   });
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('workspace:changed', { detail: 'product-labels' })));
-  await page.getByText('Label settings', { exact: true }).click();
-  await page.getByText('Evidence (0)', { exact: true }).click();
-  await page.getByLabel('Assessment date', { exact: true }).fill('2026-10-31');
-  await page.getByLabel('Product code', { exact: true }).selectOption('QA-TET');
-  await page.getByLabel('Observation date', { exact: true }).fill('2026-10-30');
-  await page.getByLabel('Evidence source', { exact: true }).fill('Product specification');
-  await page.getByLabel('Observation', { exact: true }).fill('Lamp designed exclusively for Tet decorations.');
-  await page.getByRole('button', { name: 'Add evidence', exact: true }).click();
+  assert.equal(await page.getByText('Label settings', { exact: true }).count(), 0);
   await page.getByRole('button', { name: 'Label data', exact: true }).click();
   await page.getByText('Seasonal', { exact: true }).waitFor();
   await page.getByText('Need dated product demand evidence.', { exact: true }).waitFor();
   assert.equal(posts, 1);
-  await page.getByText('Label settings', { exact: true }).click();
   for (const width of [1440, 1024, 768, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `No page overflow at ${width}`);
     await page.screenshot({ path: new URL(`warehouse-${width}.png`, out).pathname });
   }
-  await page.getByText('Label settings', { exact: true }).click();
-  await page.getByLabel('Market', { exact: true }).fill('Thailand');
-  assert.equal(await page.getByText('Seasonal', { exact: true }).count(), 0, 'Changed market invalidates labels');
   // SQL integration tests verify the write; this fixture verifies the resulting source-column UI.
   const labeled = { ...saved, revision: saved.revision + 1, data: { ...saved.data, files: saved.data.files.map(source => {
     if (source.kind !== 'inventory') return source;
@@ -136,6 +123,6 @@ try {
   await page.getByText('No tables yet.', { exact: true }).waitFor();
   assert.equal((await (await context.request.get(`${base}/api/workspace/sources`)).json()).data.files.length, 0);
   assert.deepEqual(errors, []);
-  await writeFile(new URL('result.json', out), JSON.stringify({ realWorker: ['ZIP extraction', 'table preview', 'durable save and reload', 'stock-only warehouse', 'search', 'cancel deletion', 'delete table', 'delete all and reload'], mockedModel: ['explicit run', 'evidence', 'labels', 'context invalidation', 'persisted column rendering'], widths: [1440, 1024, 768, 320], errors }, null, 2));
+  await writeFile(new URL('result.json', out), JSON.stringify({ realWorker: ['ZIP extraction', 'table preview', 'durable save and reload', 'stock-only warehouse', 'search', 'cancel deletion', 'delete table', 'delete all and reload'], mockedModel: ['explicit run', 'automatic assessment context', 'labels', 'persisted column rendering'], widths: [1440, 1024, 768, 320], errors }, null, 2));
   console.log('Passed: local Worker ZIP → persisted tables → warehouse; model UI contract; four viewport widths.');
 } finally { await browser.close(); }

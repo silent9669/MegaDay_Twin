@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import { z } from "zod";
 import { SOURCE_DEFS, MAX_BYTES, inspect, makeSource, piiColumn } from "../src/studio/sources";
 import type { ImportAnalysis, ImportTable } from "../src/studio/import-types";
-import { modelJSON, type StudioModelEnv } from "./model-json";
+import { modelJSON, ModelRequestError, type StudioModelEnv } from "./model-json";
 import { fail } from "./auth";
 
 /** Extract in memory; never write archive paths or execute archive contents. */
@@ -26,7 +26,7 @@ export function extractArchive(bytes: Uint8Array) {
     if (/^[/\\]|^[A-Za-z]:|\\/.test(file.name) || file.name.includes(String.fromCharCode(0)) || file.name.split("/").includes(".."))
       throw Error("Unsafe archive path.");
     if (file.name.endsWith("/")) return;
-    if (/ground_truth|__MACOSX|(?:^|\/)\./i.test(file.name) || !/\.(csv|json)$/i.test(file.name)) {
+    if (/ground_truth|__MACOSX|(?:^|\/)_replay\.json$|(?:^|\/)\./i.test(file.name) || !/\.(csv|json)$/i.test(file.name)) {
       skipped.push({ file: file.name, reason: "Excluded or unsupported file (CSV/JSON only)." });
       return;
     }
@@ -66,7 +66,7 @@ const mappingSchema = z.object({ tables: z.array(z.object({
 }).strict()).max(24) }).strict();
 const mappingJSONSchema = z.toJSONSchema(mappingSchema);
 
-export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv): Promise<ImportAnalysis> {
+export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv, review = true): Promise<ImportAnalysis> {
   const { files, skipped } = extractArchive(bytes);
   const tables: ImportTable[] = [];
   const inspections = new Map<string, ReturnType<typeof inspect>>();
@@ -89,7 +89,7 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv): Pr
     }
   }
   const model = env.OPENAI_MODEL_IMPORT || env.OPENAI_MODEL;
-  if (tables.length && env.OPENAI_API_KEY && model) {
+  if (review && tables.length && env.OPENAI_API_KEY && model) {
     let raw: unknown;
     try {
       raw = await modelJSON(env, model,
@@ -102,7 +102,7 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv): Pr
               sample: parsed.rows.slice(0, 2).map(row => Object.fromEntries(parsed.columns.slice(0, 12).map(column => [column, String(row[column] ?? "").slice(0, 80)]))) };
           }) },
         mappingJSONSchema, AbortSignal.timeout(55000));
-    } catch { throw Error("Model analysis failed. No tables have been saved; retry the ZIP analysis."); }
+    } catch (error) { throw error instanceof ModelRequestError ? error : Error("AI review failed. Your imported tables are unchanged; retry the review."); }
     const mappings = mappingSchema.parse(raw);
     if (mappings.reviews.length !== tables.length || new Set(mappings.reviews.map(r => r.file)).size !== tables.length || mappings.reviews.some(r => !tables.some(t => t.file === r.file)))
       throw Error("Incomplete model table review. No tables have been saved.");
@@ -128,11 +128,14 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv): Pr
     }
     for (const review of mappings.reviews) tables.find(table => table.file === review.file)!.review = review.issues;
   }
-  return { tables, skipped, model: tables.length && env.OPENAI_API_KEY ? model ?? null : null };
+  return { tables, skipped, model: review && tables.length && env.OPENAI_API_KEY ? model ?? null : null };
 }
 
 export async function studioImport(request: Request, env: StudioModelEnv) {
   if (request.method !== "POST") return fail(405, "Method not allowed.");
+  const review = new URL(request.url).searchParams.get("review") === "1";
+  if (review && (!env.OPENAI_API_KEY || !(env.OPENAI_MODEL_IMPORT || env.OPENAI_MODEL)))
+    return fail(503, "AI review is not configured. Your imported tables are unchanged.");
   if (Number(request.headers.get("content-length")) > MAX_BYTES) return fail(413, "ZIP exceeds 20 MiB.");
   const reader = request.body?.getReader();
   if (!reader) return fail(422, "Upload a ZIP archive.");
@@ -148,6 +151,6 @@ export async function studioImport(request: Request, env: StudioModelEnv) {
   const bytes = new Uint8Array(size);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  try { return Response.json(await analyzeArchive(bytes, env)); }
+  try { return Response.json(await analyzeArchive(bytes, env, review)); }
   catch (error) { return fail(422, error instanceof Error && error.name !== "ZodError" ? error.message : "Invalid archive analysis."); }
 }

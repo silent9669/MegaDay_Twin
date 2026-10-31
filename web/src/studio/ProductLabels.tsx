@@ -2,12 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Tags } from "lucide-react";
 import type { StockRow } from "./source-view";
 import { requestJSON } from "./account";
-import { DEMAND_LABELS, labelContextSchema, type LabelContext, type LabelResponse } from "./product-labels";
+import { DEMAND_LABELS, labelContextSchema, type LabelResponse } from "./product-labels";
 
 const PAGE_SIZE = 8;
 export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode }: { sourceRevision: number; blocked: boolean; inventory?: StockRow[]; selectedCode?: string }) {
   const [data, setData] = useState<LabelResponse | null>(null);
-  const [context, setContext] = useState<LabelContext>({ market: "Vietnam", asOf: new Date().toISOString().slice(0, 10), evidence: [] });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState(selectedCode ?? "");
@@ -17,8 +16,6 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
     const timer = setTimeout(() => { setSearch(selectedCode); setPage(0); }, 0);
     return () => clearTimeout(timer);
   }, [selectedCode]);
-  const [evidence, setEvidence] = useState({ productCode: "", observedAt: "", source: "", observation: "" });
-  const edited = useRef(false);
   const sequence = useRef(0);
   const posting = useRef(false);
   const invalidate = useCallback(() => { sequence.current++; }, []);
@@ -28,7 +25,6 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
       const next = await requestJSON<LabelResponse>("/api/product-labels");
       if (ticket !== sequence.current) return;
       setData(next);
-      if (!edited.current && next.run?.context) setContext(next.run.context);
     } catch (e) { if (ticket === sequence.current) setError(e instanceof Error ? e.message : "Labels unavailable."); }
   }, []);
   useEffect(() => {
@@ -41,15 +37,14 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
     return () => { clearTimeout(timer); invalidate(); window.removeEventListener("workspace:changed", changed); };
   }, [sourceRevision, reload, invalidate]);
   const current = data?.sourceRevision === sourceRevision;
-  const contextChanged = !!data?.run && JSON.stringify(context) !== JSON.stringify(data.run.context);
-  const stale = !!data && (!current || data.stale || contextChanged);
+  const stale = !!data && (!current || data.stale);
+  const context = !stale && data?.run?.context ? data.run.context : { market: "Vietnam", asOf: new Date().toISOString().slice(0, 10), evidence: [] };
   const running = submitting || (!!current && !data?.stale && data?.run?.status === "running");
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => void reload(), 3000);
     return () => clearInterval(timer);
   }, [running, reload]);
-  function updateContext(next: LabelContext) { edited.current = true; setContext(next); }
   async function run() {
     if (posting.current || blocked || !data?.configured || !current || running) return;
     const parsed = labelContextSchema.safeParse(context);
@@ -86,33 +81,6 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
     {stale && <p role="status">Labels need updating for these sources or assessment details.</p>}
     {blocked && <p role="status">Save source changes before labeling.</p>}
     {(error || (current && !stale && data?.run?.error)) && <p role="alert">{error || data?.run?.error}</p>}
-    <details className="label-evidence"><summary>Label settings</summary>
-    <fieldset className="label-context" disabled={running}>
-      <legend>Assessment</legend>
-      <label>Market<input value={context.market} maxLength={100} onChange={e => updateContext({ ...context, market: e.target.value })} /></label>
-      <label>Assessment date<input type="date" value={context.asOf} onChange={e => updateContext({ ...context, asOf: e.target.value })} /></label>
-    </fieldset>
-    <details className="label-evidence"><summary>Evidence ({context.evidence.length})</summary>
-      <fieldset className="label-context" disabled={running}>
-        <legend>Add product evidence</legend>
-        <label>Product code<select aria-label="Product code" value={evidence.productCode} onChange={e => setEvidence({ ...evidence, productCode: e.target.value })}>
-          <option value="">Select product</option>{products.map(p => <option key={p.id} value={p.reference}>{p.reference} · {p.name}</option>)}
-        </select></label>
-        <label>Observation date<input type="date" max={context.asOf} value={evidence.observedAt} onChange={e => setEvidence({ ...evidence, observedAt: e.target.value })} /></label>
-        <label>Evidence source<input maxLength={300} value={evidence.source} onChange={e => setEvidence({ ...evidence, source: e.target.value })} /></label>
-        <label>Observation<textarea maxLength={2000} value={evidence.observation} onChange={e => setEvidence({ ...evidence, observation: e.target.value })} /></label>
-        <button onClick={() => {
-          const parsed = labelContextSchema.safeParse({ ...context, evidence: [...context.evidence, evidence] });
-          if (!parsed.success) { setError("Choose a product and provide a source, observation, and date on or before the assessment date."); return; }
-          updateContext(parsed.data); setError(""); setEvidence({ productCode: "", observedAt: "", source: "", observation: "" });
-        }}>Add evidence</button>
-      </fieldset>
-      <ul>{context.evidence.map((item, i) => <li key={i}>
-        <strong>{item.productCode}</strong> · {item.observedAt} · {item.source}<p>{item.observation}</p>
-        <button disabled={running} aria-label={`Remove evidence ${i + 1}`} onClick={() => updateContext({ ...context, evidence: context.evidence.filter((_, index) => index !== i) })}>Remove</button>
-      </li>)}</ul>
-    </details>
-    </details>
     <label className="product-label-search">Search products<input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} placeholder="Name or product code" /></label>
     <div className="warehouse-table" role="region" aria-label="Inventory table" tabIndex={0}><table>
       <thead><tr><th>Product</th><th>Available units</th>{hasDemand && <th>Demand label</th>}<th>Source timestamp</th></tr></thead>

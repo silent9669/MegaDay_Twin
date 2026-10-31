@@ -29,7 +29,7 @@ import {
 } from "./sources";
 import { SandboxControl } from "./SandboxControl";
 import { SourceDiagnostics } from "./SourceDiagnostics";
-import { ArchiveImport } from "./ArchiveImport";
+import { ArchiveImport, type ArchiveImportHandle } from "./ArchiveImport";
 import "./studio.css";
 function download(name: string, text: string) {
   const url = URL.createObjectURL(
@@ -74,6 +74,8 @@ export function DataStudio() {
   const revision = draft ? base : (cloud.document?.revision ?? 0);
   const conflict =
     dirty && !!cloud.document && cloud.document.revision > revision;
+  const archive = useRef<ArchiveImportHandle>(null);
+  const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null),
     folder = useRef<HTMLInputElement>(null),
     edit = useRef<HTMLDialogElement>(null);
@@ -246,7 +248,13 @@ export function DataStudio() {
     }
   };
   return (
-    <div className="data-studio">
+    <div className={`data-studio${dragging ? " data-studio-dragging" : ""}`}
+      onDragOver={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
+      onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false); }}
+      onDrop={event => { event.preventDefault(); setDragging(false); const files = event.dataTransfer.files;
+        if (files.length !== 1) { setMessage("Drop one ZIP file at a time."); return; }
+        archive.current?.importFile(files[0]!);
+      }}>
       <header className="studio-header">
         <div>
           <span className="eyebrow">Workspace / Data</span>
@@ -345,11 +353,11 @@ export function DataStudio() {
           </button>
         </div>
       )}
-      <ArchiveImport blocked={dirty || saving || conflict || busy || !cloud.document || !!saveError}
-        onLoad={async incoming => {
+      <ArchiveImport sources={files} ref={archive} onBusyChange={setBusy} blocked={dirty || saving || conflict || busy || !cloud.document || !!saveError}
+        onLoad={async (incoming, replace) => {
           setBusy(true);
           try {
-            await saveCloud({ schema: "hackathon.sources.v1", files: mergeSources(files, incoming) }, revision);
+            await saveCloud({ schema: "hackathon.sources.v1", files: replace ? incoming : mergeSources(files, incoming) }, revision);
             setDraft(null); setDirty(false);
             setSelected(sourceKey(incoming[0]!));
             setPage(0); setQuery(""); setFocusRow(null); setTab("records"); setMessage("");
@@ -538,7 +546,7 @@ export function DataStudio() {
                                 ) : (
                                   <button
                                     className="source-cell"
-                                    disabled={current?.kind === "inventory" && column === DEMAND_COLUMN}
+                                    disabled={busy || (current?.kind === "inventory" && column === DEMAND_COLUMN)}
                                     title={`Edit row ${index + 1}, ${column}`}
                                     onClick={() =>
                                       setCell({
