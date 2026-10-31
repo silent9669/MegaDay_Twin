@@ -100,6 +100,11 @@ async function handle(request: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/studio/shop" && request.method === "GET")
       return env.ASSETS.fetch(new Request(new URL("/shop-baseline.json", url)));
+    if (path === "/api/studio/restock") {
+      if (!env.WORKSPACE) return fail(503, "Account storage is not configured.");
+      return env.WORKSPACE.get(env.WORKSPACE.idFromName("admin")).fetch(
+        new Request(new URL("/internal/studio/restock", url), request));
+    }
     if (path === "/api/studio/import") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "studio:admin" })).success)
         return fail(429, "Studio is busy. Try again in a minute.");

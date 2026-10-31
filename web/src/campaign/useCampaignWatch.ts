@@ -9,8 +9,11 @@ export function useCampaignWatch() {
   useEffect(() => {
     let disposed = false;
     let last: string | null = null;
+    let polling = false, refreshRequested = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
+      if (polling) { refreshRequested = true; return; }
+      polling = true;
       try {
         const next = await requestJSON<CampaignContext>("/api/v1/campaign-analysis/CD002");
         if (disposed) return;
@@ -22,11 +25,15 @@ export function useCampaignWatch() {
       } catch (e) {
         if (!disposed) setError(e instanceof Error ? e.message : "Chưa đọc được backend.");
       } finally {
-        if (!disposed) timer = setTimeout(() => void poll(), 15000);
+        polling = false;
+        if (!disposed) timer = setTimeout(() => void poll(), refreshRequested ? 0 : 15000);
+        refreshRequested = false;
       }
     };
     void poll();
-    return () => { disposed = true; clearTimeout(timer); };
+    const refresh = () => { clearTimeout(timer); void poll(); };
+    window.addEventListener("workspace:backend-refresh", refresh);
+    return () => { disposed = true; clearTimeout(timer); window.removeEventListener("workspace:backend-refresh", refresh); };
   }, []);
   return { context, error, acceptContext: setContext };
 }

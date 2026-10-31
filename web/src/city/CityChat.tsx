@@ -531,7 +531,9 @@ export function CityChat({
                     setDraft(
                       (previous) =>
                         previous.trim() ||
-                        `Explain this workspace change: ${notice.title}. ${notice.detail}`,
+                        (notice.kind === "stock-restocked"
+                          ? `Analyze again after this restock: ${notice.title}. ${notice.detail} Read the latest saved inventory and explain how the app's calculations change with the new stock. Keep other assumptions explicit; do not invent a new forecast.`
+                          : `Explain this workspace change: ${notice.title}. ${notice.detail}`),
                     );
                     setTab("chat");
                     setHistory(false);

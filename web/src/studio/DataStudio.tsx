@@ -7,6 +7,7 @@ import {
   FileJson,
   FileSpreadsheet,
   FolderOpen,
+  PackagePlus,
   Trash2,
   Save,
   Search,
@@ -19,6 +20,7 @@ import Papa from "papaparse";
 import { useSearchParams } from "react-router";
 import { useAccountDocument, requestJSON } from "./account";
 import type { Doc } from "./workspace-types";
+import type { RestockChange } from "../../server/studio-restock";
 import {
   SOURCE_DEFS,
   makeSource,
@@ -58,6 +60,8 @@ export function DataStudio() {
     [message, setMessage] = useState(""),
     [saveError, setSaveError] = useState("");
   const [sourceParams, setSourceParams] = useSearchParams();
+  const restockOperation = useRef<string | null>(null);
+  const [restockPending, setRestockPending] = useState(false);
   const selected = sourceParams.get('source') ?? 'orders';
   const setSelected = (kind: string) => setSourceParams(previous => { const next = new URLSearchParams(previous); next.set('source', kind); return next; });
   const [tab, setTab] = useState<"records" | "diagnostics" | "schema">("records"),
@@ -168,6 +172,30 @@ export function DataStudio() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load shop data.");
     } finally { setBusy(false); setImportingShop(false); }
+  };
+  const restock = async () => {
+    if (busy || dirty || saving || conflict || !cloud.document) return;
+    setBusy(true); setMessage("");
+    restockOperation.current ??= crypto.randomUUID();
+    try {
+      const result = await requestJSON<{ change: RestockChange; backend: string }>("/api/studio/restock", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision, operationId: restockOperation.current }),
+      });
+      await cloud.reload();
+      window.dispatchEvent(new CustomEvent("workspace:changed", { detail: "sources" }));
+      window.dispatchEvent(new Event("workspace:backend-refresh"));
+      const retry = result.backend === "pending";
+      setRestockPending(retry);
+      if (!retry) restockOperation.current = null;
+      setSelected("inventory"); setQuery("GD0003"); setPage(0); setTab("records");
+      setMessage(`GD0003 restocked: ${result.change.before} → ${result.change.after}. ${retry ? "Inventory saved. Retry backend sync." : result.backend === "synced" ? "Ready to analyze again." : "Inventory saved. Decision backend is unavailable."}`);
+    } catch (error) {
+      const conflict = (error as { status?: number }).status === 409;
+      setRestockPending(!conflict);
+      if (conflict) { restockOperation.current = null; await cloud.reload(); }
+      setMessage(error instanceof Error ? error.message : "Could not restock GD0003.");
+    } finally { setBusy(false); }
   };
   const importFiles = async (list: FileList | null) => {
     if (!list?.length || busy) return;
@@ -311,6 +339,9 @@ export function DataStudio() {
               "Loading sources…"
             )}
           </span>
+          <button onClick={() => void restock()} disabled={busy || dirty || saving || conflict || !cloud.document || !files.some(file => file.kind === "inventory")}>
+            <PackagePlus size={16} /> {restockPending ? "Retry restock sync" : "Restock GD0003 +10"}
+          </button>
           <button onClick={() => void importShop()} disabled={busy || dirty || saving || conflict || !cloud.document}>
             <FolderOpen size={16} />
             {importingShop ? "Importing shop…" : "Import shop folder"}

@@ -16,6 +16,21 @@ const setup = (files: SourcePack["files"] = []) => {
   return render(<MemoryRouter><DataStudio /></MemoryRouter>);
 };
 beforeEach(() => { vi.clearAllMocks(); save.mockResolvedValue({ revision: 8 }); });
+it("triggers GD0003 restock and reuses its operation ID when backend sync needs retry", async () => {
+  const file = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nGD0003,Fryer,2", "upload");
+  setup([file]);
+  vi.mocked(requestJSON).mockResolvedValueOnce({ change: { before: 2, after: 12 }, backend: "pending" })
+    .mockResolvedValueOnce({ change: { before: 2, after: 12 }, backend: "synced" });
+  fireEvent.click(screen.getByRole("button", { name: "Restock GD0003 +10" }));
+  await screen.findByText(/GD0003 restocked: 2 → 12/);
+  const first = JSON.parse(String(vi.mocked(requestJSON).mock.calls[0]![1]!.body));
+  expect(first.revision).toBe(7);
+  fireEvent.click(screen.getByRole("button", { name: "Retry restock sync" }));
+  await screen.findByText(/Ready to analyze again/);
+  const second = JSON.parse(String(vi.mocked(requestJSON).mock.calls[1]![1]!.body));
+  expect(second.operationId).toBe(first.operationId);
+  expect(save).not.toHaveBeenCalled();
+});
 
 it("loads and saves the baseline with one click from an empty studio, without a folder picker", async () => {
   const file = await makeSource("ton_kho_google_sheet.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "shop baseline");

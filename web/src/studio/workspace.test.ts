@@ -10,7 +10,7 @@ import { hashText, makeSource } from "./sources";
 import { defaultSettings } from "./workspace-types";
 import { mergeReplaySources } from "./replay";
 import { sourceText } from "./source-text";
-function setup() {
+function setup(env: ConstructorParameters<typeof AccountWorkspace>[1] = {}) {
   const database = new DatabaseSync(":memory:");
   const sent: string[] = [];
   let writesBlocked = false;
@@ -48,8 +48,8 @@ function setup() {
   return {
     blockWrites: () => { writesBlocked = true; },
     reconstruct: () =>
-      new AccountWorkspace(state as unknown as DurableObjectState),
-    workspace: new AccountWorkspace(state as unknown as DurableObjectState),
+      new AccountWorkspace(state as unknown as DurableObjectState, env),
+    workspace: new AccountWorkspace(state as unknown as DurableObjectState, env),
     database,
     sent,
   };
@@ -61,6 +61,26 @@ const req = (name: string, data?: unknown, revision = 1) =>
   );
 afterEach(() => vi.unstubAllGlobals());
 describe("persistent account documents", () => {
+  it("persists GD0003 restock once and retries backend sync without adding stock twice", async () => {
+    const upstream = vi.fn(async () => new Response("unavailable", { status: 503 }));
+    const { workspace, reconstruct, database } = setup({ DECISION_BACKEND: { fetch: upstream } });
+    const file = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-10,GD0003,Fryer,2", "shop");
+    await workspace.fetch(req("sources", { schema: "hackathon.sources.v1", files: [file] }, 0));
+    const operationId = crypto.randomUUID();
+    const restock = (revision = 1, id = operationId) => new Request("https://workspace.test/internal/studio/restock", {
+      method: "POST", body: JSON.stringify({ revision, operationId: id }),
+    });
+    expect((await (await workspace.fetch(restock())).json())).toMatchObject({ revision: 2, backend: "pending", change: { before: 2, after: 12 } });
+    upstream.mockImplementation(async () => Response.json({ data: { batches: [{ status: "loaded", rows_held: 0 }] } }));
+    expect((await (await reconstruct().fetch(restock())).json())).toMatchObject({ revision: 2, backend: "synced", change: { before: 2, after: 12 } });
+    await workspace.fetch(restock());
+    expect(upstream).toHaveBeenCalledTimes(2);
+    const saved = await (await reconstruct().fetch(req("sources"))).json();
+    expect(saved.revision).toBe(2);
+    expect(sourceText(saved.data.files[0])).toContain("GD0003,Fryer,12");
+    expect((await workspace.fetch(restock(1, crypto.randomUUID()))).status).toBe(409);
+    database.close();
+  });
   it("keeps a static shop snapshot through event edits, reloads and separate deletions", async () => {
     const { workspace, reconstruct, database } = setup();
     const baseline = await makeSource("stock.csv", "Ngày,Mã nội bộ,Tên hàng,Tồn thực tế\n2026-11-10,A,Cup,10", "shop");

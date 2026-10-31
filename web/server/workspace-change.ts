@@ -1,4 +1,5 @@
 import { snapshot, type ChangeReference } from "../src/city/monitor/changes";
+import { playbackHour } from "../src/studio/replay";
 import type { SourcePack } from "../src/studio/sources";
 import type { Doc, Sandbox } from "../src/studio/workspace-types";
 
@@ -17,7 +18,7 @@ export async function resolveChange(
   const [sources, sandbox] = (await Promise.all(
     responses.map((r) => r.json()),
   )) as [Doc<SourcePack>, Doc<Sandbox>];
-  const current = snapshot(sources, sandbox);
+  const current = snapshot(sources, { ...sandbox, data: { ...sandbox.data, hour: playbackHour(sandbox.data) } });
   const stock = current.stock.find((s) => s.code === reference.entity);
   const source = current.sources.find((s) => s.kind === reference.source && (s.kind !== "general" || s.name === reference.sourceName));
   return {

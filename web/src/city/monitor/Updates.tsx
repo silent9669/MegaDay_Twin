@@ -43,10 +43,10 @@ export function Updates({
             </time>
           </small>
           <footer>
-            <Link to={notice.href} onClick={onNavigate}>
-              {notice.backendCampaign ? "Mở campaign để cập nhật & đề xuất lại" : "View source"} <ArrowUpRight size={14} />
+            <Link to={notice.href} onClick={() => { if (notice.kind === "stock-restocked") window.dispatchEvent(new CustomEvent("workspace:changed", { detail: "sources" })); onNavigate(); }}>
+              {notice.backendCampaign ? "Mở campaign để cập nhật & đề xuất lại" : notice.kind === "stock-restocked" ? "Reload inventory" : "View source"} <ArrowUpRight size={14} />
             </Link>
-            {!notice.backendCampaign && <button onClick={() => onExplain(notice)}>Explain</button>}
+            {!notice.backendCampaign && <button onClick={() => onExplain(notice)}>{notice.kind === "stock-restocked" ? "Analyze again" : "Explain"}</button>}
           </footer>
         </article>
       ))}

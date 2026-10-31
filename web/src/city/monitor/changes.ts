@@ -14,6 +14,7 @@ const kinds = [
   "stock-zero",
   "stock-unknown",
   "stock-recovered",
+  "stock-restocked",
   "diagnostics",
   "diagnostics-resolved",
   "orders",
@@ -58,7 +59,7 @@ export type MonitorSnapshot = {
   stock: StockRow[];
   orders: number;
   campaigns: number;
-  sources: { kind: SourceKind; name: string; hash: string; issues: string[] }[];
+  sources: { kind: SourceKind; name: string; hash: string; restock?: boolean; issues: string[] }[];
 };
 export function snapshot(
   sources: Doc<SourcePack>,
@@ -76,6 +77,7 @@ export function snapshot(
       kind: file.kind,
       name: file.name,
       hash: file.hash,
+      restock: file.origin === "restock trigger GD0003",
       issues: readSource(file)
         .issues.filter((i) => i.level !== "info")
         .map((i) => `${i.code}:${i.row ?? ""}:${i.column ?? ""}`),
@@ -208,6 +210,10 @@ export class WorkspaceMonitor {
     for (const row of next.stock) {
       const before = oldStock.get(row.code);
       if (row.stock === before) continue;
+      if (row.code === "GD0003" && row.stock !== null && typeof before === "number" && row.stock > before && next.sourceRevision > previous.sourceRevision && next.sources.some(source => source.kind === "inventory" && source.restock)) {
+        add("stock-restocked", `${row.code} restocked`, `${row.name}: ${before} → ${row.stock}. Reload inventory and analyze again.`, before, row.stock, "inventory", row.code, true);
+        continue;
+      }
       const title =
         row.stock === null
           ? "Stock is unknown"

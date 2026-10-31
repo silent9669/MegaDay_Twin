@@ -68,6 +68,10 @@ export function ScenarioWorksheet({
         </Button>
       </header>
       <div className="hq-suggestion-status" role="status">
+        {evidence.stock && value.stock !== null && evidence.stock.value !== value.stock && <Button variant="outline" disabled={busy} onClick={() => {
+          setPrevious({ ...value });
+          setValue({ ...value, stock: evidence.stock!.value });
+        }}>Reload stock & recalculate</Button>}
         <span>{product.mode === "model" && model.isPending ? "Loading product data…"
           : model.isError && product.mode === "model" ? "Product data unavailable. Enter inputs manually or retry."
           : count ? `${count} of 8 inputs available from ${product.mode === "workspace" ? `workspace revision ${revision}` : config.useFixtures ? "the model snapshot" : "the decision backend"}. Loading replaces the form; demand and new ad spend need assumptions for the same period.`
