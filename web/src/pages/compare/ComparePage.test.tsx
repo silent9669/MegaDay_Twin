@@ -29,15 +29,15 @@ describe('Compare screen · CD002 on 11.11 (API snapshot fixture)', () => {
     expect(await screen.findByText('Run 0–2h, 12–14h. About 1.2 million VND better than reduce budget 50%.')).toBeInTheDocument();
     expect(screen.getByText('Data through 01:00 · computed 01:00')).toBeInTheDocument();
     expect(screen.getByText(/^Saved simulation at 01:00 on 11 November/)).toBeInTheDocument();
-    expect(screen.getByText('Goal: Lợi nhuận tới 00:00 12/11')).toBeInTheDocument();
+    expect(screen.getByText('Goal: Profit through 00:00 12/11')).toBeInTheDocument();
   });
 
   it('tier 1: conclusion, zone bar, "better than both" line and blocked pause card', async () => {
     renderAt('/sku/NOICHIEN2L/compare');
     expect(await screen.findByText('Run 0–2h, 12–14h. About 1.2 million VND better than reduce budget 50%.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Campaign CD002' })).toBeInTheDocument();
-    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('Tạm dừng bị cấm vì đã cam kết với sàn');
-    expect((await screen.findAllByText(/^Tạm dừng bị cấm vì đã cam kết với sàn trong khung flash sale\./)).length).toBeGreaterThan(0);
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('Pausing is blocked by a flash-sale commitment');
+    expect((await screen.findAllByText(/^Pausing is blocked by a flash-sale commitment\./)).length).toBeGreaterThan(0);
     expect(screen.getByText('Better than both: Run 0–2h, 12–14h.')).toBeInTheDocument();
 
     const cards = await within(screen.getByRole('list', { name: 'Five actions' })).findAllByRole('listitem', { name: undefined });
@@ -48,18 +48,18 @@ describe('Compare screen · CD002 on 11.11 (API snapshot fixture)', () => {
     const pause = top.find((li) => li.textContent?.startsWith('Pause') && !li.textContent.includes('restock'));
     expect(pause).toHaveTextContent('Not feasible');
     expect(pause).toHaveTextContent('Flash-sale commitment');
-    const best = top.find((li) => li.textContent?.includes('Recommendation'));
+    const best = top.find((li) => li.textContent?.includes('Recommended'));
     expect(best).toHaveTextContent('Run 0–2h, 12–14h');
   });
 
   it('tier 2: reasons with clickable numbers and the flip condition', async () => {
     renderAt('/campaign/CD002/compare');
     await userEvent.click(await screen.findByRole('button', { name: 'Reasons & assumptions' }));
-    expect(screen.getByText(/lãi 9\.280đ; ads chỉ có lời khi iROAS ≥ 57\.2/)).toBeInTheDocument();
-    const chip = screen.getByRole('button', { name: /531\.000đ/ });
+    expect(screen.getByText(/contributes 9,280 VND per unit; ads break even only at iROAS ≥ 57\.2/)).toBeInTheDocument();
+    const chip = screen.getByRole('button', { name: /531,000 VND/ });
     await userEvent.click(chip);
-    expect(screen.getByRole('dialog', { name: 'Source: Giá bán, giá vốn, phí sàn của NOICHIEN2L' })).toBeInTheDocument();
-    expect(screen.getByText(/^Nếu hàng dư còn giá trị .* → Giảm ngân sách 50% tốt hơn$/)).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Source: Price, cost and platform fees for NOICHIEN2L' })).toBeInTheDocument();
+    expect(screen.getByText(/^At a net leftover value .* → reducing the budget by 50% is better$/)).toBeInTheDocument();
     // No restock flip in the snapshot, so fixture mode shows only the leftover slider.
     expect(screen.getByLabelText(/Net leftover value per unit/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Restock delay/)).not.toBeInTheDocument();
@@ -83,7 +83,7 @@ describe('Compare screen · CD002 on 11.11 (API snapshot fixture)', () => {
     const form = screen.getByRole('form', { name: 'Create decision' });
     const save = within(form).getByRole('button', { name: 'Save decision draft' });
     expect(save).toBeDisabled();
-    expect(within(form).getByText(/Decisions cannot be saved in model snapshot mode/)).toBeInTheDocument();
+    expect(within(form).getByText(/Saving decisions requires the connected backend/)).toBeInTheDocument();
     expect(within(form).getByRole('radio', { name: /^Pause ads · Flash-sale commitment/ })).toBeDisabled();
     expect(within(form).getByRole('radio', { name: 'Run 0–2h, 12–14h' })).toBeChecked();
   });
@@ -94,7 +94,7 @@ describe('Compare screen · page-10 ZoneBar example (fixture)', () => {
     renderAt('/campaign/VIDU-T10/compare?rec=rec-510');
     expect(await screen.findByText(/Undetermined between pause ads and continue ads/)).toBeInTheDocument();
     expect(screen.getByText('Assumption-based scenario; not a validated forecast.')).toBeInTheDocument();
-    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('threshold 22.5 sp/giờ');
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('22.5 units/hour');
 
     await userEvent.click(screen.getByRole('button', { name: 'Reasons & assumptions' }));
     fireEvent.change(screen.getByLabelText(/Net leftover value per unit/), { target: { value: '20000' } });
@@ -103,7 +103,7 @@ describe('Compare screen · page-10 ZoneBar example (fixture)', () => {
     expect(label).toContain('Pause is better: the forecast is above the threshold.');
     expect(label).toContain('Break-even: 16.5 units/hour');
     expect(screen.getByText(/Browser break-even estimate/)).toBeInTheDocument();
-    expect(screen.getByText(/crossed the threshold: Nếu hàng dư còn giá trị từ 16\.875đ/)).toBeInTheDocument();
+    expect(screen.getByText(/A threshold was crossed: Nếu hàng dư còn giá trị từ 16\.875đ/)).toBeInTheDocument();
   });
 });
 

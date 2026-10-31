@@ -4,6 +4,7 @@
 // Pydantic; they are narrowed below to the values documented in
 // docs/quyet-dinh/M3-api.md §2 so the UI can switch on them safely.
 import type { components } from './schema';
+import type { CalculationTrace } from '../planner/calculation-trace';
 
 type S = components['schemas'];
 
@@ -62,9 +63,9 @@ export type InputsRef = S['InputsRefOut'];
 export type SimRequest = S['ScenarioRunRequest'];
 /** `ScenarioRun.request`: the request as run (start, horizon filled). Re-send it to hit the cache. */
 export type SimRequestEcho = S['SimRequestOut'];
-export type ScenarioRun = Omit<S['ScenarioRun'], 'recommendation'> & { recommendation: Recommendation | null };
+export type ScenarioRun = Omit<S['ScenarioRun'], 'recommendation' | 'results'> & { recommendation: Recommendation | null; results: ScenarioResult[]; calculation_trace?: CalculationTrace | null };
 /** `duplicate_of` = key of an identical, better-ranked action (e.g. pause_until_restock ≡ pause). */
-export type ScenarioResult = S['ScenarioResultOut'];
+export type ScenarioResult = S['ScenarioResultOut'] & { goal_units_sold?: Dist | null; goal_sku?: string | null };
 
 /** One entry of `CampaignDetail.commitments` (backend: dict). */
 export type Commitment = {

@@ -30,7 +30,7 @@ describe('CitationChip', () => {
     const button = screen.getByRole('button', { name: /13:00/ });
     expect(button).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(button);
-    const dialog = screen.getByRole('dialog', { name: 'Source: Mô phỏng scn-2291' });
+    const dialog = screen.getByRole('dialog', { name: 'Source: Simulation scn-2291' });
     expect(dialog).toHaveTextContent('Simulation');
     expect(dialog).toHaveTextContent('simulator · 1.000 mẫu');
     expect(dialog).toHaveTextContent('11/11 01:00');
@@ -73,7 +73,7 @@ describe('screen states', () => {
         </UpdatingRegion>
       </>,
     );
-    expect(screen.getByRole('status')).toHaveTextContent('Kết quả dựa trên giả định');
+    expect(screen.getByRole('status')).toHaveTextContent('Assumption-based scenario');
     expect(screen.getByText('Updating · data at 13:05')).toBeInTheDocument();
     expect(screen.getByText('số cũ').parentElement).toHaveClass('opacity-60');
   });

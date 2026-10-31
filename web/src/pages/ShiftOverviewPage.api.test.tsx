@@ -119,9 +119,9 @@ describe('Tổng quan ca · real API shapes', () => {
     const cards = within(attention).getAllByRole('listitem');
     expect(cards[0]).toHaveTextContent('Nồi chiên không dầu mini 2L');
     expect(cards[0]).toHaveTextContent('83 units available · stockout around 17:00');
-    expect(within(cards[0] as HTMLElement).getByRole('link')).toHaveAttribute('href', '/sku/NOICHIEN2L/compare');
+    expect(within(cards[0] as HTMLElement).getByRole('link', {name:/^Compare/})).toHaveAttribute('href', '/sku/NOICHIEN2L/compare');
     expect(cards[1]).toHaveTextContent('Áo giữ nhiệt nam(2 variants)');
-    expect(within(cards[1] as HTMLElement).getByRole('link')).toHaveAttribute('href', '/sku/AOGIUNHIET-M/compare');
+    expect(within(cards[1] as HTMLElement).getByRole('link', {name:/^Compare/})).toHaveAttribute('href', '/sku/AOGIUNHIET-M/compare');
     expect(within(attention).queryByText(/Câu đối/)).not.toBeInTheDocument();
 
     expect(await screen.findByText('Role: Operator (u-ops-1)')).toBeInTheDocument();

@@ -176,6 +176,11 @@ CSV/JSON and immediately save recognized and general tables. If several files
 match the same business table, choose one before saving. Import does not wait
 for AI. **Review & fix with AI** reviews the current saved tables and applies
 validated column mappings with revision checks; failed review leaves them unchanged.
+Repair also standardizes recognized headers, trims surrounding whitespace and
+normalizes readable, nonnegative VND amounts using the existing money contract.
+It never invents missing values, resolves ambiguous SKU identities, drops rows or
+assumes timezones. The result shows applied repairs and remaining diagnostics.
+An unchanged review does not rewrite sources or clear demand labels.
 Cell edits retain revision-checked autosave. SQLite
 `studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
 with the source document revision. Unchanged table rows are not rewritten; no
@@ -183,6 +188,12 @@ user or model SQL is executed. The
 map uses saved inventory. HQ shows imported table, order, ad and stocked-product
 counts; Neighborhood shows searchable, paginated imported orders. The demo clock
 only filters repository demo data, not uploaded inventory or orders.
+
+The authenticated gateway streams import and labeling requests to the existing
+AccountWorkspace Durable Object. Extraction, parsing, model calls and persistence
+run there, avoiding the gateway CPU limit that caused HTTP 503 responses for
+the 11.11 archive. The object receives the same `OPENAI_API_KEY` binding as Milo;
+no second key or public internal route is introduced.
 
 `POST /api/studio/import` accepts raw ZIP bytes and returns `{ tables, skipped,
 model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
@@ -243,6 +254,76 @@ For an actual archive, set `LIVE_ARCHIVE_PATH` and run
 Neighborhood, Warehouse and responsive layouts against the local Worker.
 Archive contents stay local and are never committed.
 
+## Mục tiêu buổi sale (Task 1)
+
+Mở `/sale-planner` từ sidebar hoặc MegaDay HQ. Nhập mong muốn, phân tích,
+chỉnh thông số và chọn chiến dịch, sau đó xác nhận để lưu mục tiêu đang áp dụng
+và chạy mô phỏng. Bản đầu hỗ trợ **một chiến dịch, 1–72 giờ tròn**; bốn mục tiêu
+là lợi nhuận, số lượng bán, xả hàng và hiệu quả chi. Ngân sách là tổng cho cả kỳ.
+Thao tác này không thực thi thay đổi quảng cáo. Sửa thông số hủy xác nhận và
+ẩn kết quả cũ. Nếu đã lưu mục tiêu nhưng mô phỏng lỗi, nút thử lại dùng mục tiêu đó.
+
+Gateway dùng `DATA_BACKEND_URL` (gốc API, ví dụ `https://backend.example/api/v1/`),
+`DATA_BACKEND_USER`, `DATA_BACKEND_ROLE=lead` như kết nối Data Studio. Backend
+phải có `/goal-planner/capabilities` phiên bản 1 và dữ liệu đã ingest. Chỉ dùng
+backend trên mạng tin cậy theo mô hình xác thực hiện có. Frontend gọi trực tiếp
+gateway cùng origin; không dùng fixture để thay kết quả thật. Backend chưa nối,
+chưa nâng cấp hoặc không đủ quyền sẽ có thông báo và không cho chạy.
+
+Diễn giải dùng cấu hình `OPENAI_API_KEY` và bộ chọn model sẵn có của Ask your PM.
+Khi chưa cấu hình/lỗi, chuyển sang quy tắc có thông báo hoặc nhập thủ công.
+AI chỉ trích thông số mục tiêu; các con số dự báo và đề xuất do simulator tính.
+Yêu cầu chưa hỗ trợ phải được người dùng kiểm tra và đồng ý loại khỏi lần tính.
+Mức lỗ là giới hạn **kỳ vọng J**, không phải bảo đảm không lỗ; J có giá trị tồn
+cuối kỳ nên không đồng nhất với lợi nhuận kế toán.
+
+Kiểm chứng: `npm.cmd run check`; chạy Vite cổng 5186 rồi
+`node qa/studio/sale-planner.mjs` (Windows có thể đặt `STUDIO_QA_CHANNEL=msedge`).
+Browser QA dùng API giả lập; ảnh/kết quả ở `qa/runs/sale-planner/`.
+Ảnh review (số minh họa từ API giả lập): [desktop](../docs/images/sale-planner-desktop.png),
+[mobile](../docs/images/sale-planner-mobile.png).
+
+## Trợ lý mục tiêu theo SKU và minh bạch con số
+
+Từ HQ chọn **Lập mục tiêu** của một SKU, hoặc mở `/sku-assistant?sku=...`.
+Danh sách và ngữ cảnh được đọc từ backend thật. SKU được chuyển vào **Milo**,
+dùng chung hội thoại và lịch sử lưu trong tài khoản. Milo nhận dữ liệu SKU,
+lịch sử bán gần đây, nguồn/mốc dữ liệu và chiến dịch liên quan. Mục tiêu được
+diễn giải từ nhiều lượt chat, bao gồm việc sửa yêu cầu; giá trị đã biết không
+cần hỏi lại. **Kiểm tra mục tiêu** mở form chỉnh và xác nhận có sẵn.
+Đổi SKU tách phạm vi hội thoại và bỏ phản hồi muộn của sản phẩm trước.
+Bản nháp hiển thị trong phiên không phải mục tiêu đã lưu hoặc lệnh thực thi.
+
+Nếu một SKU thuộc nhiều chiến dịch, người dùng chọn chiến dịch. Mục tiêu bán
+đủ/xả hàng xét lượng bán trực tiếp của SKU đó; J, ngân sách và giới hạn lỗ vẫn
+tính cho **toàn chiến dịch**. Chưa có phân bổ ngân sách quảng cáo hoặc lợi nhuận
+riêng SKU. Không tự tạo chiến dịch hoặc thực thi thay đổi quảng cáo.
+
+Kết quả mới có bản truy vết được lưu cùng mô phỏng: bấm chỉ số để mở phân vị,
+mở **Cách tính và đối chiếu con số** để xem số thay vào công thức J; mở **Dữ liệu
+và công thức đã dùng trong lần tính** để xem file/batch, dự báo, tham số, giá
+vốn/phí và giả định từng SKU. Snapshot cũ không bị thay bằng dữ liệu mới. Kết
+quả trước khi có trace hiển thị thiếu bằng chứng; không dựng lời giải thích giả.
+Nguồn chưa truy vết được tới từng dòng CSV được nêu rõ trong giới hạn.
+
+Cần backend có migration 5 và capability `focus_sku`, `calculation_trace`, cùng
+cấu hình kết nối/lead của planner. Chạy migration theo quy trình backend trước
+khi dùng; gateway từ chối chạy theo SKU trên backend cũ. AI diễn giải vẫn dùng
+cấu hình Milo (`OPENAI_API_KEY`, model đã chọn trong tài khoản) và có fallback
+quy tắc khi bước diễn giải gặp lỗi. Chưa cấu hình AI thì hội thoại báo rõ,
+không trả lời giả làm AI. Bản nháp vẫn phải kiểm tra trước khi xác nhận.
+Kiểm thử model dùng phản hồi giả lập, không đánh giá chất lượng AI trực tiếp.
+
+Browser QA: Vite cổng 5186, `node qa/studio/sku-assistant.mjs` (có thể đặt
+`STUDIO_QA_CHANNEL=msedge`). Script dùng API giả lập, kiểm tra xác nhận, phạm vi
+SKU/chiến dịch, phản hồi muộn sau đổi SKU, số liệu/bằng chứng và desktop/mobile.
+Ảnh/kết quả nằm ở `qa/runs/sku-assistant/`.
+Ảnh review: [Milo desktop](../docs/images/milo-conversation-desktop.png),
+[Milo mobile](../docs/images/milo-conversation-mobile.png),
+[đối chiếu số trên mobile](../docs/images/sku-evidence-mobile.png) dùng API giả lập;
+[phân rã giá vốn/phí](../docs/images/sku-evidence-real.png) dùng kết quả Python
+thật trên DB thử `nho` riêng, phát lại qua HTTP giả lập trong browser.
+
 ## Cấu trúc
 
 ```
@@ -258,3 +339,36 @@ src/
 ```
 
 Theme: token CSS trên `:root` và `[data-theme='dark']`, map vào Tailwind bằng `@theme inline` (dùng `bg-surface`, `text-muted`, `border-border`...). Nút trên thanh trên cùng đổi Theo hệ thống / Sáng / Tối, lưu ở `localStorage` (bọc try/catch). `Ctrl+K` mở panel Trợ lý, `Esc` đóng.
+
+### HQ product workspace
+
+HQ contains Overview, SKU Details, Comparisons, Campaigns and Activity Logs.
+Track a product from Overview; the active product scopes the other tabs. Tracked
+products, saved worksheet inputs and activity are revisioned in the account's
+`hq` document. Unsaved worksheet inputs and notes stay separate per product while
+HQ remains open. Source records and names retain their original values.
+
+The continue/pause worksheet uses explicit user assumptions. Sales are capped by
+stock; costs include unit cost, packaging and percentage fees. It excludes taxes,
+returns, fixed costs, restocking and leftover valuation. Existing backend model
+comparisons and goal confirmation remain separate from this worksheet.
+
+Milo opens on the left beside desktop HQ. Analyze with AI attaches context to an
+editable draft; only Send starts inference. Up to two PNG/JPEG/WebP images can be
+attached (10 MB input limit, resized to 1,280 px and at most 512 KB each). Saved
+messages retain images and analysis context for history and retries. The existing
+20 MiB account document limit still applies.
+
+The authenticated `/api/pm/chat` endpoint delegates execution to the account
+Durable Object. Milo can list source tables and read/search records through
+read-only tools, with source revisions and record numbers. Each response permits
+at most eight tool calls over five rounds; oversized records/output are explicitly
+marked truncated. This does not grant ad execution, inventory writes or arbitrary
+SQL access. Uploaded records, images and attached context are untrusted evidence.
+
+Building selection opens the workspace and focuses the camera. Closing it returns
+to the city. Data management remains in Data Studio. The tutorial's seen state is
+stored on the device, and Replay tutorial always opens it explicitly.
+
+Verification: `node qa/hq-workspace.mjs` runs against a local Wrangler preview,
+using local test data and mocked AI replies; it never writes to production.

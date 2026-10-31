@@ -1,58 +1,465 @@
 // English interface copy. The export name is retained for existing consumers.
-import type { ActionSpec, ComputeState, Confidence } from '../api/types';
-import type { Role } from './config';
-import { formatHourWindows, formatNumber, formatVnd } from './format';
-export function pctOf(pct:number):number {return pct<=1?pct*100:pct;}
-export const viText={
- app:{name:'MegaDay Twin',shopName:'Demo homeware shop',event:'11.11 sale',skipToContent:'Skip to content'},
- nav:{label:'Main navigation',overview:'Overview',skuDetail:'SKU Details',compare:'Comparisons',import:'Data Studio',alerts:'Alerts',decisions:'Activity Logs',assistant:'AI Assistant',settings:'Settings',collapse:'Collapse menu',expand:'Expand menu'},
- topBar:{dataUntil:(time:string)=>`Data through ${time}`,alerts:(n:number)=>`Alerts ${n}`,alertsAria:(n:number)=>`${n} open alerts`,openAssistant:'Open Milo (Ctrl+K)',fixtureMode:'Model snapshot',fixtureModeHint:'Saved demo API results from 01:00 on 11 November; not live workspace data.'},
- role:{operator:'Operator',lead:'Lead',viewer:'Viewer'} satisfies Record<Role,string>,
- theme:{label:'Appearance',system:'System',light:'Light',dark:'Dark'},
- freshnessSource:{orders:'Orders',ads:'Ads',inventory:'Inventory',cost:'Cost'} as Record<string,string>,
- freshnessStatus:{fresh:'current',stale:'stale',partial:'partial',missing:'missing'} as Record<string,string>,
- freshnessTooltip:(label:string,time:string,status:string)=>`${label} through ${time} · ${status}`,
- freshnessLag:(minutes:number,thresholdMinutes?:number|null)=>`${Math.round(minutes)} min behind${thresholdMinutes?` (limit ${thresholdMinutes} min)`:''}`,
- freshnessMissingSkus:(n:number)=>`${n} missing SKUs`,
- confidence:{verified:{label:'Validated',hint:'Forecast validated against historical data within the error threshold'},reference:{label:'Reference',hint:'Validation threshold not met, or a new context'},scenario:{label:'Scenario',hint:'Insufficient evidence; results depend on assumptions'}} satisfies Record<Confidence,{label:string;hint:string}>,
- computeState:{fresh:'Current',queued:'Queued',computing:'Updating',stale:'Stale',failed:'Failed'} satisfies Record<ComputeState,string>,
- action:(a:Pick<ActionSpec,'kind'|'pct'|'windows_local'>):string=>{
-  switch(a.kind){case 'continue':return 'Continue ads';case 'pause':return 'Pause ads';case 'reduce_budget':return a.pct!=null?`Reduce budget ${formatNumber(pctOf(a.pct))}%`:'Reduce budget';case 'schedule_hours':return a.windows_local?.length?`Run ${formatHourWindows(a.windows_local)}`:'Scheduled hours';case 'pause_until_restock':return 'Pause until restock';}
- },
- recommendationStatus:{undetermined:'Undetermined',none_meets_goal:'No option meets the goal'},
- overview:{
-  needsAttention:(n:number)=>`Needs attention (${n})`,allSkus:(n:number)=>`All products (${n})`,columns:{sku:'Product',stock:'Stock',cover:'Cover (hours)',soldToday:'Sold today',recommendation:'Recommendation',confidence:'Confidence',updated:'Updated'},
-  stockLine:(stock:string,cover:string)=>`${stock} available · about ${cover} hours of cover`,stockUntil:(stock:string,time:string)=>`${stock} available · stockout around ${time}`,stockBeyond:(stock:string,hours:string)=>`${stock} available · covers more than ${hours} hours`,stockOut:'Out of stock',coverBeyond:(hours:string)=>`> ${hours}`,
-  variants:(n:number)=>`${n} variants`,sameCampaign:(n:number)=>`${n} more SKUs in this campaign`,gainLine:(amount:string)=>`About ${amount} better`,roleLine:(role:string,id:string)=>`Role: ${role} (${id})`,updating:'Updating',noForecastCompare:'No forecast comparison',sortLabel:'Sort',sort:{priority:'Priority',sku:'SKU code',cover:'Lowest cover',sold_today:'Most sold today'} as Record<string,string>,
-  searchLabel:'Search products',searchPlaceholder:'Code or product name…',loadMore:'Load more',loadingMore:'Loading…',loadedCount:(n:number,more:boolean,total?:number|null)=>total!=null&&(more||total>n)?`${n} of ${total} products`:more?`${n} products loaded`:`${n} products`,allSkusTitle:'All products',noResults:(q:string)=>`No products match “${q}”.`,attentionNote:'Open alerts or recommendations other than continuing ads.',alertCount:(n:number)=>`${n} alerts`,deviation:{on_track:'On track',below_forecast:'Below forecast',above_forecast:'Above forecast'} as Record<string,string>,compare:'Compare',noCampaign:'No ads',nothingToReview:(time:string)=>`No products need attention. Last computed at ${time}.`,emptyTitle:'No products yet',emptyBody:'Import orders, inventory and costs to begin.',emptyAction:'Data Studio',
- },
- pages:{
-  overview:{title:'Overview',description:''},
-  skuDetail:{title:'SKU Details',description:'Inventory, sales, costs and campaign context for one product.',emptyTitle:'Select a product',emptyBody:'Track a product from Overview to inspect its details.'},
-  compare:{title:'Comparisons',description:'Actions, assumptions and their evidence.',emptyTitle:'Select a product',emptyBody:'Choose a tracked product to compare scenarios.',target:(target:string)=>`Target: ${target}`},
-  import:{title:'Data Studio',description:'Import and inspect your source data.',emptyTitle:'No imports yet',emptyBody:'Upload source files to begin.'},
-  alerts:{title:'Alerts',description:'Inventory, sales and source freshness.',emptyTitle:'Alerts are not connected',emptyBody:'The alert workflow requires the decision backend.'},
-  decisions:{title:'Activity Logs',description:'Product activity and recorded decisions.',emptyTitle:'No activity yet',emptyBody:'Actions recorded in HQ appear here.'},
-  assistant:{title:'Milo',description:'Analyze source data and scenarios.',emptyTitle:'Milo is unavailable',emptyBody:'Your data remains available in the workspace.',panelTitle:'Milo',close:'Close Milo',openFull:'Expand chat'},
-  settings:{title:'Settings',description:'Goals, parameters and appearance.',emptyTitle:'No settings yet',emptyBody:'Open city settings to configure your view.'},
-  notFound:{title:'Page not found',description:'This address is not available.',back:'Back to Overview'},
- },
- zoneBar:{axisLabel:'Sales per hour if ads pause (units)',continueSide:'Continue is better',pauseSide:'Pause is better',pauseSideBlocked:'Pause (blocked)',threshold:(x:string)=>`threshold ${x}`,altLabel:(vnd:number)=>`leftover value ${formatVnd(vnd)}`,verdict:{undetermined:(x:string)=>`Undetermined: the forecast spans both sides of ${x} units/hour.`,pause_better:'Pause is better: the forecast is above the threshold.',continue_better:'Continue is better: the forecast is below the threshold.'},summary:(p10:string,p50:string,p90:string,x:string)=>`If ads pause: ${p10}–${p90} units/hour (median ${p50}). Break-even: ${x} units/hour.`,altSummary:(label:string,x:string)=>`With ${label}: ${x} units/hour.`,noBar:'Holding inventory is worth more than selling at this leftover value; pausing is always financially better.',estimated:'Browser break-even estimate; the simulation has not been rerun.',blockedWhyCommitment:'because of a flash-sale commitment',blockedWhyOther:'because it violates a constraint',blockedPauseBetter:(why:string)=>`Pausing is blocked ${why}. Although financially better, the chart shows the cost of the constraint, not a recommendation to pause.`,blockedCompareOnly:(why:string)=>`Pausing is blocked ${why}; comparison only.`},
- citation:{kind:{scenario:'Simulation',forecast:'Forecast',iroas:'Incremental ad effectiveness',contribution:'Unit contribution',constraint:'Sale constraint',inventory:'Inventory',parameter:'Parameter',goal:'Goal',breakeven:'Break-even formula',commitment:'Sale commitment',snapshot:'SKU snapshot',panel:'Hourly observations'} as Record<string,string>,sourceKind:'Source type',id:'ID',tool:'Tool',dataAsOf:'Data through',computedAt:'Computed at',open:'Inspect evidence',dialog:(label:string)=>`Source: ${label}`,close:'Close'},
- range:{aria:(from:string,to:string)=>`Forecast range from ${from} to ${to}`},
- banner:{scenario:'Assumption-based scenario; not a validated forecast.',stale:(source:string)=>`${source} data is stale. Results may no longer apply.`,updating:(time:string)=>`Updating · data at ${time}`},
- compare:{
-  back:'Overview',title:(campaign:string)=>`Campaign ${campaign}`,skusInCampaign:(names:string)=>`Products: ${names}`,goal:(goal:string)=>`Goal: ${goal}`,dataLine:(dataAsOf:string,computedAt:string)=>`Data through ${dataAsOf} · computed ${computedAt}`,fixtureNote:'Illustrative example; not a simulation result.',snapshotNote:'Saved simulation at 01:00 on 11 November. Sliders only estimate locally.',tier1:'Conclusion',tier2:'Reasons & assumptions',tier3:'Audit details',
-  headline:{recommend:(best:string,runnerUp:string,gain:string)=>`${best}. About ${gain} VND better than ${runnerUp}.`,recommendNoRunner:(best:string)=>`${best}.`,onlyMeetsGoal:(best:string,runnerUp:string,cost:string)=>`${best} is the only option meeting the goal. ${runnerUp} earns about ${cost} VND more but misses the goal.`,undetermined:(best:string,runnerUp:string,prob:string)=>`Undetermined between ${best} and ${runnerUp}; probability of ${best} being better is ${prob}.`},
-  probLine:(prob:string)=>`Probability of beating the runner-up: ${prob}`,pauseBlocked:'Pausing is financially better but blocked by a flash-sale commitment.',betterThanBoth:(action:string)=>`Better than both: ${action}.`,noneMeetsGoal:'No option meets the goal. A lead must review alternatives.',notifyLead:'Notify lead',notifyLeadDisabled:'The handoff API is not connected.',noZoneBar:'No single break-even threshold is available for these actions.',noZoneBarHold:(detail:string)=>`Holding stock is worth more than selling${detail?` (${detail})`:''}; pausing is financially better.`,noZoneBarBlocked:'Actions cannot yet be compared.',campaignName:(name:string)=>`Campaign: ${name}`,infeasibleIfAllowed:(v:string)=>`Without the constraint: ${v}`,duplicateOf:(other:string)=>`Same result as ${other}`,actionCards:'Five actions',bestMark:'Recommended',infeasible:'Not feasible',stockoutAt:(time:string)=>`Stockout ${time}`,noStockout:'No stockout in this horizon',lowerCase:(s:string)=>s.charAt(0).toLowerCase()+s.slice(1),violation:{campaign_must_run:'Flash-sale commitment',budget_exceeded:'Budget exceeded',below_safety_stock:'Below safety stock'} as Record<string,string>,violationFallback:(code:string)=>`Constraint: ${code}`,
-  reasonsTitle:'Reasons',flipTitle:'What changes the conclusion',noFlip:'The conclusion holds within the current uncertainty range.',tryTitle:'Adjust assumptions',sliderLeftover:'Net leftover value per unit relative to cost (VND)',sliderRestock:'Restock delay (days; negative = earlier)',sliderLeftoverDefault:'Per-product default',sliderLeftoverHint:(min:string,max:string)=>`Applies to all campaign SKUs. Range ${min} to ${max}; zero means later sales break even.`,serverError:(msg:string)=>`Could not rerun: ${msg}`,clampedTo:(max:string)=>`Capped at ${max}.`,sliderRestockValue:(d:number)=>d===0?'on time':d<0?`${-d} days early`:`${d} days late`,resetParams:'Reset assumptions',whatIfActive:'Unsaved assumptions are active.',flipHit:(text:string)=>`A threshold was crossed: ${text}`,flipNotHit:'The conclusion is unchanged.',serverRunning:(samples:number)=>`Running ${formatNumber(samples,0)} samples…`,serverDone:(samples:number,id:string)=>`Simulation ${id}: ${formatNumber(samples,0)} samples.`,leftoverNoInputs:'This snapshot has no break-even inputs; a connected backend is required to rerun.',
-  table:{caption:'Five actions over the decision horizon',action:'Action',expected:'Expected result',range:'Forecast range',spend:'Ad spend',sold:'Units sold',leftover:'Units left',stockout:'Stockout',feasible:'Feasible',yes:'Yes',no:'No'},
-  lineage:{title:'Data, parameters & model',dataAsOf:'Data through',computedAt:'Computed at',forecasts:'Forecasts',estimate:'Incremental ad effectiveness (iROAS)',paramVersion:'Parameter version',goal:'Goal',scenario:'Simulation',samples:'Samples · seed',horizon:'Start · horizon',hours:'hours',cache:'Cached',recommendation:'Recommendation ID',sources:'Sources',allDefault:(n:number)=>`${n} default parameters (v0)`,override:'Run overrides',commitments:'Sale commitments'},
-  decision:{open:'Create decision',title:'Create decision',action:'Action',rationale:'Rationale',rationaleHint:'Explain your choice for the reviewer.',override:'This overrides the recommendation and will be flagged to the lead.',whatIf:'The displayed values use your assumptions.',save:'Save decision draft',submit:'Submit for approval',cancel:'Close',simulatedNote:'Simulated action; nothing is sent to an ad platform.',disabledFixture:'Saving decisions requires the connected backend; this is a model snapshot.',disabledViewer:'Viewers cannot create decisions.',disabledInfeasible:'This action violates a constraint.',disabledRationale:'Enter a rationale before saving.',saved:(id:string)=>`Draft ${id} saved.`,submitted:(id:string)=>`${id} submitted. See Activity Logs.`},
-  pick:{active:'Active recommendations',examples:'Illustrative model snapshots',examplesNote:'Saved examples for inspecting the decision model, separate from imported data.',open:'Open comparison',exampleItems:{fryer1111:'CD002 · 11.11 · Flash-sale hours',page10:'Break-even example · 120 units, 4 hours, 45,000 VND/unit'},none:'No active recommendations.'},
-  notFoundSku:(sku:string)=>`Product ${sku} was not found.`,noRecommendationTitle:'No recommendation yet',noRecommendationBody:'A campaign and completed simulation are required.',noCampaignTitle:'No ad campaign',noCampaignBody:'Model comparisons require a campaign linked to this product.',
-  setup:{needGoalTitle:(c:string)=>`Campaign ${c} needs a goal`,needGoalBody:'A lead must set a goal before comparing actions.',needGoalAsk:'Ask a lead to set the campaign goal.',goalFormTitle:'Set goal',goalKind:'Goal type',goalKinds:{profit:'Profit',sell_target:'Sales target',clear_stock:'Clear inventory',efficiency:'Ad efficiency'} as Record<string,string>,deadline:'Deadline (Vietnam time)',targetUnits:'Target units',reason:'Reason',saveGoal:'Save goal and simulate',savingGoal:'Saving goal…',noRecTitle:(c:string)=>`No recommendation for ${c}`,noRecBody:(goal:string)=>`Goal “${goal}” is set; no active simulation yet.`,run:'Run simulation (1,000 samples)',running:'Running simulation…',runViewer:'An operator must run the simulation.',blockedTitle:'Missing required data',importAction:'Data Studio'},
- },
- state:{loading:'Loading',retry:'Retry',errorTitle:'Could not load data',errorCode:(code:string)=>`Error: ${code}`},
- errors:{network:'Could not reach the backend. Check the connection or use the model snapshot.',http:(status:number)=>`Server returned ${status}. Try again shortly.`,fixtureMissing:(path:string)=>`No model snapshot for ${path}.`},
+import type { ActionSpec, ComputeState, Confidence } from "../api/types";
+import type { Role } from "./config";
+import { formatHourWindows, formatNumber, formatVnd } from "./format";
+export function pctOf(pct: number): number {
+  return pct <= 1 ? pct * 100 : pct;
+}
+export const viText = {
+  app: {
+    name: "MegaDay Twin",
+    shopName: "Demo homeware shop",
+    event: "11.11 sale",
+    skipToContent: "Skip to content",
+  },
+  nav: {
+    label: "Main navigation",
+    overview: "Overview",
+    skuDetail: "SKU Details",
+    compare: "Comparisons",
+    import: "Data Studio",
+    alerts: "Alerts",
+    decisions: "Activity Logs",
+    assistant: "AI Assistant",
+    settings: "Settings",
+    collapse: "Collapse menu",
+    expand: "Expand menu",
+  },
+  topBar: {
+    dataUntil: (time: string) => `Data through ${time}`,
+    alerts: (n: number) => `Alerts ${n}`,
+    alertsAria: (n: number) => `${n} open alerts`,
+    openAssistant: "Open Milo (Ctrl+K)",
+    fixtureMode: "Model snapshot",
+    fixtureModeHint:
+      "Saved demo API results from 01:00 on 11 November; not live workspace data.",
+  },
+  role: {
+    operator: "Operator",
+    lead: "Lead",
+    viewer: "Viewer",
+  } satisfies Record<Role, string>,
+  theme: {
+    label: "Appearance",
+    system: "System",
+    light: "Light",
+    dark: "Dark",
+  },
+  freshnessSource: {
+    orders: "Orders",
+    ads: "Ads",
+    inventory: "Inventory",
+    cost: "Cost",
+  } as Record<string, string>,
+  freshnessStatus: {
+    fresh: "current",
+    stale: "stale",
+    partial: "partial",
+    missing: "missing",
+  } as Record<string, string>,
+  freshnessTooltip: (label: string, time: string, status: string) =>
+    `${label} through ${time} · ${status}`,
+  freshnessLag: (minutes: number, thresholdMinutes?: number | null) =>
+    `${Math.round(minutes)} min behind${thresholdMinutes ? ` (limit ${thresholdMinutes} min)` : ""}`,
+  freshnessMissingSkus: (n: number) => `${n} missing SKUs`,
+  confidence: {
+    verified: {
+      label: "Validated",
+      hint: "Forecast validated against historical data within the error threshold",
+    },
+    reference: {
+      label: "Reference",
+      hint: "Validation threshold not met, or a new context",
+    },
+    scenario: {
+      label: "Scenario",
+      hint: "Insufficient evidence; results depend on assumptions",
+    },
+  } satisfies Record<Confidence, { label: string; hint: string }>,
+  computeState: {
+    fresh: "Current",
+    queued: "Queued",
+    computing: "Updating",
+    stale: "Stale",
+    failed: "Failed",
+  } satisfies Record<ComputeState, string>,
+  action: (a: Pick<ActionSpec, "kind" | "pct" | "windows_local">): string => {
+    switch (a.kind) {
+      case "continue":
+        return "Continue ads";
+      case "pause":
+        return "Pause ads";
+      case "reduce_budget":
+        return a.pct != null
+          ? `Reduce budget ${formatNumber(pctOf(a.pct))}%`
+          : "Reduce budget";
+      case "schedule_hours":
+        return a.windows_local?.length
+          ? `Run ${formatHourWindows(a.windows_local)}`
+          : "Scheduled hours";
+      case "pause_until_restock":
+        return "Pause until restock";
+    }
+  },
+  recommendationStatus: {
+    undetermined: "Undetermined",
+    none_meets_goal: "No option meets the goal",
+  },
+  overview: {
+    needsAttention: (n: number) => `Needs attention (${n})`,
+    allSkus: (n: number) => `All products (${n})`,
+    columns: {
+      sku: "Product",
+      stock: "Stock",
+      cover: "Cover (hours)",
+      soldToday: "Sold today",
+      recommendation: "Recommendation",
+      confidence: "Confidence",
+      updated: "Updated",
+    },
+    stockLine: (stock: string, cover: string) =>
+      `${stock} available · about ${cover} hours of cover`,
+    stockUntil: (stock: string, time: string) =>
+      `${stock} available · stockout around ${time}`,
+    stockBeyond: (stock: string, hours: string) =>
+      `${stock} available · covers more than ${hours} hours`,
+    stockOut: "Out of stock",
+    coverBeyond: (hours: string) => `> ${hours}`,
+    variants: (n: number) => `${n} variants`,
+    sameCampaign: (n: number) => `${n} more SKUs in this campaign`,
+    gainLine: (amount: string) => `About ${amount} better`,
+    roleLine: (role: string, id: string) => `Role: ${role} (${id})`,
+    updating: "Updating",
+    noForecastCompare: "No forecast comparison",
+    sortLabel: "Sort",
+    sort: {
+      priority: "Priority",
+      sku: "SKU code",
+      cover: "Lowest cover",
+      sold_today: "Most sold today",
+    } as Record<string, string>,
+    searchLabel: "Search products",
+    searchPlaceholder: "Code or product name…",
+    loadMore: "Load more",
+    loadingMore: "Loading…",
+    loadedCount: (n: number, more: boolean, total?: number | null) =>
+      total != null && (more || total > n)
+        ? `${n} of ${total} products`
+        : more
+          ? `${n} products loaded`
+          : `${n} products`,
+    allSkusTitle: "All products",
+    noResults: (q: string) => `No products match “${q}”.`,
+    attentionNote: "Open alerts or recommendations other than continuing ads.",
+    alertCount: (n: number) => `${n} alerts`,
+    deviation: {
+      on_track: "On track",
+      below_forecast: "Below forecast",
+      above_forecast: "Above forecast",
+    } as Record<string, string>,
+    compare: "Compare",
+    noCampaign: "No ads",
+    nothingToReview: (time: string) =>
+      `No products need attention. Last computed at ${time}.`,
+    emptyTitle: "No products yet",
+    emptyBody: "Import orders, inventory and costs to begin.",
+    emptyAction: "Data Studio",
+  },
+  pages: {
+    overview: { title: "Overview", description: "" },
+    skuDetail: {
+      title: "SKU Details",
+      description:
+        "Inventory, sales, costs and campaign context for one product.",
+      emptyTitle: "Select a product",
+      emptyBody: "Track a product from Overview to inspect its details.",
+    },
+    compare: {
+      title: "Comparisons",
+      description: "Actions, assumptions and their evidence.",
+      emptyTitle: "Select a product",
+      emptyBody: "Choose a tracked product to compare scenarios.",
+      target: (target: string) => `Target: ${target}`,
+    },
+    import: {
+      title: "Data Studio",
+      description: "Import and inspect your source data.",
+      emptyTitle: "No imports yet",
+      emptyBody: "Upload source files to begin.",
+    },
+    alerts: {
+      title: "Alerts",
+      description: "Inventory, sales and source freshness.",
+      emptyTitle: "Alerts are not connected",
+      emptyBody: "The alert workflow requires the decision backend.",
+    },
+    decisions: {
+      title: "Activity Logs",
+      description: "Product activity and recorded decisions.",
+      emptyTitle: "No activity yet",
+      emptyBody: "Actions recorded in HQ appear here.",
+    },
+    assistant: {
+      title: "Milo",
+      description: "Analyze source data and scenarios.",
+      emptyTitle: "Milo is unavailable",
+      emptyBody: "Your data remains available in the workspace.",
+      panelTitle: "Milo",
+      close: "Close Milo",
+      openFull: "Expand chat",
+    },
+    settings: {
+      title: "Settings",
+      description: "Goals, parameters and appearance.",
+      emptyTitle: "No settings yet",
+      emptyBody: "Open city settings to configure your view.",
+    },
+    notFound: {
+      title: "Page not found",
+      description: "This address is not available.",
+      back: "Back to Overview",
+    },
+  },
+  zoneBar: {
+    axisLabel: "Sales per hour if ads pause (units)",
+    continueSide: "Continue is better",
+    pauseSide: "Pause is better",
+    pauseSideBlocked: "Pause (blocked)",
+    threshold: (x: string) => `threshold ${x}`,
+    altLabel: (vnd: number) => `leftover value ${formatVnd(vnd)}`,
+    verdict: {
+      undetermined: (x: string) =>
+        `Undetermined: the forecast spans both sides of ${x} units/hour.`,
+      pause_better: "Pause is better: the forecast is above the threshold.",
+      continue_better:
+        "Continue is better: the forecast is below the threshold.",
+    },
+    summary: (p10: string, p50: string, p90: string, x: string) =>
+      `If ads pause: ${p10}–${p90} units/hour (median ${p50}). Break-even: ${x} units/hour.`,
+    altSummary: (label: string, x: string) => `With ${label}: ${x} units/hour.`,
+    noBar:
+      "Holding inventory is worth more than selling at this leftover value; pausing is always financially better.",
+    estimated:
+      "Browser break-even estimate; the simulation has not been rerun.",
+    blockedWhyCommitment: "because of a flash-sale commitment",
+    blockedWhyOther: "because it violates a constraint",
+    blockedPauseBetter: (why: string) =>
+      `Pausing is blocked ${why}. Although financially better, the chart shows the cost of the constraint, not a recommendation to pause.`,
+    blockedCompareOnly: (why: string) =>
+      `Pausing is blocked ${why}; comparison only.`,
+  },
+  citation: {
+    kind: {
+      scenario: "Simulation",
+      forecast: "Forecast",
+      iroas: "Incremental ad effectiveness",
+      contribution: "Unit contribution",
+      constraint: "Sale constraint",
+      inventory: "Inventory",
+      parameter: "Parameter",
+      goal: "Goal",
+      breakeven: "Break-even formula",
+      commitment: "Sale commitment",
+      snapshot: "SKU snapshot",
+      panel: "Hourly observations",
+    } as Record<string, string>,
+    sourceKind: "Source type",
+    id: "ID",
+    tool: "Tool",
+    dataAsOf: "Data through",
+    computedAt: "Computed at",
+    open: "Inspect evidence",
+    dialog: (label: string) => `Source: ${label}`,
+    close: "Close",
+  },
+  range: {
+    aria: (from: string, to: string) => `Forecast range from ${from} to ${to}`,
+  },
+  banner: {
+    scenario: "Assumption-based scenario; not a validated forecast.",
+    stale: (source: string) =>
+      `${source} data is stale. Results may no longer apply.`,
+    updating: (time: string) => `Updating · data at ${time}`,
+  },
+  compare: {
+    back: "Overview",
+    title: (campaign: string) => `Campaign ${campaign}`,
+    skusInCampaign: (names: string) => `Products: ${names}`,
+    goal: (goal: string) => `Goal: ${goal}`,
+    dataLine: (dataAsOf: string, computedAt: string) =>
+      `Data through ${dataAsOf} · computed ${computedAt}`,
+    fixtureNote: "Illustrative example; not a simulation result.",
+    snapshotNote:
+      "Saved simulation at 01:00 on 11 November. Sliders only estimate locally.",
+    tier1: "Conclusion",
+    tier2: "Reasons & assumptions",
+    tier3: "Audit details",
+    headline: {
+      recommend: (best: string, runnerUp: string, gain: string) =>
+        `${best}. About ${gain} VND better than ${runnerUp}.`,
+      recommendNoRunner: (best: string) => `${best}.`,
+      onlyMeetsGoal: (best: string, runnerUp: string, cost: string) =>
+        `${best} is the only option meeting the goal. ${runnerUp} earns about ${cost} VND more but misses the goal.`,
+      undetermined: (best: string, runnerUp: string, prob: string) =>
+        `Undetermined between ${best} and ${runnerUp}; probability of ${best} being better is ${prob}.`,
+    },
+    probLine: (prob: string) => `Probability of beating the runner-up: ${prob}`,
+    pauseBlocked:
+      "Pausing is financially better but blocked by a flash-sale commitment.",
+    betterThanBoth: (action: string) => `Better than both: ${action}.`,
+    noneMeetsGoal: "No option meets the goal. A lead must review alternatives.",
+    notifyLead: "Notify lead",
+    notifyLeadDisabled: "The handoff API is not connected.",
+    noZoneBar: "No single break-even threshold is available for these actions.",
+    noZoneBarHold: (detail: string) =>
+      `Holding stock is worth more than selling${detail ? ` (${detail})` : ""}; pausing is financially better.`,
+    noZoneBarBlocked: "Actions cannot yet be compared.",
+    campaignName: (name: string) => `Campaign: ${name}`,
+    infeasibleIfAllowed: (v: string) => `Without the constraint: ${v}`,
+    duplicateOf: (other: string) => `Same result as ${other}`,
+    actionCards: "Five actions",
+    bestMark: "Recommended",
+    infeasible: "Not feasible",
+    stockoutAt: (time: string) => `Stockout ${time}`,
+    noStockout: "No stockout in this horizon",
+    lowerCase: (s: string) => s.charAt(0).toLowerCase() + s.slice(1),
+    violation: {
+      campaign_must_run: "Flash-sale commitment",
+      budget_exceeded: "Budget exceeded",
+      below_safety_stock: "Below safety stock",
+    } as Record<string, string>,
+    violationFallback: (code: string) => `Constraint: ${code}`,
+    reasonsTitle: "Reasons",
+    flipTitle: "What changes the conclusion",
+    noFlip: "The conclusion holds within the current uncertainty range.",
+    tryTitle: "Adjust assumptions",
+    sliderLeftover: "Net leftover value per unit relative to cost (VND)",
+    sliderRestock: "Restock delay (days; negative = earlier)",
+    sliderLeftoverDefault: "Per-product default",
+    sliderLeftoverHint: (min: string, max: string) =>
+      `Applies to all campaign SKUs. Range ${min} to ${max}; zero means later sales break even.`,
+    serverError: (msg: string) => `Could not rerun: ${msg}`,
+    clampedTo: (max: string) => `Capped at ${max}.`,
+    sliderRestockValue: (d: number) =>
+      d === 0 ? "on time" : d < 0 ? `${-d} days early` : `${d} days late`,
+    resetParams: "Reset assumptions",
+    whatIfActive: "Unsaved assumptions are active.",
+    flipHit: (text: string) => `A threshold was crossed: ${text}`,
+    flipNotHit: "The conclusion is unchanged.",
+    serverRunning: (samples: number) =>
+      `Running ${formatNumber(samples, 0)} samples…`,
+    serverDone: (samples: number, id: string) =>
+      `Simulation ${id}: ${formatNumber(samples, 0)} samples.`,
+    leftoverNoInputs:
+      "This snapshot has no break-even inputs; a connected backend is required to rerun.",
+    table: {
+      caption: "Five actions over the decision horizon",
+      action: "Action",
+      expected: "Expected result",
+      range: "Forecast range",
+      spend: "Ad spend",
+      sold: "Units sold",
+      leftover: "Units left",
+      stockout: "Stockout",
+      feasible: "Feasible",
+      yes: "Yes",
+      no: "No",
+    },
+    lineage: {
+      title: "Data, parameters & model",
+      dataAsOf: "Data through",
+      computedAt: "Computed at",
+      forecasts: "Forecasts",
+      estimate: "Incremental ad effectiveness (iROAS)",
+      paramVersion: "Parameter version",
+      goal: "Goal",
+      scenario: "Simulation",
+      samples: "Samples · seed",
+      horizon: "Start · horizon",
+      hours: "hours",
+      cache: "Cached",
+      recommendation: "Recommendation ID",
+      sources: "Sources",
+      allDefault: (n: number) => `${n} default parameters (v0)`,
+      override: "Run overrides",
+      commitments: "Sale commitments",
+    },
+    decision: {
+      open: "Create decision",
+      title: "Create decision",
+      action: "Action",
+      rationale: "Rationale",
+      rationaleHint: "Explain your choice for the reviewer.",
+      override:
+        "This overrides the recommendation and will be flagged to the lead.",
+      whatIf: "The displayed values use your assumptions.",
+      save: "Save decision draft",
+      submit: "Submit for approval",
+      cancel: "Close",
+      simulatedNote: "Simulated action; nothing is sent to an ad platform.",
+      disabledFixture:
+        "Saving decisions requires the connected backend; this is a model snapshot.",
+      disabledViewer: "Viewers cannot create decisions.",
+      disabledInfeasible: "This action violates a constraint.",
+      disabledRationale: "Enter a rationale before saving.",
+      saved: (id: string) => `Draft ${id} saved.`,
+      submitted: (id: string) => `${id} submitted. See Activity Logs.`,
+    },
+    pick: {
+      active: "Active recommendations",
+      examples: "Illustrative model snapshots",
+      examplesNote:
+        "Saved examples for inspecting the decision model, separate from imported data.",
+      open: "Open comparison",
+      exampleItems: {
+        fryer1111: "CD002 · 11.11 · Flash-sale hours",
+        page10: "Break-even example · 120 units, 4 hours, 45,000 VND/unit",
+      },
+      none: "No active recommendations.",
+    },
+    notFoundSku: (sku: string) => `Product ${sku} was not found.`,
+    noRecommendationTitle: "No recommendation yet",
+    noRecommendationBody: "A campaign and completed simulation are required.",
+    noCampaignTitle: "No ad campaign",
+    noCampaignBody:
+      "Model comparisons require a campaign linked to this product.",
+    setup: {
+      needGoalTitle: (c: string) => `Campaign ${c} needs a goal`,
+      needGoalBody: "A lead must set a goal before comparing actions.",
+      needGoalAsk: "Ask a lead to set the campaign goal.",
+      goalFormTitle: "Set goal",
+      goalKind: "Goal type",
+      goalKinds: {
+        profit: "Profit",
+        sell_target: "Sales target",
+        clear_stock: "Clear inventory",
+        efficiency: "Ad efficiency",
+      } as Record<string, string>,
+      deadline: "Deadline (Vietnam time)",
+      targetUnits: "Target units",
+      reason: "Reason",
+      saveGoal: "Save goal and simulate",
+      savingGoal: "Saving goal…",
+      noRecTitle: (c: string) => `No recommendation for ${c}`,
+      noRecBody: (goal: string) =>
+        `Goal “${goal}” is set; no active simulation yet.`,
+      run: "Run simulation (1,000 samples)",
+      running: "Running simulation…",
+      runViewer: "An operator must run the simulation.",
+      blockedTitle: "Missing required data",
+      importAction: "Data Studio",
+    },
+  },
+  state: {
+    loading: "Loading",
+    retry: "Retry",
+    errorTitle: "Could not load data",
+    errorCode: (code: string) => `Error: ${code}`,
+  },
+  errors: {
+    network:
+      "Could not reach the backend. Check the connection or use the model snapshot.",
+    http: (status: number) => `Server returned ${status}. Try again shortly.`,
+    fixtureMissing: (path: string) => `No model snapshot for ${path}.`,
+  },
 } as const;

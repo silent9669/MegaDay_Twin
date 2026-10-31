@@ -63,9 +63,9 @@ describe('ZoneBar (09 §4 examples)', () => {
       />,
     );
     const label = screen.getByRole('img').getAttribute('aria-label') ?? '';
-    expect(label).toContain('Tạm dừng bị cấm');
+    expect(label).toContain('Pausing is blocked');
     expect(label).not.toContain('Pause tốt hơn: cả khoảng');
-    expect(screen.getByRole('note')).toHaveTextContent('Tạm dừng bị cấm');
+    expect(screen.getByRole('note')).toHaveTextContent('Pausing is blocked');
     expect(screen.getByText('Pause (blocked) ▶')).toBeInTheDocument();
     expect(screen.queryByText('Pause tốt hơn ▶')).not.toBeInTheDocument();
   });

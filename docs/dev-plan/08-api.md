@@ -658,3 +658,125 @@ Python `/api/v1` analytics API:
 
 Authentication and same-origin checks apply. Model inputs are untrusted data.
 See `web/README.md` for configuration, limits, failure semantics and validation.
+## Sale goal planner extension (Task 1)
+
+Worker routes require the existing authenticated account; POSTs require the
+same-origin mutation guard. Backend identity remains server-configured through
+`DATA_BACKEND_USER/ROLE`; it is never accepted from request JSON.
+
+- `GET /api/sale-planner/context`: `{backendConfigured, canCreateGoals,
+  referenceTime, dataAsOf, campaigns:[{id,name}], notice}`. Checks backend
+  capabilities and `me` permissions; reads up to 2,000 campaigns with pagination.
+- `POST /api/sale-planner/interpret`: `{text}` (1–4,000 characters) returns
+  `{draft, method:"ai"|"rules", notices}`. Uses the PM rate limit. No goal or
+  scenario is created. AI failure produces an explicit rules fallback.
+- `POST /api/sale-planner/run`: `{campaignId, draft, confirmed:true,
+  acknowledgedUnresolved:boolean, goalId?:string}` saves a campaign goal and
+  calls the real scenario API. Returns `{goalId, scenario:Envelope<ScenarioRun>}`.
+  Errors contain `{error:{code,message,details?}, goalId:null|string,
+  stage:"validation"|"goal"|"simulation"}`. A simulation error can follow a
+  successful goal save; clients must retain the returned ID for retry.
+
+`GoalDraft` includes the original `text`, nullable `kind` (`profit`, `sell_target`,
+`clear_stock`, `efficiency`), `targetUnits`, `start`, `deadline`, `maxSpendVnd`,
+`maxLossVnd`, `sellTargetProbability`, `minMarginalReturn`, and `unresolved:string[]`.
+Run requires absolute timezone-qualified start/deadline on whole hours, duration
+1–72 hours, a selected kind, positive integer target for sell_target, and explicit
+acknowledgement of excluded requirements. Probability/target apply only to
+sell_target; marginal return only to efficiency. Inapplicable supplied fields are
+rejected, never silently dropped. Numeric limits must be finite and nonnegative;
+probability is in (0,1]. Null means not explicitly supplied; zero is meaningful.
+
+Python adds authenticated `GET /api/v1/goal-planner/capabilities`, returning
+`{data:{version:1,constraints:["max_spend_vnd","max_loss_vnd","sell_target_prob",
+"min_marginal_return"]},meta}`. Worker refuses unsupported backends before writes.
+No database migration: confirmed constraints use existing goal `params`.
+`max_spend_vnd` caps total simulated spend over the requested horizon, including
+efficiency fallback candidates. `max_loss_vnd` bounds expected J for every kind;
+clear_stock keeps its existing default when absent. Existing goal API validates
+numeric parameters and rejects conflicting constraints/params values.
+
+Goal params also retain `planner_request_hash`, `planner_source_text`,
+`planner_excluded_requirements`, `planner_start` for audit/recovery. Retry reuses
+an active goal only when campaign/kind/target/deadline, hash and all confirmed
+numeric parameters match; otherwise 409. When no ID was received, Worker can
+recover the matching active goal. This handles sequential retries, not a
+transactional idempotency guarantee for simultaneous independent requests.
+Scenario runs use 1,000 samples and seed 20261111. No fixture fallback or ad execution.
+
+## SKU goal assistant and calculation evidence
+
+The authenticated Worker adds:
+
+- `GET /api/sale-assistant/skus?q=...&cursor=...`: real backend SKU search,
+  `{items:[{sku,name,variant,stockAvailable}],nextCursor,dataAsOf}`.
+- `GET /api/sale-assistant/context?sku=...`: `{sku,campaigns,dataAsOf,source,
+  canPlan,notices,opening}`. SKU facts include stock, today's units, effective
+  price, contribution per unit and demand group; unknown numeric values stay
+  null. Campaigns contain all discovered memberships with `{id,name,skus}`.
+- `POST /api/sale-assistant/turn`: `{sku,messages:[{role,content}]}` returns
+  `{reply,interpretation:{draft,method,notices},context}`. Conversation is bounded;
+  user requirements are interpreted into an editable draft. Assistant messages
+  are not accepted as a source of facts or authorization. No goal or scenario
+  is saved by this endpoint. Session, same-origin writes and PM rate limit apply.
+
+`POST /api/sale-planner/run` now accepts optional `focusSku`. The gateway verifies
+membership and backend `focus_sku` capability before saving; the confirmed SKU
+participates in goal matching and retry recovery. It is stored as `params.focus_sku`.
+Python also validates membership, including direct API callers. For sell_target
+and clear_stock the quantity metric is the selected SKU's sold units. Budgets,
+loss limits and J remain campaign-wide; profit/efficiency optimize the campaign.
+`ScenarioResult.goal_sku` and `goal_units_sold` identify this quantity separately
+from the unchanged aggregate `units_sold`.
+
+`ScenarioRun.calculation_trace` is a versioned snapshot made from the actual
+simulation inputs and samples, persisted with its scenario. Legacy scenarios
+without a snapshot return null; reading an old result must not rebuild evidence
+from today's data. Trace version 1 includes:
+
+- Scenario input hash, campaign/focus SKU, quantity/economic scopes, requested
+  window, sample count and seed, data timestamp and panel version.
+- Confirmed goal, parameter values/versions, forecast references, iROAS origin
+  (estimate or prior), and import batch references where available.
+- SKU prices, costs, per-unit economics, starting stock, restocks and demand
+  inputs. Unknown stock is labelled as a modelling assumption, not real stock.
+- Equations and each action's actual distributions; expected-value substitution
+  for J = contribution − spend + terminal inventory value − shortage penalty,
+  with a reconciliation residual. Quantiles are calculated from samples;
+  adding component P10/P50/P90 values does not produce J's quantiles.
+- Explicit limitations. Batch references identify source context and are not
+  represented as complete lineage to every original CSV row.
+
+Capability version 1 additionally advertises `focus_sku` and `calculation_trace`.
+This is additive: old campaign-only planner callers remain valid.
+
+### Milo conversation context and goal review
+
+`POST /api/pm/chat` additionally accepts optional `context` containing identifiers
+only: `{screen?, sku?, campaignId?, scenarioId?}`. Chat sessions persist the same
+optional context. Existing sessions remain valid. SKU, campaign and scenario
+scope must match the saved session; a different scope requires another session
+(409 on mismatch). Unknown context properties are rejected (422). The server
+always loads saved messages, never client-supplied history or numerical facts.
+
+Milo resolves current account source checks and sandbox observations, selected
+SKU facts and recent daily sales, campaign membership and budget, and matching
+immutable scenario evidence when a scenario ID is supplied. Missing data yields
+explicit notices, never fixture values. Sandbox observations remain separate
+from backend facts. A trace must match the selected scope and scenario input
+hash. Returned evidence is bounded and marks truncated results.
+
+The goal interpreter considers the saved conversation (up to 200 messages),
+including corrections to earlier requirements. Only user turns establish
+requirements; assistant suggestions are not acceptance. AI output is validated
+against a structured schema; unavailable or invalid interpretation falls back
+to conservative rules with a visible notice. Recent 16 turns and the interpreted
+draft inform Milo's natural-language reply. Absolute dates remain subject to
+review; no relative sale date is silently guessed.
+
+Successful replies can include `plan: {interpretation, context}` for the selected
+SKU. This is a draft for the existing review form, not a saved goal or permission
+to run a scenario. Chat performs no backend mutations. Review still requires a
+campaign choice, valid time window, unresolved-item acknowledgement and explicit
+confirmation. A stale conversation or changed scope during generation prevents
+saving the late reply (409). Failed calls retain the user's saved message for retry.

@@ -627,3 +627,18 @@ Báo cáo `eval_data.py` in bảng trên và ghi `backend/eval/reports/data_<ng�
 | PNL-03 | `allocation.py`: chia chi ads về SKU | D1 | 0,5 |
 | PNL-04 | Cập nhật tăng dần + `ingest_live_delta` | D1 | 1 |
 | EVD-01 | `eval/eval_data.py` theo §8 | D1 | 0,75 |
+
+## Snapshot bằng chứng mô phỏng (migration 5)
+
+`scenario_calculation_traces(scenario_id VARCHAR PRIMARY KEY, trace JSON NOT NULL,
+results JSON NOT NULL)` lưu bằng chứng và kết quả đầy đủ của một lần mô phỏng.
+Ghi cùng transaction với scenario/recommendation; không cập nhật snapshot khi
+nguồn nhập, giá vốn hoặc tham số thay đổi sau đó. `trace.version` quản lý phiên
+bản hợp đồng; `input_hash` liên kết với đầu vào của scenario. `results` giữ cả
+điều kiện mục tiêu, xác suất đạt và kết quả riêng SKU để đọc lại không mất nghĩa.
+
+Schema mới và migration đều tạo bảng theo cách idempotent. Các scenario cũ
+không có snapshot vẫn đọc được, trả `calculation_trace=null`; không backfill bằng
+dữ liệu hiện tại. Tham chiếu batch chỉ gồm các bản ghi nguồn liên quan có thể
+xác định được; chưa có liên kết batch chính xác cho mọi giá vốn/cam kết sale.
+Không lưu nội dung CSV hoặc dữ liệu cá nhân vào trace.

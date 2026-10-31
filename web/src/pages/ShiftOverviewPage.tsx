@@ -99,6 +99,7 @@ function AttentionCard({
         {t.compare}
         <ChevronRight aria-hidden className="size-4" />
       </Link>
+      <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} className="btn-secondary" aria-label={`Plan goal ${item.sku}`}>Plan goal {many ? item.sku : ''}</Link>
     </li>
   );
 }
@@ -130,6 +131,7 @@ function SkuTable({ items }: { items: SkuListItem[] }) {
                     {item.sku}
                   </Link>
                   <div className="text-xs text-muted">{displayName(item)}</div>
+                  <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} className="inline-flex min-h-11 items-center text-sm underline" aria-label={`Plan goal ${item.sku}`}>Plan goal</Link>
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatNumber(item.stock_available, 0)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{coverText(item)}</td>
@@ -310,7 +312,7 @@ export function ShiftOverviewPage() {
   return (
     <>
       <PageHeader title={p.title} description={p.description} />
-      {meData ? <p className="-mt-3 mb-3 text-xs text-muted">{t.roleLine(viText.role[meData.role], meData.id)}</p> : null}
+      {meData ? <p className="-mt-3 mb-3 text-xs text-muted">{t.roleLine(viText.role[meData.role as keyof typeof viText.role]??meData.role, meData.id)}</p> : null}
       {stale.length ? (
         <Banner tone="warn">{viText.banner.stale(stale.map((s) => viText.freshnessSource[s.source] ?? s.label).join(', '))}</Banner>
       ) : null}

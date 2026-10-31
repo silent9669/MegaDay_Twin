@@ -15,3 +15,11 @@ it("bounds keyboard resizing and restores the chosen width after expansion", () 
   key("End"); key("ArrowLeft");
   expect(result.current.style?.width).toBe(window.innerWidth - 112);
 });
+it('reserves room for HQ beside a left-side chat and reverses resize direction',()=>{
+ const {result}=renderHook(()=>usePanelResize(400,300,'left',572));
+ expect(result.current.width).toBe(340);
+ act(()=>result.current.grip.onKeyDown({key:'ArrowLeft',preventDefault(){}} as never));
+ expect(result.current.width).toBe(308);
+ act(()=>result.current.setExpanded(true));expect(result.current.width).toBe(340);
+ expect(result.current.style).toMatchObject({left:94,right:'auto'});
+});

@@ -142,7 +142,7 @@ const CAMPAIGN: CampaignDetail = {
   ],
   price_max_vnd: 690_000,
   commitments: [{ kind: 'campaign_must_run', windows_local: [[0, 2]], text: 'Không tắt chiến dịch trong khung flash sale (đã cam kết với sàn)' }],
-  goal: { goal_id: 'goal-1', kind: 'profit', label: 'Lợi nhuận tới 00:00 12/11', deadline: '2026-11-12T00:00:00+07:00', target_units: null, confirmed_by: 'u-lead-1', version: 1 },
+  goal: { goal_id: 'goal-1', kind: 'profit', label: 'Profit through 00:00 12/11', deadline: '2026-11-12T00:00:00+07:00', target_units: null, confirmed_by: 'u-lead-1', version: 1 },
 };
 
 const ME = (lead: boolean) => ({
@@ -208,11 +208,11 @@ describe('Compare · real API', () => {
     expect(await screen.findByText('Run 0–2h, 12–14h. About 1.5 million VND better than reduce budget 50%.')).toBeInTheDocument();
     expect(screen.getByText(/Holding stock is worth more than selling/)).toBeInTheDocument();
     expect(screen.getByText('Pausing is financially better but blocked by a flash-sale commitment.')).toBeInTheDocument();
-    expect(screen.getByText('Goal: Lợi nhuận tới 00:00 12/11')).toBeInTheDocument();
+    expect(screen.getByText('Goal: Profit through 00:00 12/11')).toBeInTheDocument();
     expect(screen.getByText(/Campaign: \[Tìm kiếm\] Nồi chiên mini \+ giấy lót/)).toBeInTheDocument();
 
     const cards = screen.getByRole('list', { name: 'Five actions' });
-    const pause = within(cards).getAllByRole('listitem').find((li) => li.textContent?.startsWith('Tạm dừng'));
+    const pause = within(cards).getAllByRole('listitem').find((li) => li.textContent?.startsWith('Pause ads'));
     expect(pause).toHaveTextContent('Not feasible');
     expect(pause).toHaveTextContent('Without the constraint: 4.5 M');
 
@@ -225,8 +225,8 @@ describe('Compare · real API', () => {
     stub({});
     renderAt('/campaign/CD002/compare');
     await userEvent.click(await screen.findByRole('button', { name: 'Reasons & assumptions' }));
-    await userEvent.click(screen.getByRole('button', { name: /531\.000đ/ }));
-    const dialog = screen.getByRole('dialog', { name: 'Source: Giá bán, giá vốn, phí sàn của NOICHIEN2L' });
+    await userEvent.click(screen.getByRole('button', { name: /531,000 VND/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Source: Price, cost and platform fees for NOICHIEN2L' });
     expect(dialog).toHaveTextContent('get_sku_snapshot');
     expect(within(dialog).getByRole('link')).toHaveAttribute('href', '/sku/NOICHIEN2L');
   });
@@ -261,8 +261,8 @@ describe('Compare · real API', () => {
   it('no goal, operator: says a lead must set one; no form', async () => {
     stub({ campaign: { ...CAMPAIGN, campaign_id: 'CD006', goal: null }, recs: [] });
     renderAt('/campaign/CD006/compare');
-    expect(await screen.findByText('Campaign CD006 has no goal')).toBeInTheDocument();
-    expect(await screen.findByText(/A lead must set the goal/)).toBeInTheDocument();
+    expect(await screen.findByText('Campaign CD006 needs a goal')).toBeInTheDocument();
+    expect(await screen.findByText(/Ask a lead to set the campaign goal/)).toBeInTheDocument();
     expect(screen.queryByRole('form', { name: 'Set goal' })).not.toBeInTheDocument();
   });
 

@@ -70,4 +70,15 @@ describe("PM model discovery", () => {
     expect(response.status).toBe(422);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it.each(["incomplete", "failed"])("does not return a %s numerical explanation as a completed reply", async (status) => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(Response.json({ data: [{ id: "gpt-4.1", created: 1 }] }))
+      .mockResolvedValueOnce(Response.json({ status, output: [{ type: "message", content: [
+        { type: "output_text", text: "The expected profit is" },
+      ] }] })));
+    const response = await pmChat(new Request("https://test/api/pm/chat", { method: "POST",
+      body: JSON.stringify({ model: "gpt-4.1", messages: [{ role: "user", content: "Explain the result" }] }),
+    }), { OPENAI_API_KEY: "test" }, {});
+    expect(response.status).toBe(502);
+  });
 });

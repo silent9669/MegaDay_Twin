@@ -155,7 +155,10 @@ def test_scenario_read_back_from_db(api: TestClient, first_run: dict[str, Any]) 
     want = {r["key"]: r for r in first_run["data"]["results"]}
     for r in got["results"]:
         assert r["objective"] == want[r["key"]]["objective"]
-        assert r["lost_units"] is None  # not persisted
+        assert r["lost_units"] == want[r["key"]]["lost_units"]
+        assert r["goal_eligible"] == want[r["key"]]["goal_eligible"]
+        assert r["p_target"] == want[r["key"]]["p_target"]
+    assert got["calculation_trace"] == first_run["data"]["calculation_trace"]
     assert (
         got["recommendation"]["recommendation_id"]
         == (first_run["data"]["recommendation"]["recommendation_id"])

@@ -67,6 +67,12 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         " ALTER TABLE actions ADD COLUMN IF NOT EXISTS note VARCHAR;"
         " ALTER TABLE actions ADD COLUMN IF NOT EXISTS verified_by VARCHAR",
     ),
+    (
+        5,
+        "immutable scenario calculation traces and result snapshots",
+        "CREATE TABLE IF NOT EXISTS scenario_calculation_traces ("
+        " scenario_id VARCHAR PRIMARY KEY, trace JSON NOT NULL, results JSON NOT NULL)",
+    ),
 ]
 
 _TABLE_RE = re.compile(r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)", re.IGNORECASE)

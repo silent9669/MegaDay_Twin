@@ -1,6 +1,7 @@
 import { imageAttachmentSchema } from "../city/chat-evidence";
 import { analysisContextSchema } from "../city/analysis-context";
 import { z } from "zod";
+import { miloContextSchema } from "../city/milo-contract";
 export const settingsSchema = z.object({
   appearance: z.enum(["morning", "night"]).default("morning"),
   signals: z.boolean(),
@@ -37,6 +38,7 @@ export const chatSessionSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).max(100),
   model: z.string().max(150),
+  context: miloContextSchema.optional(),
   updatedAt: z.string().datetime(),
   messages: z.array(chatMessageSchema).max(200),
 });

@@ -1,9 +1,11 @@
+import { AdsStats } from "./AdsStats";
+import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
+import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
 import { HQWorkspace } from "../hq/HQWorkspace";
 import { useAssistant } from "./assistant-context";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link,  useNavigate, useSearchParams } from "react-router";
 import {
-  ArrowLeft,
   ArrowRight,
   Building2,
   Check,
@@ -25,6 +27,7 @@ import {
   Radio,
   RotateCcw,
   Settings2,
+  Target,
   Warehouse,
   X,
 } from "lucide-react";
@@ -58,7 +61,8 @@ const DISTRICTS = [
   { id: "ads", name: "Ads Platform", icon: Megaphone },
   { id: "homes", name: "Residential district", icon: Home },
 ] as const;
-export function CityApp({ studio = false }: { studio?: boolean }) {
+export function CityApp({ studio = false, planner = false, skuAssistant = false }: { studio?: boolean; planner?: boolean; skuAssistant?: boolean }) {
+  const pageWorkspace = studio || planner || skuAssistant;
   const [mobile, setMobile] = useState(
     () => matchMedia("(max-width: 1023px)").matches,
   );
@@ -73,7 +77,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   const settings = useAccountDocument<ViewSettings>("settings"),
     sources = useAccountDocument<SourcePack>("sources"),
     sandbox = useAccountDocument<Sandbox>("sandbox");
-  const panel = usePanelResize(980, 560, "right", chatOpen ? assistant.width + 12 : 0);
+  const panel = usePanelResize(1080, 560, "right", chatOpen ? assistant.width + 12 : 0);
   const viewSettings = settings.document?.data ?? defaultSettings;
   const appearance = viewSettings.appearance ?? "morning";
   useEffect(() => {
@@ -104,7 +108,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     [error, setError] = useState("");
   const setWorkspaceOpen=assistant.setWorkspaceOpen;
   const [params, setParams] = useSearchParams();
-  useEffect(() => { setWorkspaceOpen(workspace && !studio); return () => setWorkspaceOpen(false); }, [workspace, studio, setWorkspaceOpen]);
+  useEffect(() => { setWorkspaceOpen(workspace && !pageWorkspace); return () => setWorkspaceOpen(false); }, [workspace, pageWorkspace, setWorkspaceOpen]);
   const settingsOpen = params.get("panel") === "settings";
   const navigate = useNavigate();
   const worldRef = useRef<ReturnType<typeof createCity> | null>(null),
@@ -130,13 +134,15 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     setTour(tourIndex);
     if (mobile) setChatOpen(false);
     setDistrict(next);
-    setWorkspace(next === "hq" || next === "warehouse" || next === "ads");
+    if(next)setParams(previous=>{if(previous.get("district")===next)return previous;const query=new URLSearchParams(previous);query.set("district",next);return query;},{replace:true});
+    setWorkspace(next !== null);
+    if (!next) setParams(previous=>{const query=new URLSearchParams(previous);for(const key of ["district","hq","stock","sku","campaign","rec","mode"])query.delete(key);return query;},{replace:true});
     worldRef.current?.focus(next);
   };
   const enterRef = useRef(enter);
   enterRef.current = enter;
   useEffect(() => {
-    if (studio || !host.current) return;
+    if (pageWorkspace || !host.current) return;
     let active = true;
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     reduced.current = media.matches;
@@ -178,7 +184,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       worldRef.current?.dispose();
       worldRef.current = null;
     };
-  }, [studio]);
+  }, [pageWorkspace]);
   useEffect(() => {
     worldRef.current?.update({
       ...latest.current,
@@ -193,7 +199,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !chatOpen) {
         if (tour !== null) finishTour();
-        else if (workspace) setWorkspace(false);
+        else if (workspace) enterRef.current(null);
         else enterRef.current(null);
       }
     };
@@ -222,19 +228,23 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     }
   }
   function tourStep(index: number) {
+    try { localStorage.setItem(TOUR_KEY,"seen"); } catch { /* Device preference is optional. */ }
     enter(TOUR[index]?.place ?? null, index);
   }
   useEffect(() => {
-    if (!ready || studio) return;
+    if (!ready || pageWorkspace) return;
     const initial = setTimeout(() => {
       try {
-        if (!localStorage.getItem(TOUR_KEY) && !window.location.search) enterRef.current(TOUR[0]!.place, 0);
+        if (!localStorage.getItem(TOUR_KEY) && !window.location.search) {
+          localStorage.setItem(TOUR_KEY,"seen");
+          enterRef.current(TOUR[0]!.place, 0);
+        }
       } catch {
         /* Replay remains available. */
       }
     }, 100);
     return () => clearTimeout(initial);
-  }, [ready, studio]);
+  }, [ready, pageWorkspace]);
   const selectedStock = params.get('stock');
   useEffect(() => {
     if (!workspace || district !== 'warehouse' || chatOpen || !selectedStock) return;
@@ -248,7 +258,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
   };
   return (
     <div
-      className={`city-app ${studio ? "city-studio" : ""} ${chatOpen ? "milo-open" : ""}`}
+      className={`city-app ${pageWorkspace ? "city-studio" : ""} ${chatOpen ? "milo-open" : ""}`}
       data-compact={compact}
     >
       <a className="city-skip" href="#city-main">
@@ -267,7 +277,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         </Link>
         <span className="city-route">
           /{" "}
-          {studio
+          {skuAssistant ? "Product assistant" : planner ? "Sale planner" : studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
@@ -291,7 +301,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             to="/city-demo"
             title="View city"
             aria-label="View city"
-            aria-current={!studio && !district ? "page" : undefined}
+            aria-current={!pageWorkspace && !district ? "page" : undefined}
             onClick={() => enter(null)}
           >
             <Layers3 />
@@ -303,9 +313,9 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               key={id}
               title={name}
               aria-label={name}
-              aria-current={!studio && district === id ? "location" : undefined}
+              aria-current={!pageWorkspace && district === id ? "location" : undefined}
               onClick={() => {
-                if (studio) navigate(`/city-demo?district=${id}`);
+                if (pageWorkspace) navigate(`/city-demo?district=${id}`);
                 else enter(id);
               }}
             >
@@ -315,6 +325,14 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
           ))}
         </div>
         <div className="city-nav-tools">
+          <Link to="/sku-assistant" title="Product assistant" aria-label="Product assistant" aria-current={skuAssistant ? "page" : undefined}>
+            <MessageCircle />
+            <span>Product assistant</span>
+          </Link>
+          <Link to="/sale-planner" title="Sale planner" aria-label="Sale planner" aria-current={planner ? "page" : undefined}>
+            <Target />
+            <span>Sale planner</span>
+          </Link>
           <Link
             to="/mock-data"
             title="Data Studio"
@@ -338,7 +356,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             title="Replay tutorial"
             aria-label="Replay tutorial"
             onClick={() => {
-              if (studio) navigate("/city-demo?tour=replay");
+              if (pageWorkspace) navigate("/city-demo?tour=replay");
               else tourStep(0);
             }}
           >
@@ -369,7 +387,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       </nav>
       {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
-        {studio ? (
+        {skuAssistant ? <SkuGoalAssistant /> : planner ? <SaleGoalPlanner /> : studio ? (
           <DataStudio />
         ) : (
           <>
@@ -398,26 +416,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                     ? `${viewSettings.platforms.length} platform${viewSettings.platforms.length === 1 ? "" : "s"}`
                     : ""}
               </span>
-              {district && (
-                <div className="city-district-actions">
-                  <button onClick={() => enter(null)}>
-                    <ArrowLeft size={16} />
-                    City
-                  </button>
-                  <button
-                    className="primary"
-                    onClick={() => {
-                      setChatOpen(false);
-                      setWorkspace(!workspace);
-                    }}
-                  >
-                    {workspace
-                      ? "Hide workspace"
-                      : `Open ${district === "hq" ? "HQ" : "workspace"}`}
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              )}
+
             </div>
             {!district && (
               <section className="city-stats" aria-label="Source overview">
@@ -478,12 +477,12 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               </button>
             </div>
             {workspace && district && (!mobile || !chatOpen) && (
-              <Sheet open disablePointerDismissal={!mobile} onOpenChange={open => { setWorkspace(open); if (!open) finishTour(); }} modal={mobile}>
+              <Sheet open disablePointerDismissal={!mobile} onOpenChange={open => { if (!open) { finishTour(); enter(null); } }} modal={mobile}>
                 <SheetContent
                   showCloseButton={false}
                   style={panel.style}
                   overlay={mobile}
-                  className={`district-workspace city-sheet ${district === "hq" ? "hq-workspace" : ""}`}
+                  className={`district-workspace city-sheet ${district === "hq" ? "hq-panel" : ""}`}
                   aria-label={`${DISTRICTS.find((d) => d.id === district)?.name} workspace`}
                 >
                   <div className="panel-resize-grip" {...panel.grip} />
@@ -496,7 +495,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                     <button
                       className="city-icon"
                       aria-label="Close workspace"
-                      onClick={() => { setWorkspace(false); finishTour(); }}
+                      onClick={() => { finishTour(); enter(null); }}
                     >
                       <X />
                     </button>
@@ -507,12 +506,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                       <HQWorkspace pack={sources.document?.data ?? null} revision={sources.document?.revision ?? 0} />
                     ) : district === "warehouse" ? (
                       <>
-                        <div className="warehouse-title">
-                          <Link to="/mock-data">
-                            Manage sources
-                            <ArrowRight size={16} />
-                          </Link>
-                        </div>
                         <ProductLabels
                           sourceRevision={sources.document?.revision ?? 0}
                           inventory={feed.stock}
@@ -522,6 +515,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                       </>
                     ) : district === "ads" ? (
                       <>
+                        <AdsStats pack={sources.document?.data??null} revision={sources.document?.revision??0}/>
                         <h3>Platform buildings</h3>
                         <div className="platform-grid">
                           {PLATFORM_IDS.map((p) => (
@@ -603,7 +597,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         )}
       </main>
       <footer className="city-footer">
-        <span>Sandbox data · Motion illustrates observations</span>
+        <span>{planner || skuAssistant ? "User-confirmed goals · Backend simulations" : "Sandbox data · Motion illustrates observations"}</span>
         <span>
           {sources.document
             ? `Source revision ${sources.document.revision}`
@@ -703,10 +697,10 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         locationKey={String(studio) + (params.get("district") ?? "") + (params.get("stock") ?? "") + (params.get("tour") ?? "")}
         ready={ready}
         onDistrict={(id) => {
-          enterRef.current(id);
+          if(district!==id)enterRef.current(id);
           if (params.has("stock")) setWorkspace(true);
         }}
-        onTour={() => tourStep(0)}
+        onTour={() => { tourStep(0); setParams(previous=>{const query=new URLSearchParams(previous);query.delete("tour");return query;},{replace:true}); }}
       />
     </div>
   );

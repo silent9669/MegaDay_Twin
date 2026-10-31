@@ -38,7 +38,11 @@ import { MiloAvatar } from "./MiloAvatar";
 import { Updates } from "./monitor/Updates";
 import type { WorkspaceUpdates } from "./monitor/useWorkspaceMonitor";
 import type { ChangeReference } from "./monitor/changes";
+import { miloContextSchema, type MiloContext, type MiloReply, type MiloReplyPlan } from "./milo-contract";
+import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
+const draftScope=(context?:MiloContext)=>"new:"+JSON.stringify([context?.sku??null,context?.campaignId??null,context?.scenarioId??null]);
 const EMPTY_MESSAGES: ChatMessage[] = [];
+type SavedPlan = { plan: MiloReplyPlan; userMessageId: string };
 export function CityChat({
   workspaceOpen = false,
   onWidthChange,
@@ -46,6 +50,7 @@ export function CityChat({
   updates,
   onOpenChange,
   open: controlledOpen,
+  context: screenContext,
 }: {
   workspaceOpen?: boolean;
   onWidthChange?: (width:number)=>void;
@@ -53,6 +58,7 @@ export function CityChat({
   updates?: WorkspaceUpdates;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  context?: MiloContext;
 }) {
   const [mobile, setMobile] = useState(
     () => window.matchMedia("(max-width: 1023px)").matches,
@@ -75,12 +81,19 @@ export function CityChat({
   const imageInput=useRef<HTMLInputElement>(null);
   const archive = useChatArchive();
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [selectedContext, setSelectedContext] = useState<MiloContext | undefined>();
+  const [savedPlan, setPlan] = useState<SavedPlan | null>(null);
+  const [review, setReview] = useState(false);
+  const operation = useRef(0);
   const [history, setHistory] = useState(false);
   const [optimistic, setOptimistic] = useState<ChatMessage | null>(null);
   const conversation = archive.document?.data.sessions.find(
     (s) => s.id === sessionId,
   );
   const messages = conversation?.messages ?? EMPTY_MESSAGES;
+  const plan = savedPlan && messages.at(-1)?.role === "assistant" && messages.at(-2)?.id === savedPlan.userMessageId ? savedPlan.plan : null;
+  const context = conversation?.context ?? selectedContext ?? screenContext;
+  const draftKey=sessionId??draftScope(context);
   const visibleMessages =
     optimistic && !messages.some((m) => m.id === optimistic.id)
       ? [...messages, optimistic]
@@ -112,6 +125,34 @@ export function CityChat({
   }, [open, tab, markRead]);
   const drafts = useRef(new Map<string, string>());
   const references = useRef(new Map<string, ChangeReference | undefined>());
+  const plans = useRef(new Map<string, SavedPlan>());
+  useEffect(() => {
+    const selectSku = (event: Event) => {
+      const result = miloContextSchema.safeParse((event as CustomEvent).detail);
+      if (!result.success || (!result.data.sku && !result.data.scenarioId)) return;
+      drafts.current.set(draftKey,draft);
+      evidence.current.set(draftKey,{analysis,attachments});
+      operation.current++;
+      controller.current?.abort();
+      setPending(false);
+      setOptimistic(null);
+      setSelectedContext(result.data);
+      const saved = archive.document?.data.sessions.find((session) => session.context?.sku === result.data.sku && session.context?.campaignId === result.data.campaignId && session.context?.scenarioId === result.data.scenarioId);
+      const savedEvidence=evidence.current.get(saved?.id??draftScope(result.data));
+      setAnalysis(savedEvidence?.analysis);setAttachments(savedEvidence?.attachments??[]);
+      setSessionId(saved?.id ?? null);
+      setPlan(saved ? plans.current.get(saved.id) ?? null : null);
+      setReview(false);
+      setChangeReference(undefined);
+      setDraft(drafts.current.get(saved?.id??draftScope(result.data))??(result.data.scenarioId ? "Explain the numbers and evidence for this scenario." : ""));
+      setError("");
+      setHistory(false);
+      setTab("chat");
+      setOpen(true);
+    };
+    window.addEventListener("workspace:milo-sku", selectSku);
+    return () => window.removeEventListener("workspace:milo-sku", selectSku);
+  }, [archive.document, setOpen,draftKey,draft,analysis,attachments]);
   useEffect(() => {
     const show = (event: Event) => {
       setOpen(true);
@@ -146,6 +187,7 @@ export function CityChat({
       const detail=(event as CustomEvent).detail;
       const parsed=analysisContextSchema.safeParse(detail?.context);
       if(!parsed.success||typeof detail?.prompt!=='string')return;
+      if(parsed.data.sku){const selection=miloContextSchema.safeParse({sku:parsed.data.sku,screen:'hq'});if(selection.success)window.dispatchEvent(new CustomEvent('workspace:milo-sku',{detail:selection.data}));}
       setAnalysis(parsed.data);setDraft(previous=>previous.trim()||detail.prompt.slice(0,4000));
       setOpen(true);setTab('chat');setHistory(false);
       setTimeout(()=>input.current?.focus(),0);
@@ -161,7 +203,7 @@ export function CityChat({
     catch(e){setError(e instanceof Error?e.message:'Could not prepare image.');}
     finally{setPreparingImage(false);if(imageInput.current)imageInput.current.value='';}
   }
-  function rememberEvidence(){evidence.current.set(sessionId??'new',{analysis,attachments});}
+  function rememberEvidence(){evidence.current.set(draftKey,{analysis,attachments});}
   function restoreEvidence(id:string){const saved=evidence.current.get(id);setAnalysis(saved?.analysis);setAttachments(saved?.attachments??[]);}
   useEffect(() => () => controller.current?.abort(), []);
   const preferredModel = archive.document?.data.preferredModel;
@@ -214,20 +256,26 @@ export function CityChat({
       model,
       updatedAt: new Date().toISOString(),
       messages: [],
+      context,
     };
+    const sequence = ++operation.current;
+    plans.current.delete(session.id);
+    setPlan(null);
+    setReview(false);
     setPending(true);
     setError("");
     setOptimistic(message);
     controller.current = new AbortController();
     try {
       await archive.append({ ...session, model }, message);
-      drafts.current.delete(sessionId ?? "new");
-      evidence.current.delete(sessionId??"new");
+      if (sequence !== operation.current) return;
+      drafts.current.delete(draftKey);
+      evidence.current.delete(draftKey);
       setAnalysis(undefined);setAttachments([]);
       setSessionId(session.id);
       setDraft("");
       setOptimistic(null);
-      await requestJSON("/api/pm/chat", {
+      const result = await requestJSON<MiloReply>("/api/pm/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.current.signal,
@@ -235,18 +283,28 @@ export function CityChat({
           sessionId: session.id,
           lastMessageId: message.id,
           changeReference,
+          context: { ...session.context, screen: screenContext?.screen ?? session.context?.screen },
         }),
       });
+      if (sequence !== operation.current) return;
+      if (result.plan && result.plan.context.sku.sku === session.context?.sku) {
+        const received = { plan: result.plan, userMessageId: message.id };
+        plans.current.set(session.id, received);
+        setPlan(received);
+      }
       setChangeReference(undefined);
       await archive.reload();
     } catch (e) {
+      if (sequence !== operation.current) return;
       if (!(e instanceof DOMException && e.name === "AbortError"))
         setError(e instanceof Error ? e.message : "Milo could not reply.");
       await archive.reload();
     } finally {
-      setOptimistic(null);
-      setPending(false);
-      input.current?.focus();
+      if (sequence === operation.current) {
+        setOptimistic(null);
+        setPending(false);
+        input.current?.focus();
+      }
     }
   }
   async function chooseModel(next: string) {
@@ -275,9 +333,13 @@ export function CityChat({
       return;
     setPending(true);
     setError("");
+    const sequence = ++operation.current;
+    plans.current.delete(conversation.id);
+    setReview(false);
+    setPlan(null);
     controller.current = new AbortController();
     try {
-      await requestJSON("/api/pm/chat", {
+      const result = await requestJSON<MiloReply>("/api/pm/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.current.signal,
@@ -285,23 +347,38 @@ export function CityChat({
           sessionId: conversation.id,
           lastMessageId: conversation.messages.at(-1)!.id,
           changeReference,
+          context: { ...conversation.context, screen: screenContext?.screen ?? conversation.context?.screen },
         }),
       });
+      if (sequence !== operation.current) return;
+      if (result.plan && result.plan.context.sku.sku === conversation.context?.sku) {
+        const received = { plan: result.plan, userMessageId: conversation.messages.at(-1)!.id };
+        plans.current.set(conversation.id, received);
+        setPlan(received);
+      }
     } catch (e) {
+      if (sequence !== operation.current) return;
       if (!(e instanceof DOMException && e.name === "AbortError"))
         setError(e instanceof Error ? e.message : "Milo could not reply.");
     } finally {
       await archive.reload();
-      setPending(false);
+      if (sequence === operation.current) setPending(false);
     }
   }
   function newChat() {
-    rememberEvidence();restoreEvidence("new");
-    references.current.set(sessionId ?? "new", changeReference);
-    setChangeReference(references.current.get("new"));
-    drafts.current.set(sessionId ?? "new", draft);
+    rememberEvidence();restoreEvidence(draftScope(context));
+    operation.current++;
+    controller.current?.abort();
+    setPending(false);
+    setOptimistic(null);
+    setSelectedContext(context);
+    setPlan(null);
+    setReview(false);
+    references.current.set(draftKey, changeReference);
+    setChangeReference(references.current.get(draftScope(context)));
+    drafts.current.set(draftKey, draft);
     setSessionId(null);
-    setDraft(drafts.current.get("new") ?? "");
+    setDraft(drafts.current.get(draftScope(context)) ?? "");
     setHistory(false);
     setError("");
     setTimeout(() => input.current?.focus(), 0);
@@ -447,8 +524,14 @@ export function CityChat({
                   }}
                   onSelect={(id) => {
                     rememberEvidence();restoreEvidence(id);
-                    drafts.current.set(sessionId ?? "new", draft);
-                    references.current.set(sessionId ?? "new", changeReference);
+                    operation.current++;
+                    controller.current?.abort();
+                    setPending(false);
+                    setOptimistic(null);
+                    setReview(false);
+                    setPlan(plans.current.get(id) ?? null);
+                    drafts.current.set(draftKey, draft);
+                    references.current.set(draftKey, changeReference);
                     setChangeReference(references.current.get(id));
                     setSessionId(id);
                     setDraft(drafts.current.get(id) ?? "");
@@ -457,6 +540,7 @@ export function CityChat({
                     const saved = archive.document?.data.sessions.find(
                       (s) => s.id === id,
                     );
+                    setSelectedContext(saved?.context);
                     if (saved && models.includes(saved.model))
                       setModel(saved.model);
                     setTimeout(() => input.current?.focus(), 0);
@@ -469,6 +553,14 @@ export function CityChat({
                       {conversation.title}
                     </div>
                   )}
+                  {(context?.sku || context?.scenarioId) && (
+                    <div className="milo-context" role="status">
+                      <span>Discussing <strong>{context.sku ?? context.campaignId}</strong>{context.scenarioId && <small> · Scenario {context.scenarioId}</small>}</span>
+                      <button type="button" disabled={pending} onClick={() => {
+                        newChat(); setSelectedContext(screenContext?.sku ? { screen: screenContext.screen } : screenContext);
+                      }}>Clear {context.scenarioId ? "scenario" : "SKU"}</button>
+                    </div>
+                  )}
                   <div
                     className="chat-messages"
                     ref={scroll}
@@ -478,13 +570,13 @@ export function CityChat({
                   >
                     {!visibleMessages.length ? (
                       <div className="chat-welcome">
-                        <h3>What are we working on?</h3>
+                        <h3>{context?.sku ? `What would you like to achieve with ${context.sku}?` : "What are we working on?"}</h3>
                         <div>
-                          {[
-                            "Review source readiness",
-                            "Explain the stock checks",
-                            "Help plan the next step",
-                          ].map((prompt) => (
+                          {(context?.sku ? ["Help increase sales for this product", "Help clear remaining inventory", "Review goals supported by the current data"] : [
+                            "Is the data ready for a scenario?",
+                            "Explain current inventory",
+                            "Help plan a sale goal",
+                          ]).map((prompt) => (
                             <button
                               key={prompt}
                               onClick={() => {
@@ -542,6 +634,17 @@ export function CityChat({
                         </article>
                       ))
                     )}
+                    {plan && !pending && !draft.trim() && (
+                      <section className="milo-goal-handoff" aria-label="Goal draft">
+                        <p>Review and edit the goal before running a simulation.</p>
+                        <button type="button" onClick={() => { setReview((value) => !value); setExpanded(true); }}>
+                          {review ? "Close goal draft" : "Review goal"}
+                        </button>
+                        {review && <SaleGoalPlanner key={`${sessionId}-${messages.at(-1)?.id}`} embedded
+                          initialInterpretation={plan.interpretation} focusSku={plan.context.sku.sku}
+                          campaignIds={plan.context.campaigns.map((campaign) => campaign.id)} allowRun={plan.context.canPlan} />}
+                      </section>
+                    )}
                     {pending && (
                       <div className="chat-thinking" role="status">
                         Reviewing the workspace<span>…</span>
@@ -589,7 +692,7 @@ export function CityChat({
                         maxLength={4000}
                         disabled={pending}
                         rows={2}
-                        onChange={(e) => setDraft(e.target.value)}
+                        onChange={(e) => { setDraft(e.target.value); setReview(false); }}
                         onKeyDown={(e) => {
                           if (
                             e.key === "Enter" &&

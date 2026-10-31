@@ -4,6 +4,8 @@ export type ImportTable = {
   source: Source;
   rowCount: number;
   review?: string[];
+  repairs?: string[];
+  remainingIssues?: string[];
   method: "recognized" | "model" | "general";
   columns: { source: string; target: string }[];
 };

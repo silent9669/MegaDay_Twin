@@ -181,13 +181,13 @@ describe('no zone bar, blocked runs, goals', () => {
     const goal = {
       goal_id: 'g',
       kind: 'profit',
-      label: 'Lợi nhuận tới 00:00 12/11',
+      label: 'Profit through 00:00 12/11',
       deadline: '2026-11-12T00:00:00+07:00',
       target_units: null,
       confirmed_by: 'u-lead-1',
       version: 1,
     };
-    expect(goalText(goal, 'g')).toBe('Lợi nhuận tới 00:00 12/11');
+    expect(goalText(goal, 'g')).toBe('Profit through 00:00 12/11');
     expect(goalText(goal, 'other')).toBe('other');
     expect(goalText(null, 'g')).toBe('g');
   });
@@ -200,7 +200,7 @@ describe('no zone bar, blocked runs, goals', () => {
 
   it('param_version object → short text', () => {
     expect(paramVersionText({ a: 0, b: 0 })).toBe('2 default parameters (v0)');
-    expect(paramVersionText({ a: 0, leftover_value_per_unit: -1, b: 3 })).toBe('leftover_value_per_unit: giả định của lần chạy · b v3');
+    expect(paramVersionText({ a: 0, leftover_value_per_unit: -1, b: 3 })).toBe('leftover_value_per_unit: Run overrides · b v3');
   });
 });
 
@@ -266,7 +266,7 @@ describe('pause not allowed (05 §7.2, M3-mo-phong Q14)', () => {
     expect(estimated).toBe(true);
     expect(bar?.verdict).toBe('pause_better');
     expect(bar?.pause_feasible).toBe(false);
-    expect(bar?.verdict_note).toMatch(/^Tạm dừng bị cấm vì đã cam kết với sàn trong khung flash sale. Về tiền, tạm dừng lợi hơn chạy tiếp/);
+    expect(bar?.verdict_note).toMatch(/^Pausing is blocked because of a flash-sale commitment. Although financially better/);
   });
 
   it('no duplicate "pause blocked" line when the API sends verdict_note', () => {

@@ -27,7 +27,16 @@ from app.api.schemas import Envelope, LocalDatetime, Meta, Page
 from app.core.errors import Forbidden, NotFound, ValidationFailed
 from app.core.events import GoalChanged, ParameterChanged
 from app.core.timeutil import to_local, utcnow
-from app.economics.goals import GOAL_LABEL_VI, Goal, GoalKind, create_goal, get_goal
+from app.economics.goals import (
+    GOAL_LABEL_VI,
+    Goal,
+    GoalKind,
+    create_goal,
+    get_goal,
+    validate_focus_sku,
+    validate_goal_params,
+    validate_target_units,
+)
 from app.economics.parameters import (
     CATALOGUE,
     ParamDef,
@@ -428,7 +437,7 @@ def read_goal(goal_id: str, conn: Conn, _user: Viewer) -> Envelope[GoalOut]:
 class GoalBody(BaseModel):
     kind: GoalKind
     deadline: datetime
-    target_units: int | None = Field(default=None, ge=1)
+    target_units: int | None = Field(default=None, ge=1, strict=True)
     params: dict[str, Any] = Field(default_factory=dict)
     constraints: dict[str, Any] = Field(default_factory=dict)  # 08 §3.7 shape
     reason: str | None = Field(default=None, max_length=500)
@@ -437,6 +446,29 @@ class GoalBody(BaseModel):
 class GoalIn(GoalBody):
     scope: Literal["campaign", "sku"] = "campaign"
     scope_id: str
+
+
+class GoalPlannerCapabilities(BaseModel):
+    version: Literal[1] = 1
+    constraints: list[str] = Field(
+        default_factory=lambda: [
+            "max_spend_vnd",
+            "max_loss_vnd",
+            "sell_target_prob",
+            "min_marginal_return",
+            "focus_sku",
+            "calculation_trace",
+        ]
+    )
+
+
+@router.get(
+    "/goal-planner/capabilities",
+    response_model=Envelope[GoalPlannerCapabilities],
+    summary="Khả năng thực thi mục tiêu sale",
+)
+def goal_planner_capabilities(user: Viewer) -> Envelope[GoalPlannerCapabilities]:
+    return Envelope(data=GoalPlannerCapabilities(), meta=Meta(computed_at=utcnow()))
 
 
 def _save_goal(
@@ -453,8 +485,29 @@ def _save_goal(
     if body.deadline.tzinfo is None:
         raise ValidationFailed("deadline phải có múi giờ (vd +07:00).")
     cons = dict(body.constraints)
-    target = body.target_units or cons.pop("target_units", None)
+    constraint_target = cons.pop("target_units", None)
+    validate_target_units(constraint_target, required=False)
+    if (
+        body.target_units is not None
+        and constraint_target is not None
+        and body.target_units != constraint_target
+    ):
+        raise ValidationFailed("target_units và constraints.target_units phải khớp nhau.")
+    target = body.target_units if body.target_units is not None else constraint_target
+    validate_target_units(target, required=body.kind == "sell_target")
+    validate_goal_params(cons)
+    validate_goal_params(body.params)
+    for key in (
+        "max_spend_vnd",
+        "max_loss_vnd",
+        "sell_target_prob",
+        "min_marginal_return",
+        "focus_sku",
+    ):
+        if key in cons and key in body.params and cons[key] != body.params[key]:
+            raise ValidationFailed(f"Ràng buộc {key} xuất hiện với hai giá trị khác nhau.", key=key)
     params = {**cons, **body.params}
+    validate_focus_sku(conn, scope, scope_id, params)
     if body.reason:
         params["reason"] = body.reason
     prev = conn.execute(
@@ -471,7 +524,7 @@ def _save_goal(
         deadline=body.deadline,
         confirmed_by=user.id,
         scope=scope,
-        target_units=int(target) if target is not None else None,
+        target_units=target,
         params=params,
     )
     version = int(prev[0]) + 1 if prev and prev[0] is not None else 1

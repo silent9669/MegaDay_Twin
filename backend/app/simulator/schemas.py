@@ -10,7 +10,7 @@ IroasEstimate prior"). See docs/quyet-dinh/M3-mo-phong.md for how to plug the re
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -140,6 +140,8 @@ class ScenarioResult(BaseModel):
     goal_eligible: bool = True  # [DEV] meets the goal constraint (05 §4)
     p_target: float | None = None  # [DEV] sell_target: P(Σ sold ≥ N)
     goal_note: str | None = None  # [DEV]
+    goal_sku: str | None = None
+    goal_units_sold: Dist | None = None  # focused SKU quantity; units_sold stays campaign total
     # [DEV] key of a better-ranked action with identical results (05 §9 step 3), e.g.
     # pause_until_restock ≡ pause when nothing arrives in the horizon
     duplicate_of: str | None = None
@@ -200,6 +202,7 @@ class SimOutput(BaseModel):
     # recommendation never replaces the campaign's active one (service.is_what_if)
     what_if: bool = False
     timings_ms: dict[str, float] = Field(default_factory=dict)
+    calculation_trace: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------- iROAS

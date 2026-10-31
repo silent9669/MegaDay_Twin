@@ -141,6 +141,7 @@ class ActionRun:
     lost_by_sku: dict[str, FloatArr]
     demand_by_sku: dict[str, FloatArr]
     first_lost_t: dict[str, IntArr]
+    contribution_by_sku: dict[str, FloatArr] = field(default_factory=dict)
 
 
 @dataclass
@@ -302,6 +303,10 @@ def simulate(
                 lost_by_sku=lost_by,
                 demand_by_sku={k: d[ai].sum(axis=1) for k, d in demand.items()},
                 first_lost_t=first,
+                contribution_by_sku={
+                    **{s.sku_id: res.contribution_single[j, ai] for j, s in enumerate(js)},
+                    **{s.sku_id: res.contribution_combo[c, ai] for c, s in enumerate(cs)},
+                },
             )
         )
     return SimRun(inputs=inputs, runs=runs, samples=samples, seed=seed, draws=dr, perturb=pt)
