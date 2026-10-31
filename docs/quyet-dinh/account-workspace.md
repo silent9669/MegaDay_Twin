@@ -18,8 +18,10 @@ Deploy this repository's build to Worker `megadaytwin` with the
 scrypt password format and `megaday_session` cookie valid; local PBKDF2 hashes
 also work. Rollback versions and steps are in `web/README.md`.
 
-CI now generates the ignored source fallback before typechecking and uses
-Chromium to test the rendered login, private chat access and D1 health. Static
+CI generates the ignored source fallback before typechecking. After the `ci`
+gate passes on `main`, it promotes that commit to `cloudflare-production`;
+Cloudflare Workers Builds pulls that branch, builds and deploys the Worker.
+The Chromium smoke test checks rendered login, private chat access and D1 health. Static
 HTML text cannot verify controls rendered by the Vite app. Release verification
 includes unit tests, both builds, browser tests on two independent sessions and
 signed-in checks after deployment. Local browser model responses are simulated;

@@ -114,6 +114,11 @@ deploys `web/`. GitHub Actions does not hold Cloudflare deployment credentials.
 The Cloudflare Build configuration uses `npm run build:cloudflare` followed by
 `npm run deploy:cloudflare`.
 
+Teammates: open a PR to `main`, wait for the `ci` check, then merge. Do not merge
+or push to `cloudflare-production` directly. Watch GitHub Actions for CI and the
+promotion job; watch Worker `megadaytwin` → Builds in Cloudflare for deployment.
+Runtime secrets and the D1/AccountWorkspace bindings remain on the Worker.
+
 Rollback: redeploy a known-good `megadaytwin` version and keep the
 `megadaytwin.dangphuc.me` custom domain attached to it. The old Workers,
 custom domain and D1 were retired during the migration.

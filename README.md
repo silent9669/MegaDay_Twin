@@ -1,5 +1,7 @@
 # MegaDay Twin
 
+[Live demo](https://megadaytwin.dangphuc.me) · [CI](https://github.com/silent9669/MegaDay_Twin/actions/workflows/ci.yml)
+
 Trợ lý ra quyết định quảng cáo cho người vận hành shop trên Shopee. Khi nhu cầu và tồn kho thay đổi giữa mùa sale, app trả lời câu hỏi **"lúc này nên tiếp tục hay tạm dừng quảng cáo?"**. Câu trả lời dựa trên tồn kho, giá vốn, lịch hàng về và mục tiêu của shop, chứ không chỉ dựa trên ROAS sàn báo.
 
 Điểm khác biệt cốt lõi: **AI không thể bịa số**. Lớp AI (OpenAI) hiểu câu hỏi tiếng Việt, điều tra và giải thích. Mọi con số nó nói ra đều đến từ công cụ đã được chấm điểm, được kiểm tự động trước khi hiển thị, và bấm vào được để xem nguồn. AI không tự bật/tắt quảng cáo; mọi hành động cần người duyệt.

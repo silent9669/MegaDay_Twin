@@ -38,7 +38,7 @@ describe('Compare screen · CD002 on 11.11 (API snapshot fixture)', () => {
     expect((await screen.findAllByText(/^Tạm dừng bị cấm vì đã cam kết với sàn trong khung flash sale\./)).length).toBeGreaterThan(0);
     expect(screen.getByText('Phương án tốt hơn cả hai: Chỉ chạy 0–2h, 12–14h.')).toBeInTheDocument();
 
-    const cards = within(screen.getByRole('list', { name: 'Năm hành động' })).getAllByRole('listitem', { name: undefined });
+    const cards = await within(screen.getByRole('list', { name: 'Năm hành động' })).findAllByRole('listitem', { name: undefined });
     const top = cards.filter((li) => li.parentElement?.getAttribute('aria-label') === 'Năm hành động');
     // the API also returns pause_until_restock, blocked like pause
     expect(top).toHaveLength(6);
