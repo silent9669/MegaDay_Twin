@@ -6,6 +6,8 @@ import { useAccountDocument, useAccountEvents } from "../studio/account";
 import type { Sandbox } from "../studio/workspace-types";
 import type { SourcePack } from "../studio/sources";
 import { useWorkspaceMonitor } from "./monitor/useWorkspaceMonitor";
+import { productKey, type HQDocument } from "../hq/types";
+import { assistantSkuSchema } from "../planner/assistant-contract";
 export function AssistantLayout() {
   const [localOpen, setLocalOpen] = useState(false),
     [width, setWidth] = useState(400),
@@ -13,6 +15,7 @@ export function AssistantLayout() {
     [launcherAnchor, setLauncherAnchor] = useState<HTMLElement | null>(null);
   const location = useLocation();
   const [params, setParams] = useSearchParams();
+  const campaignId = params.get("campaign") ?? (location.pathname === "/campaign-hq" ? "CD002" : undefined);
   const open = localOpen || params.get("assistant") === "open";
   const setOpen = useCallback(
     (value: boolean) => {
@@ -26,8 +29,11 @@ export function AssistantLayout() {
     [params, setParams],
   );
   const connected = useAccountEvents(),
+    hq = useAccountDocument<HQDocument>("hq"),
     sources = useAccountDocument<SourcePack>("sources"),
     sandbox = useAccountDocument<Sandbox>("sandbox");
+  const product = hq.document?.data.tracked.find(item => productKey(item) === hq.document?.data.active);
+  const selectedSku = assistantSkuSchema.safeParse(product?.sku);
   const updates = useWorkspaceMonitor(
     sources.document,
     sandbox.document,
@@ -44,6 +50,7 @@ export function AssistantLayout() {
         setWorkspaceOpen,
         setLauncherAnchor,
         connected,
+        unread: updates.unread,
       }}
     >
       <Outlet />
@@ -56,8 +63,9 @@ export function AssistantLayout() {
             location.pathname === "/mock-data"
               ? "data-studio"
               : location.pathname.slice(1),
-          ...(params.get("campaign")
-            ? { campaignId: params.get("campaign")! }
+          ...(selectedSku.success && !campaignId ? { sku: selectedSku.data } : {}),
+          ...(campaignId
+            ? { campaignId }
             : {}),
         }}
         open={open}

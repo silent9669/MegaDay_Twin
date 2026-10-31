@@ -21,6 +21,8 @@ const activeGoalParamsSchema = z.object({
   planner_parent_goal_id: text.optional(),
   planner_parent_goal_version: z.number().int().positive().optional(),
   planner_parent_goal_kind: text.optional(),
+  hq_progress: z.object({ units: z.number().finite(), spend: z.number().finite(),
+    cash: z.number().finite(), ads_complete: z.boolean() }).optional(),
 });
 const goalBriefSchema = z.object({ goal_id: text, kind: text, label: text, deadline: text,
   target_units: optionalNumber, version: z.number().int().positive().optional(),
@@ -60,7 +62,9 @@ const traceSchema = z.object({
     adstock_start: z.number().finite(), budget_source: text, daily_budget: finiteSeries, must_run_hours: finiteSeries }).optional(),
   equations: z.array(z.object({ id: text, formula: text, explanation: z.string().max(2000) })).max(30),
   actions: z.array(z.object({
-    key: text, metrics: z.object({ objective: distribution, contribution: distribution, spend: distribution,
+    key: text, feasible: z.boolean().optional(), violations: z.array(text).optional(),
+    metrics: z.object({ objective: distribution, contribution: distribution, spend: distribution,
+      revenue: distribution.optional(), selling_cost: distribution.optional(), after_ads: distribution.optional(),
       leftover_value: distribution, stockout_penalty: distribution, units_sold: distribution,
       focus_units_sold: distribution.nullable() }),
     reconciliation: z.object({ sum_components_mean: z.number().finite(), objective_mean: z.number().finite(), residual_vnd: z.number().finite() }),

@@ -9,11 +9,13 @@ from app.api import actions as actions_api
 from app.api import ai as ai_api
 from app.api import alerts as alerts_api
 from app.api import (
+    campaign_analysis,
     campaigns,
     demand_labels,
     economics,
     health,
     ingest,
+    replay_archive,
     sale_plans,
     scenarios,
     skus,
@@ -40,4 +42,7 @@ api_router.include_router(decisions_api.router)
 api_router.include_router(actions_api.router)
 api_router.include_router(alerts_api.router)
 api_router.include_router(live_api.router)
+api_router.include_router(replay_archive.router)
 api_router.include_router(stream_api.router)
+
+api_router.include_router(campaign_analysis.router)

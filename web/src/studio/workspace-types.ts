@@ -14,6 +14,7 @@ export const settingsSchema = z.object({
 });
 export const sandboxSchema = z.object({
   hour: z.number().int().min(0).max(24),
+  startedAt: z.string().datetime().optional(),
   event: z.enum(["observe", "stock", "ads", "orders"]),
 });
 export type ViewSettings = z.infer<typeof settingsSchema>;

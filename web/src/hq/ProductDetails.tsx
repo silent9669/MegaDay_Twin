@@ -1,8 +1,10 @@
+import { readSource } from "../studio/read-source";
+import { Button } from "../components/ui/button";
 import { config } from "../lib/config";
 import { DemandDetails } from "../planner/DemandDetails";
 import { useMemo } from "react";
 import { useSku } from "../api/queries";
-import { inspect, normalize, type SourcePack } from "../studio/sources";
+import { normalize, type SourcePack } from "../studio/sources";
 import type { StockRow } from "../studio/source-view";
 import { analyzeWithAI } from "../city/analysis-context";
 import { ErrorState, SkeletonRows } from "../components/states";
@@ -20,7 +22,7 @@ const codeColumns = new Set([
 function matchingRecords(pack: SourcePack | null, sku: string) {
   return (pack?.files ?? [])
     .map((file) => {
-      const parsed = inspect(file.name, file.text),
+      const parsed = readSource(file),
         columns = parsed.columns.filter((c) => codeColumns.has(normalize(c)));
       const rows = parsed.rows.filter((row) =>
         columns.some((c) =>
@@ -57,9 +59,8 @@ export function ProductDetails({
   return (
     <section className="hq-details">
       <header>
-        <h3>{product.name}</h3>
-        <button
-          className="btn-secondary"
+        <h3>Source records</h3>
+        <Button variant="outline"
           onClick={() =>
             analyzeWithAI(
               {
@@ -81,7 +82,7 @@ export function ProductDetails({
           }
         >
           Analyze with AI
-        </button>
+        </Button>
       </header>
       <dl className="source-metrics">
         <div>
@@ -162,8 +163,7 @@ function ModelDetails({ sku }: { sku: string }) {
     <section className="hq-details">
       <header>
         <h3>{item.name}</h3>
-        <button
-          className="btn-secondary"
+        <Button variant="outline"
           onClick={() =>
             analyzeWithAI(
               {
@@ -181,7 +181,7 @@ function ModelDetails({ sku }: { sku: string }) {
           }
         >
           Analyze with AI
-        </button>
+        </Button>
       </header>
       <dl className="source-metrics">
         {[

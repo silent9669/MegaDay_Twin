@@ -47,6 +47,7 @@ class LiveController:
         self.hour: int | None = None  # last hour written by this controller
         self.started_at: datetime | None = None
         self.finished = False
+        self.command_lock = asyncio.Lock()
 
     @property
     def live_dir(self) -> Path:
@@ -75,9 +76,7 @@ class LiveController:
 
     async def jump(self, hour: int, *, wait: bool = False) -> None:
         await self.stop()
-        await asyncio.to_thread(write_live_stream, self.source, self.live_dir, hour)
-        self.hour = hour
-        await self.watcher.poll()
+        await self._step(hour)
         if wait and self._settle is not None:
             await self._settle()
 
@@ -99,13 +98,29 @@ class LiveController:
         return n
 
     async def _replay(self, from_hour: int, interval: float) -> None:
-        for hour in range(from_hour, 24):
+        try:
+            for hour in range(from_hour, 24):
+                await self._step(hour)
+                if hour < 23:
+                    await asyncio.sleep(interval)
+            self.finished = True
+        except Exception as exc:
+            self.watcher.last_error = f"{type(exc).__name__}: {exc}"
+            log.exception("replay_failed")
+
+    async def _step(self, hour: int) -> None:
+        async def commit() -> None:
             await asyncio.to_thread(write_live_stream, self.source, self.live_dir, hour)
+            await self.watcher.poll()  # also works when the file watcher is disabled
             self.hour = hour
-            self.watcher.poke()
-            if hour < 23:
-                await asyncio.sleep(interval)
-        self.finished = True
+
+        step = asyncio.create_task(commit())
+        try:
+            await asyncio.shield(step)
+        except asyncio.CancelledError:
+            # Stopping waits for the in-flight hour; never leave a thread writing after reset.
+            await step
+            raise
 
     # ------------------------------------------------------------------ status
     def status(self) -> dict[str, Any]:

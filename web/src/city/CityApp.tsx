@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import {
   ArrowRight,
   Building2,
+  Bell,
   Check,
   CircleHelp,
   Database,
@@ -40,8 +41,12 @@ import type { SourcePack } from "../studio/sources";
 import { SourceWorkspace } from "../studio/SourceWorkspace";
 import { ProductLabels } from "../studio/ProductLabels";
 import "../studio/studio.css";
+import { visibleSources } from "../studio/replay";
+import { usePlaybackHour } from "../studio/use-playback-hour";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
+import { CampaignHQ } from "../campaign/CampaignHQ";
+import { useCampaignWatch } from "../campaign/useCampaignWatch";
 import { PLATFORM_IDS, PLATFORMS } from "./platforms";
 import type { createCity, District, WorldState } from "./world";
 import "./city.css";
@@ -56,8 +61,9 @@ const DISTRICTS = [
   { id: "ads", name: "Ads Platform", icon: Megaphone },
   { id: "homes", name: "Residential district", icon: Home },
 ] as const;
-export function CityApp({ studio = false }: { studio?: boolean }) {
-  const pageWorkspace = studio;
+export function CityApp({ studio = false, campaignHQ = false }: { studio?: boolean; campaignHQ?: boolean }) {
+  const pageWorkspace = studio || campaignHQ;
+  const campaignWatch = useCampaignWatch();
   const [mobile, setMobile] = useState(
     () => matchMedia("(max-width: 1023px)").matches,
   );
@@ -86,13 +92,15 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
     };
   }, [appearance]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const hour = usePlaybackHour(sandbox.document?.data);
+  const visiblePack = useMemo(() => visibleSources(sources.document?.data ?? null, hour), [sources.document, hour]);
   const feed = useMemo(
     () =>
       sourceView(
-        sources.document?.data ?? null,
-        sandbox.document?.data.hour ?? 1,
+        visiblePack,
+        hour,
       ),
-    [sources.document, sandbox.document],
+    [visiblePack, hour],
   );
   const [compact, setCompact] = useState(true),
     [district, setDistrict] = useState<District | null>(null),
@@ -271,13 +279,17 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
         </Link>
         <span className="city-route">
           /{" "}
-          {studio
+          {campaignHQ ? "Campaign CD002" : studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
               : "Commerce city"}
         </span>
         <div className="city-account">
+          <button className="city-appearance" aria-label="Milo notifications"
+            onClick={() => window.dispatchEvent(new Event("workspace:updates"))}>
+            <Bell size={16} /><span>{assistant.unread ? assistant.unread : "Milo"}</span>
+          </button>
           <button className="city-appearance" aria-label="Night mode" aria-pressed={appearance === "night"}
             disabled={!settings.document || savingSettings}
             onClick={() => void setSettings({ ...viewSettings, appearance: appearance === "night" ? "morning" : "night" })}>
@@ -373,7 +385,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
       </nav>
       {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
-        {studio ? (
+        {campaignHQ ? <CampaignHQ watch={campaignWatch} /> : studio ? (
           <DataStudio />
         ) : (
           <>
@@ -422,7 +434,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                 <Link to="/mock-data">
                   <Database size={16} />
                   <span>
-                    {String(sandbox.document?.data.hour ?? 1).padStart(2, "0")}
+                    {String(hour).padStart(2, "0")}
                     :00 · Source clock
                   </span>
                   <ArrowRight size={16} />
@@ -445,6 +457,8 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                     </SheetTitle>
                     <button className="city-icon panel-expand" aria-label={panel.expanded ? "Restore workspace" : "Expand workspace"}
                       onClick={() => panel.setExpanded(!panel.expanded)}>{panel.expanded ? <Minimize2 /> : <Maximize2 />}</button>
+                    <button className="city-icon" aria-label="Open PM assistant" title="Open PM assistant"
+                      onClick={() => window.dispatchEvent(new Event("workspace:chat"))}><MessageCircle /></button>
                     <button
                       className="city-icon"
                       aria-label="Close workspace"
@@ -456,7 +470,12 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                   {tour !== null && <Tutorial step={tour} onStep={tourStep} onFinish={finishTour} />}
                   <div className="district-workspace-body">
                     {district === "hq" ? (
-                      <HQWorkspace pack={sources.document?.data ?? null} revision={sources.document?.revision ?? 0} />
+                      <>
+                        <div className="workspace-tabs">
+                          <Link className="btn-secondary" to="/campaign-hq">CD002 · Analysis & recommendations <ArrowRight aria-hidden size={16} /></Link>
+                        </div>
+                        <HQWorkspace pack={visiblePack} revision={sources.document?.revision ?? 0} />
+                      </>
                     ) : district === "warehouse" ? (
                       <>
                         <ProductLabels
@@ -468,7 +487,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                       </>
                     ) : district === "ads" ? (
                       <>
-                        <AdsStats pack={sources.document?.data??null} revision={sources.document?.revision??0}/>
+                        <AdsStats pack={visiblePack} revision={sources.document?.revision??0}/>
                         <h3>Platform buildings</h3>
                         <div className="platform-grid">
                           {PLATFORM_IDS.map((p) => (
@@ -539,7 +558,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
                         </Link>
                       </>
                     ) : (
-                      <SourceWorkspace pack={sources.document?.data ?? null} district="residential" />
+                      <SourceWorkspace pack={visiblePack} district="residential" />
                     )}
                   </div>
                 </SheetContent>
@@ -557,8 +576,6 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
             : "Loading account"}
         </span>
       </footer>
-
-
       <dialog
         ref={settingsDialog}
         className="city-settings"

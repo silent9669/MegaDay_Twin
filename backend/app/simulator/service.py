@@ -27,7 +27,7 @@ from app.ads_effect.schemas import IroasEstimate
 from app.core.events import RecommendationChanged
 from app.core.ids import new_id
 from app.core.timeutil import to_utc
-from app.economics.goals import get_goal
+from app.economics.goals import Goal, get_goal
 from app.economics.parameters import load_param_set
 from app.forecast.base import ForecastResult
 from app.simulator import engine, recommend
@@ -82,6 +82,7 @@ def _key(inp: SimInputs, req: SimRequest, actions: Sequence[ActionSpec]) -> str:
             tuple(sorted(inp.params.versions.items())),
             inp.goal.goal_id,
             inp.goal.version,
+            repr(sorted(inp.goal.params.items())),
             inp.goal.active,  # deactivation changes recommendation semantics without a version bump
             to_utc(inp.data_as_of).isoformat() if inp.data_as_of else None,
             to_utc(inp.start).isoformat(),
@@ -103,13 +104,14 @@ def run_simulation(
     forecasts: Mapping[str, ForecastResult] | None = None,
     iroas: IroasPosterior | IroasEstimate | None = None,
     persist: bool = True,
+    goal_override: Goal | None = None,
     with_flips: bool = True,
     use_cache: bool = True,
     events: list[RecommendationChanged] | None = None,
 ) -> SimOutput:
     """Simulate every action of ``req`` and build the recommendation."""
     t0 = time.perf_counter()
-    goal = get_goal(conn, req.goal_id)
+    goal = goal_override or get_goal(conn, req.goal_id)
     params = load_param_set(
         conn,
         campaign_id=req.campaign_id,

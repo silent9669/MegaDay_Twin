@@ -1,14 +1,24 @@
+import { visibleSources } from "../src/studio/replay";
 import { ModelRequestError } from "./model-json";
 import { fail } from "./auth";
 import {
-  labelContextSchema, buildLabelInput, validateLabelResponse, type LabelInput, type LabelResponse, type LabelRun,
+  labelContextSchema, buildLabelInput, sourceFingerprint, validateLabelResponse, type LabelInput, type LabelResponse, type LabelRun,
 } from "../src/studio/product-labels";
 import type { Doc } from "../src/studio/workspace-types";
 import type { SourcePack } from "../src/studio/sources";
 import { LABEL_LEASE_MS, LABEL_TIMEOUT_MS, type ProductLabelProvider } from "./product-label-provider";
 
 type Storage = { fetch(request: Request): Promise<Response> };
-type Snapshot = { sources: Doc<SourcePack>; run: LabelRun | null };
+type Snapshot = { hour?: number; sources: Pick<Doc<SourcePack>, "revision" | "data">; run: LabelRun | null };
+
+export async function snapshotInput(snapshot: Snapshot, includeEvidence = false) {
+  const pack = snapshot.sources.data;
+  const needed = { ...pack, files: pack.files.filter(file => file.kind === "inventory" || (includeEvidence && file.kind === "orders")) };
+  const input = await buildLabelInput(visibleSources(needed, snapshot.hour ?? 24)!, snapshot.sources.revision, includeEvidence);
+  if (pack.files.some(file => file.replay) && input.context) input.context.eventHour = snapshot.hour ?? 24;
+  input.sourceFingerprint = await sourceFingerprint(pack);
+  return input;
+}
 
 /** Auth and same-origin protection are enforced by the Worker before this handler. */
 export async function productLabels(
@@ -16,7 +26,8 @@ export async function productLabels(
   storage: Storage,
   provider: ProductLabelProvider | null,
 ): Promise<Response> {
-  if (!["GET", "POST"].includes(request.method)) return fail(405, "Method not allowed.");
+  if (!["GET", "POST", "PATCH"].includes(request.method)) return fail(405, "Method not allowed.");
+  if (request.method === "PATCH") return storage.fetch(new Request(new URL("/internal/product-labels/manual", request.url), { method: "POST", body: request.body, duplex: "half" } as RequestInit));
   const internal = (operation: string, body?: LabelRun) => storage.fetch(new Request(
     new URL(`/internal/product-labels/${operation}`, request.url),
     body ? { method: "POST", body: JSON.stringify(body) } : {},
@@ -25,13 +36,14 @@ export async function productLabels(
   if (!snapshotResponse.ok) return snapshotResponse;
   const snapshot = await snapshotResponse.json() as Snapshot;
   let input: LabelInput;
-  try { input = await buildLabelInput(snapshot.sources.data, snapshot.sources.revision); }
+  try { input = await snapshotInput(snapshot, request.method === "POST"); }
   catch (error) {
     return fail(422, error instanceof Error ? error.message : "Review product identities before labeling.");
   }
   const response = (run: LabelRun | null): Response => {
     const stale = !!run && (!run.context || run.sourceRevision !== input.sourceRevision ||
-      run.sourceFingerprint !== input.sourceFingerprint || (!!provider && run.provider !== provider.id));
+      run.sourceFingerprint !== input.sourceFingerprint ||
+      (!!provider && run.provider !== provider.id && !run.results.every(result => result.manual)));
     const expired = run?.status === "running" && Date.parse(run.startedAt) + LABEL_LEASE_MS <= Date.now();
     const body: LabelResponse = {
       ...input, configured: !!provider, provider: provider?.id ?? null, stale,
@@ -49,7 +61,8 @@ export async function productLabels(
         !Number.isSafeInteger(body.sourceRevision) || body.sourceRevision < 0)
       return fail(422, "A saved source revision is required.");
     revision = body.sourceRevision;
-    input.context = labelContextSchema.parse(body.context);
+    const context = labelContextSchema.parse(body.context);
+    input.context = input.context ? { ...context, asOf: input.context.asOf, ...(input.context.eventHour !== undefined ? { eventHour: input.context.eventHour } : {}) } : context;
     const codes = new Set(input.products.map(p => p.reference));
     if (input.context.evidence.some(e => !codes.has(e.productCode)))
       return fail(422, "Evidence must refer to an inventory product code.");
@@ -102,6 +115,6 @@ export async function productLabels(
   const latestResponse = await internal("snapshot");
   if (!latestResponse.ok) return latestResponse;
   const latest = await latestResponse.json() as Snapshot;
-  input = await buildLabelInput(latest.sources.data, latest.sources.revision);
+  input = await snapshotInput(latest);
   return response(latest.run ?? saved.run);
 }

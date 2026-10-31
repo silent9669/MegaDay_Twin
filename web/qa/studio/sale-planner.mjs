@@ -2,14 +2,15 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 
 const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5179';
 assert(['127.0.0.1','localhost'].includes(new URL(base).hostname),'Local QA only');
 const out = new URL('../../../qa/runs/sale-planner/', import.meta.url);
 await mkdir(out, { recursive: true });
 const sources = JSON.parse(await readFile(new URL('../../server/repository-sources.json', import.meta.url), 'utf8'));
-const browser = await chromium.launch({ headless: true, channel: process.env.STUDIO_QA_CHANNEL });
+const engine = process.env.QA_ENGINE === 'webkit' ? webkit : chromium;
+const browser = await engine.launch({ headless: true, channel: process.env.STUDIO_QA_CHANNEL });
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const docs = { hq: {tracked:[],active:null,worksheets:{},activity:[]}, sources, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] }, sandbox: { hour: 1, event: 'observe' }, chats: { preferredModel: '', sessions: [] } };

@@ -8,6 +8,7 @@ export const AssistantContext = createContext<{
   setWorkspaceOpen: (open: boolean) => void;
   setLauncherAnchor: (element: HTMLElement | null) => void;
   connected: boolean;
+  unread?: number;
 }>({
   open: false,
   setOpen: () => {},

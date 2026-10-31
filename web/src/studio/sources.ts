@@ -1,3 +1,5 @@
+import { encodeSource, sourceText, MAX_TABLE_BYTES, MAX_SOURCE_BYTES } from "./source-text";
+import { z } from "zod";
 import Papa from "papaparse";
 import { previewVnd } from "./money-preview";
 
@@ -64,6 +66,8 @@ export type Source = {
   kind: SourceKind;
   name: string;
   text: string;
+  encoding?: "gzip-base64";
+  replay?: { date: string; hours: number[]; lagHours: number };
   hash: string;
   origin: string;
   commit?: string;
@@ -181,16 +185,12 @@ export function inspect(
         !["campaigns", "sale_program"].includes(d.kind) &&
         keyHas(columns, d.required),
     )?.kind;
-    rows = parsed.data.map((row) =>
-      Object.fromEntries(
-        columns.map((k) => [
-          k,
-          /ghi chu|note/.test(normalize(k))
-            ? mask(row[k] ?? "")
-            : (row[k] ?? ""),
-        ]),
-      ),
-    );
+    rows = parsed.data;
+    for (const row of rows) {
+      for (const column of removed) delete row[column];
+      for (const column of columns)
+        if (/ghi chu|note/.test(normalize(column))) row[column] = mask(String(row[column] ?? ""));
+    }
     addIssues(
       ...parsed.errors
         .slice(0, 100)
@@ -206,7 +206,7 @@ export function inspect(
   if (!columns.length || columns.length > 100 || columns.some(c => !c || c.length > 200))
     throw Error(`${name}: expected 1–100 named columns (at most 200 characters each).`);
   const definition = SOURCE_DEFS.find((d) => d.kind === kind);
-  const seen = new Set<string>();
+  const seen = new Map<string, Record<string, unknown>[]>();
   rows.forEach((row, i) => {
     const rowNumber = i + (payload === undefined ? 2 : 1);
     for (const key of definition?.required ?? [])
@@ -273,15 +273,16 @@ export function inspect(
       }
     }
     if (kind === "orders") {
-      const key = JSON.stringify(row);
-      if (seen.has(key))
+      const key = JSON.stringify([row["Mã đơn hàng"], row["SKU phân loại hàng"]]);
+      const previous = seen.get(key) ?? [];
+      if (previous.some(prior => JSON.stringify(prior) === JSON.stringify(row)))
         addIssues({
           level: "warning",
           code: "DUP_ORDER",
           row: rowNumber,
           message: "Repeated order line; backend ingestion deduplicates.",
         });
-      seen.add(key);
+      previous.push(row); seen.set(key, previous);
     }
     if (kind === "campaigns" && !Array.isArray(row.sku))
       addIssues({
@@ -338,7 +339,7 @@ export async function makeSource(
   return {
     kind: result.kind,
     name: SOURCE_DEFS.find((d) => d.kind === result.kind)?.file ?? name.replace(/[/\\]/g, "__"),
-    text: sanitized,
+    ...encodeSource(sanitized),
     hash: await hashText(sanitized),
     origin: origin.slice(0, 300),
     commit,
@@ -368,18 +369,25 @@ export async function validatePack(input: unknown): Promise<SourcePack> {
       /[/\\]/.test(entry.name)
     )
       throw Error("Invalid source entry.");
-    size += new TextEncoder().encode(entry.text).length;
-    if (size > MAX_BYTES) throw Error("Sources exceed 20 MiB.");
-    files.push(
-      await makeSource(
+    if (entry.encoding !== undefined && entry.encoding !== "gzip-base64") throw Error("Unsupported source encoding.");
+    const text = sourceText(entry);
+    const bytes = new TextEncoder().encode(text).length;
+    size += bytes;
+    if (bytes > MAX_TABLE_BYTES || size > MAX_SOURCE_BYTES) throw Error("Sources exceed 48 MiB, or one table exceeds 32 MiB.");
+    const source = await makeSource(
         entry.name,
-        entry.text,
+        text,
         typeof entry.origin === "string" ? entry.origin : "upload",
         typeof entry.commit === "string" && /^[a-f0-9]{40}$/.test(entry.commit)
           ? entry.commit
           : undefined,
-      ),
-    );
+      );
+    if (entry.replay !== undefined) {
+      const replay = z.object({ date: z.iso.date(), hours: z.array(z.number().int().min(-1).max(23)), lagHours: z.number().int().min(0).max(24) }).strict().parse(entry.replay);
+      if (!["orders", "ads", "inventory"].includes(source.kind) || replay.hours.length !== inspect(source.name, text).rows.length) throw Error("Replay must match every business table row.");
+      source.replay = replay;
+    }
+    files.push(source);
   }
   if (new Set(files.map(sourceKey)).size !== files.length)
     throw Error(
@@ -399,8 +407,8 @@ export function selectUploads(
           f.path.split("/").pop() === def.file &&
           !/ground_truth|_replay|manifest/.test(f.path),
       );
-    const live = candidates.filter((f) => f.path.includes("/live_11_11/"));
-    if (live.length) candidates = live;
+    const root = candidates.filter(f => !f.path.includes("/live_11_11/"));
+    if (root.length) candidates = root;
     if (candidates.length > 1)
       throw Error(`Multiple ${def.name} sources. Choose one shop folder.`);
     if (candidates[0]) result.push(candidates[0].i);
@@ -424,9 +432,9 @@ export const DEMAND_COLUMN = "Demand label";
 export async function withoutDemandLabels(pack: SourcePack): Promise<SourcePack> {
   return { ...pack, files: await Promise.all(pack.files.map(async source => {
     if (source.kind !== "inventory") return source;
-    const parsed = inspect(source.name, source.text);
+    const parsed = inspect(source.name, sourceText(source));
     const columns = parsed.columns.filter(c => c !== DEMAND_COLUMN);
     const text = Papa.unparse({ fields: columns, data: parsed.rows });
-    return { ...source, text, hash: await hashText(text) };
+    return { ...source, encoding: undefined, ...encodeSource(text), hash: await hashText(text) };
   })) };
 }

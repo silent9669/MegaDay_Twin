@@ -27,8 +27,9 @@ export type CalculationTrace = {
     leftover_value_per_unit: number; restock: { hour: number; units: number }[] }[];
   actions: { key: string; action: unknown; metrics: {
     objective: Dist; contribution: Dist; spend: Dist; leftover_value: Dist;
+    revenue?: Dist; selling_cost?: Dist; after_ads?: Dist;
     stockout_penalty: Dist; units_sold: Dist; focus_units_sold: Dist | null;
   }; reconciliation: { sum_components_mean: number; objective_mean: number; residual_vnd: number };
-    spend_hourly: number[]; per_sku: { sku_id: string; units_sold: Dist; contribution: Dist }[] }[];
+    spend_hourly: number[]; per_sku: { sku_id: string; units_sold: Dist; contribution: Dist; revenue?: Dist; leftover_units?: Dist | null }[] }[];
   limitations: string[];
 };

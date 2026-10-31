@@ -125,4 +125,19 @@ it("retains a note on save failure and stores activity only after success", asyn
     action: "Note",
     detail: "Review campaign costs",
   });
+  fireEvent.change(screen.getByLabelText("Search activity"),{target:{value:"no such entry"}});
+  expect(screen.getByText("No matching activity.")).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Search activity"),{target:{value:"campaign costs"}});
+  expect(screen.getByText("Review campaign costs")).toBeVisible();
+});
+it("switches between the active product's campaigns and all campaigns", async () => {
+  saved.data.tracked=[{sku:"A",name:"Product A",mode:"workspace"}];saved.data.active="workspace:A";
+  const campaignPack: SourcePack={...pack,files:[...pack.files,{name:"campaigns.json",kind:"campaigns",origin:"upload",hash:"x",text:JSON.stringify([{id:"C1",name:"Linked sale",sku:["A"]},{id:"C2",name:"Other sale",sku:["B"]}])}]};
+  render(<MemoryRouter initialEntries={["/?hq=campaigns"]}><HQWorkspace pack={campaignPack} revision={3}/></MemoryRouter>);
+  await screen.findByRole("heading",{name:"Linked sale"});
+  expect(screen.queryByRole("heading",{name:"Other sale"})).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Campaign scope"),{target:{value:"all"}});
+  expect(screen.getByRole("heading",{name:"Other sale"})).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Search campaigns"),{target:{value:"missing"}});
+  expect(screen.getByText("No campaigns match your search.")).toBeVisible();
 });

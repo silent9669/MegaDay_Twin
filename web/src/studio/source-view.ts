@@ -1,4 +1,5 @@
-import { DEMAND_COLUMN, inspect, normalize, type SourcePack } from "./sources";
+import { readSource } from "./read-source";
+import { DEMAND_COLUMN, normalize, type SourcePack } from "./sources";
 export type StockRow = {
   code: string;
   name: string;
@@ -10,13 +11,13 @@ export function sourceView(pack: SourcePack | null, hour: number) {
   const inventory = pack?.files.find((f) => f.kind === "inventory");
   const latest = new Map<string, StockRow>();
   if (inventory) {
-    const parsed = inspect(inventory.name, inventory.text);
+    const parsed = readSource(inventory);
     const column = (name: string) => parsed.columns.find(c => normalize(c) === normalize(name)) ?? name;
     const timestampColumn = column("Thời điểm cập nhật"), dateColumn = column("Ngày"),
       codeColumn = column("Mã nội bộ"), stockColumn = column("Tồn thực tế"), nameColumn = column("Tên hàng");
     const hasDemand = parsed.columns.includes(DEMAND_COLUMN);
     for (const row of parsed.rows) {
-      const asOf = String(row[timestampColumn] ?? row[dateColumn] ?? "");
+      const asOf = String(row[timestampColumn] || row[dateColumn] || "");
       const rowHour = asOf.includes(":") ? Number(asOf.slice(11, 13)) : 0;
       if (inventory.commit && rowHour > hour) continue;
       const code = String(row[codeColumn] ?? "").trim();
@@ -38,19 +39,19 @@ export function sourceView(pack: SourcePack | null, hour: number) {
     ads = pack?.files.find((f) => f.kind === "ads"),
     campaigns = pack?.files.find((f) => f.kind === "campaigns");
   const orderRows = orders
-    ? inspect(orders.name, orders.text).rows.filter(
+    ? readSource(orders).rows.filter(
         (row) =>
           !orders.commit || Number(String(row["Ngày đặt hàng"] ?? "").slice(11, 13)) < hour,
       ).length
     : 0;
   // Report raw ad observations only. Timezone normalization belongs to Python.
-  const adRows = ads ? inspect(ads.name, ads.text).rows.length : 0;
+  const adRows = ads ? readSource(ads).rows.length : 0;
   return {
     stock: [...latest.values()],
     orderRows,
     adRows,
     campaignCount: campaigns
-      ? inspect(campaigns.name, campaigns.text).rows.length
+      ? readSource(campaigns).rows.length
       : 0,
     importedAds: !!ads && !ads.commit,
   };

@@ -1,3 +1,5 @@
+import { sourceText, MAX_SOURCE_BYTES, MAX_TABLE_BYTES } from "../src/studio/source-text";
+import { applyArchiveReplay } from "./archive-replay";
 import { Unzip, UnzipInflate } from "fflate";
 import Papa from "papaparse";
 import { z } from "zod";
@@ -28,11 +30,11 @@ export function extractArchive(bytes: Uint8Array) {
     if (/^[/\\]|^[A-Za-z]:|\\/.test(file.name) || file.name.includes(String.fromCharCode(0)) || file.name.split("/").includes(".."))
       throw Error("Unsafe archive path.");
     if (file.name.endsWith("/")) return;
-    if (/ground_truth|__MACOSX|(?:^|\/)_replay\.json$|(?:^|\/)\./i.test(file.name) || !/\.(csv|json)$/i.test(file.name)) {
+    if (/ground_truth|__MACOSX|(?:^|\/)\./i.test(file.name) || !/\.(csv|json)$/i.test(file.name)) {
       skipped.push({ file: file.name, reason: "Excluded or unsupported file (CSV/JSON only)." });
       return;
     }
-    if ((file.originalSize ?? 0) > MAX_BYTES || pending + files.length >= 24)
+    if ((file.originalSize ?? 0) > MAX_TABLE_BYTES || pending + files.length >= 24)
       throw Error("Archive expansion or 24-table limit exceeded.");
     pending++;
     const chunks: Uint8Array[] = [];
@@ -41,7 +43,7 @@ export function extractArchive(bytes: Uint8Array) {
       if (error) throw Error("Could not extract ZIP entry.");
       size += chunk.length;
       total += chunk.length;
-      if (total > MAX_BYTES) { file.terminate(); throw Error("Archive expansion exceeds the 20 MiB limit."); }
+      if (total > MAX_SOURCE_BYTES || size > MAX_TABLE_BYTES) { file.terminate(); throw Error("Archive exceeds 48 MiB expanded or 32 MiB per table."); }
       chunks.push(chunk);
       if (final) {
         const data = new Uint8Array(size);
@@ -85,14 +87,18 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv, rev
   const inspections = new Map<string, ReturnType<typeof inspect>>();
   const unknown: { file: string; columns: string[]; rows: Record<string, unknown>[] }[] = [];
   for (const file of files) {
+    if (/(?:^|\/)_replay\.json$/.test(file.name)) continue;
     try {
       let source = await makeSource(file.name, file.text, file.name);
       const fixed = review ? await repairSource(source) : { source, repairs: [] };
       source = fixed.source;
       // Escape archive separators without collapsing distinct paths into one table.
       if (source.kind === "general") source.name = file.name.replace(/%/g, "%25").replace(/\//g, "%2F");
-      const parsed = inspect(source.name, source.text);
-      inspections.set(file.name, parsed);
+      const parsed = inspect(source.name, sourceText(source));
+      const samples: Record<string, unknown>[] = [];
+      for (const index of reviewRows(parsed)) samples[index] = parsed.rows[index]!;
+      samples.length = parsed.rows.length;
+      inspections.set(file.name, { ...parsed, rows: samples });
       if (source.kind === "general" && !parsed.rows.some(row => Object.values(row).some(value => value !== null && typeof value === "object"))) {
         unknown.push({ file: file.name, columns: parsed.columns, rows: parsed.rows });
       }
@@ -158,9 +164,10 @@ export async function analyzeArchive(bytes: Uint8Array, env: StudioModelEnv, rev
       table.repairs = [...(table.repairs ?? []), ...fixed.repairs];
     }
     for (const review of mappings.reviews) tables.find(table => table.file === review.file)!.review = review.issues;
-    for (const table of tables) table.remainingIssues = [...new Set(inspect(table.source.name, table.source.text).issues
+    for (const table of tables) table.remainingIssues = [...new Set(inspect(table.source.name, sourceText(table.source)).issues
       .filter(issue => issue.level !== "info").map(issue => issue.message))].slice(0, 8);
   }
+  applyArchiveReplay(files, tables);
   return { tables, skipped, model: review && tables.length && env.OPENAI_API_KEY ? model ?? null : null };
 }
 
@@ -185,5 +192,7 @@ export async function studioImport(request: Request, env: StudioModelEnv) {
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
   try { return Response.json(await analyzeArchive(bytes, env, review)); }
-  catch (error) { return fail(422, error instanceof Error && error.name !== "ZodError" ? error.message : "Invalid archive analysis."); }
+  catch (error) {
+    return fail(422, error instanceof Error && error.name !== "ZodError" ? error.message : "Invalid archive analysis.");
+  }
 }

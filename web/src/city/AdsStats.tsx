@@ -1,6 +1,8 @@
+import { readSource } from "../studio/read-source";
+import { Button } from "../components/ui/button";
 import { useMemo } from "react";
 import { Link } from "react-router";
-import { inspect, normalize, type SourcePack } from "../studio/sources";
+import { normalize, type SourcePack } from "../studio/sources";
 import { analyzeWithAI } from "./analysis-context";
 export function AdsStats({
   pack,
@@ -13,7 +15,7 @@ export function AdsStats({
     () =>
       pack?.files
         .filter((f) => f.kind === "ads")
-        .map((file) => ({ file, parsed: inspect(file.name, file.text) })) ?? [],
+        .map((file) => ({ file, parsed: readSource(file) })) ?? [],
     [pack],
   );
   const field = (row: Record<string, unknown>, names: string[]) =>
@@ -32,7 +34,7 @@ export function AdsStats({
     <section className="ads-source-stats">
       <header>
         <h3>Ad observations</h3>
-        <Link to="/city-demo?district=hq&hq=campaigns">Campaigns in HQ</Link>
+        <Button variant="outline" render={<Link to="/city-demo?district=hq&hq=campaigns" />}>Campaigns in HQ</Button>
       </header>
       <dl className="source-metrics">
         <div>
@@ -52,8 +54,7 @@ export function AdsStats({
         <p>No ad performance table imported.</p>
       ) : (
         <>
-          <button
-            className="btn-secondary"
+          <Button variant="outline"
             onClick={() =>
               analyzeWithAI(
                 {
@@ -74,7 +75,7 @@ export function AdsStats({
             }
           >
             Analyze with AI
-          </button>
+          </Button>
           {tables.map(({ file, parsed }) => (
             <details key={file.name}>
               <summary>

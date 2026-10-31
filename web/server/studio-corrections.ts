@@ -1,3 +1,4 @@
+import { sourceText } from "../src/studio/source-text";
 import Papa from "papaparse";
 import { inspect, makeSource, normalize, piiColumn, DEMAND_COLUMN, type Source } from "../src/studio/sources";
 import { previewVnd } from "../src/studio/money-preview";
@@ -8,7 +9,7 @@ export type ModelCorrection = { row: number; column: string; before: Cell; after
 /** Apply explicit cell patches, never model-generated replacement tables. */
 export async function applyModelCorrections(source: Source, corrections: ModelCorrection[]) {
   if (!corrections.length) return { source, repairs: [] as string[] };
-  const parsed = inspect(source.name, source.text);
+  const parsed = inspect(source.name, sourceText(source));
   const rows = parsed.rows.map(row => ({ ...row }));
   const seen = new Set<string>();
   const repairs: string[] = [];
@@ -42,7 +43,7 @@ export async function applyModelCorrections(source: Source, corrections: ModelCo
     : JSON.stringify(Array.isArray(parsed.payload) ? rows : rows[0]);
   const fixed = await makeSource(source.name, text, source.origin);
   const originalErrors = new Set(parsed.issues.filter(issue => issue.level === "error").map(issue => JSON.stringify(issue)));
-  if (inspect(fixed.name, fixed.text).issues.some(issue => issue.level === "error" && !originalErrors.has(JSON.stringify(issue))))
+  if (inspect(fixed.name, sourceText(fixed)).issues.some(issue => issue.level === "error" && !originalErrors.has(JSON.stringify(issue))))
     throw Error("AI correction introduced new data errors. No changes saved.");
-  return { source: { ...source, text: fixed.text, hash: fixed.hash }, repairs };
+  return { source: { ...source, text: fixed.text, encoding: fixed.encoding, hash: fixed.hash }, repairs };
 }

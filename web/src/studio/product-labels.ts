@@ -1,6 +1,8 @@
+import { readSource } from "./read-source";
 import { z } from "zod";
+import { attachSalesEvidence } from "./sales-evidence";
 import { sourceView } from "./source-view";
-import { hashText, inspect, normalize, type SourceKind, type SourcePack } from "./sources";
+import { hashText, normalize, type SourceKind, type SourcePack } from "./sources";
 
 export const DEMAND_LABELS = {
   Trendy: "Trendy",
@@ -13,6 +15,7 @@ export const MAX_LABEL_PRODUCTS = 2000;
 export const labelContextSchema = z.object({
   market: z.string().trim().min(1).max(100),
   asOf: z.iso.date(),
+  eventHour: z.number().int().min(0).max(24).optional(),
   evidence: z.array(z.object({
     productCode: z.string().trim().min(1).max(300),
     observedAt: z.iso.date(),
@@ -34,6 +37,7 @@ export type LabelProduct = {
   identity: "platform_sku" | "internal_code" | "name_only";
   reference: string;
   rowCount: number;
+  salesEvidence?: { match: string; firstDate: string; lastDate: string; dailyUnits: [string, number][]; earlierWeeks?: [string, number][]; excludedCancelled: number };
 };
 export type LabelInput = {
   sourceRevision: number;
@@ -45,6 +49,7 @@ export const productLabelSchema = z.object({
   productId: z.string().min(1).max(2000),
   group: z.enum(["Trendy", "Seasonal", "Normal"]).nullable(),
   reason: z.string().trim().min(1).max(1000),
+  manual: z.boolean().optional(),
   confidence: z.number().min(0).max(1).optional(),
 }).strict();
 export type ProductLabel = z.infer<typeof productLabelSchema>;
@@ -89,7 +94,7 @@ export function extractLabelProducts(pack: SourcePack): LabelProduct[] {
   const products = new Map<string, LabelProduct>();
   for (const source of pack.files) {
     if (!["orders", "inventory", "cost"].includes(source.kind)) continue;
-    const parsed = inspect(source.name, source.text);
+    const parsed = readSource(source);
     const field = (name: string) => parsed.columns.find((column) => normalize(column) === normalize(name));
     const nameColumn = field(source.kind === "orders" ? "Tên sản phẩm" : source.kind === "inventory" ? "Tên hàng" : "tên sp");
     const codeColumn = field(source.kind === "orders" ? "SKU phân loại hàng" : "Mã nội bộ");
@@ -123,9 +128,9 @@ export function extractLabelProducts(pack: SourcePack): LabelProduct[] {
 }
 
 export async function sourceFingerprint(pack: SourcePack): Promise<string> {
-  return hashText(JSON.stringify(pack.files.map((source) => [source.kind, source.hash]).sort(([a], [b]) => a!.localeCompare(b!))));
+  return hashText(JSON.stringify(pack.files.map((source) => [source.kind, source.hash, source.replay ?? null]).sort(([a], [b]) => String(a).localeCompare(String(b)))));
 }
-export async function buildLabelInput(pack: SourcePack, sourceRevision: number): Promise<LabelInput> {
+export async function buildLabelInput(pack: SourcePack, sourceRevision: number, includeEvidence = true): Promise<LabelInput> {
   const inventory = { ...pack, files: pack.files.filter(source => source.kind === "inventory") };
   const stocked = sourceView(inventory, 24).stock.filter(row => (row.stock ?? 0) > 0);
   if (stocked.length > MAX_LABEL_PRODUCTS) throw Error(`At most ${MAX_LABEL_PRODUCTS} stocked products can be labeled per workspace.`);
@@ -134,5 +139,7 @@ export async function buildLabelInput(pack: SourcePack, sourceRevision: number):
     return { id: JSON.stringify(["inventory", "internal_code", row.code]), name: row.name.trim(), alternateNames: [],
       source: "inventory", identity: "internal_code", reference: row.code, rowCount: 1 };
   });
-  return { sourceRevision, sourceFingerprint: await sourceFingerprint(pack), products };
+  if (includeEvidence) attachSalesEvidence(pack, products);
+  const asOf = stocked.map(row => row.asOf.slice(0, 10)).filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1);
+  return { sourceRevision, sourceFingerprint: await sourceFingerprint(pack), products, ...(asOf ? { context: { market: "Vietnam", asOf, evidence: [] } } : {}) };
 }

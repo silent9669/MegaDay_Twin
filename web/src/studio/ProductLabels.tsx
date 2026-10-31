@@ -1,8 +1,9 @@
+import { Button } from "../components/ui/button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Tags } from "lucide-react";
 import type { StockRow } from "./source-view";
 import { requestJSON } from "./account";
-import { DEMAND_LABELS, labelContextSchema, type LabelResponse } from "./product-labels";
+import { DEMAND_LABELS, labelContextSchema, type DemandLabel, type LabelResponse } from "./product-labels";
 
 const PAGE_SIZE = 8;
 export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode }: { sourceRevision: number; blocked: boolean; inventory?: StockRow[]; selectedCode?: string }) {
@@ -24,6 +25,9 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState(selectedCode ?? "");
+  const [demand, setDemand] = useState("all");
+  const [sort, setSort] = useState("name");
+  const [changing, setChanging] = useState("");
   const [page, setPage] = useState(0);
   useEffect(() => {
     if (!selectedCode) return;
@@ -52,7 +56,7 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
   }, [sourceRevision, reload, invalidate]);
   const current = data?.sourceRevision === sourceRevision;
   const stale = !!data && (!current || data.stale);
-  const context = !stale && data?.run?.context ? data.run.context : { market: "Vietnam", asOf: new Date().toISOString().slice(0, 10), evidence: [] };
+  const context = !stale && data?.run?.context ? data.run.context : data?.context ?? { market: "Vietnam", asOf: new Date().toISOString().slice(0, 10), evidence: [] };
   const running = submitting || (!!current && !data?.stale && data?.run?.status === "running");
   useEffect(() => {
     if (!running) return;
@@ -78,20 +82,34 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
     ? data?.run?.results.map(r => [r.productId, r]) ?? [] : []);
   const products = current ? data?.products ?? [] : [];
   const rows: StockRow[] = inventory?.filter(row => (row.stock ?? 0) > 0 || row.code === selectedCode) ?? products.map(p => ({ code: p.reference, name: p.name, stock: null, asOf: "" }));
-  const hasDemand = rows.some(row => row.demand !== undefined) || !!data?.run?.results.length;
+  const hasDemand = rows.length > 0;
   const productByCode = new Map(products.map(product => [product.reference, product]));
-  const filtered = rows.filter(p => `${p.name} ${p.code}`.toLowerCase().includes(search.toLowerCase()));
+  const groupFor = (row: StockRow) => results.get(productByCode.get(row.code)?.id ?? "")?.group ?? row.demand ?? "";
+  const filtered = rows.filter(p => `${p.name} ${p.code}`.toLowerCase().includes(search.toLowerCase()) && (demand === "all" || groupFor(p) === demand))
+    .sort((a, b) => (sort === "demand" ? groupFor(a).localeCompare(groupFor(b)) : 0) || a.name.localeCompare(b.name));
+  async function relabel(code: string, group: DemandLabel) {
+    if (posting.current || blocked || !current || running) return;
+    posting.current = true; setChanging(code); setError("");
+    try {
+      await requestJSON("/api/product-labels", { method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceRevision, productId: JSON.stringify(["inventory", "internal_code", code]), group }) });
+      window.dispatchEvent(new CustomEvent("workspace:changed", { detail: "sources" }));
+      await reload();
+      await sync();
+    } catch (error) { setError(error instanceof Error ? error.message : "Could not save label."); }
+    finally { posting.current = false; setChanging(""); }
+  }
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.min(page, pages - 1);
   return <section className="product-label-panel" aria-labelledby="product-label-title">
     <header><h3 id="product-label-title"><Tags size={18} aria-hidden /> Inventory</h3>
       <div className="product-label-actions">
-        <button disabled={blocked || !current || !data?.configured || running || !products.length} onClick={() => void run()}>
+        <Button variant="outline" disabled={blocked || !current || !data?.configured || running || !products.length} onClick={() => void run()}>
           {running ? "Labeling…" : "Label data"}
-        </button>
-        <button disabled={blocked || running || syncing || stale || !data?.run?.results.length} onClick={() => void sync()}>
+        </Button>
+        <Button variant="outline" disabled={blocked || running || syncing || stale || !data?.run?.results.length} onClick={() => void sync()}>
           {syncing ? "Synchronizing…" : "Sync labels to forecasting"}
-        </button>
+        </Button>
       </div>
     </header>
     {!data && !error && <p role="status">Loading product labels…</p>}
@@ -102,6 +120,14 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
     {blocked && <p role="status">Save source changes before labeling.</p>}
     {(error || (current && !stale && data?.run?.error)) && <p role="alert">{error || data?.run?.error}</p>}
     <label className="product-label-search">Search products<input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} placeholder="Name or product code" /></label>
+    <div className="product-label-actions">
+      <select aria-label="Filter demand labels" value={demand} onChange={event => { setDemand(event.target.value); setPage(0); }}>
+        <option value="all">All demand labels</option>{Object.keys(DEMAND_LABELS).map(label => <option key={label}>{label}</option>)}
+      </select>
+      <select aria-label="Sort products" value={sort} onChange={event => { setSort(event.target.value); setPage(0); }}>
+        <option value="name">Product name</option><option value="demand">Demand label</option>
+      </select>
+    </div>
     <div className="warehouse-table" role="region" aria-label="Inventory table" tabIndex={0}><table>
       <thead><tr><th>Product</th><th>Available units</th>{hasDemand && <th>Demand label</th>}<th>Source timestamp</th></tr></thead>
       <tbody>{filtered.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE).map(row => {
@@ -109,15 +135,18 @@ export function ProductLabels({ sourceRevision, blocked, inventory, selectedCode
         const label = product ? results.get(product.id) : undefined;
         return <tr key={row.code} className={row.code === selectedCode ? "stock-highlight" : undefined}><td><strong>{row.name}</strong><br /><code>{row.code}</code></td>
           <td>{row.stock === null ? "Unknown" : row.stock.toLocaleString()}</td>
-          {hasDemand && <td><strong className="product-demand-label">{!stale && !blocked && !running && data?.run?.status !== "failed" ? label?.group ? DEMAND_LABELS[label.group] : row.demand || "Unclassified" : "Unclassified"}</strong>
+          {hasDemand && <td><select className="product-demand-label" aria-label={`Demand label for ${row.name}`} value={groupFor(row)} disabled={blocked || running || !!changing || !current}
+              onChange={event => void relabel(row.code, event.target.value as DemandLabel)}>
+              <option value="" disabled>Unclassified</option>{Object.keys(DEMAND_LABELS).map(group => <option key={group}>{group}</option>)}
+            </select>
             {label && <p>{label.reason}</p>}</td>}<td>{row.asOf || "—"}</td></tr>;
       })}</tbody>
     </table></div>
     {!rows.length && <p>No products in stock.</p>}
     {pages > 1 && <nav className="product-label-pagination" aria-label="Product label pages">
-      <button disabled={activePage === 0} onClick={() => setPage(activePage - 1)}>Previous</button>
+      <Button variant="outline" disabled={activePage === 0} onClick={() => setPage(activePage - 1)}>Previous</Button>
       <span>{activePage + 1} / {pages}</span>
-      <button disabled={activePage + 1 >= pages} onClick={() => setPage(activePage + 1)}>Next</button>
+      <Button variant="outline" disabled={activePage + 1 >= pages} onClick={() => setPage(activePage + 1)}>Next</Button>
     </nav>}
 
   </section>;
