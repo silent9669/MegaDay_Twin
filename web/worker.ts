@@ -14,6 +14,7 @@ import { productLabels } from "./server/product-labels";
 import { getProductLabelProvider } from "./server/product-label-provider";
 import { plannerContext, runSalePlan } from "./server/sale-planner";
 import { interpretGoal } from "./server/goal-interpret";
+import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
 import { SOURCE_DEFS, type SourcePack } from "./src/studio/sources";
 export { AccountWorkspace } from "./server/workspace";
 export type Env = AccessEnv &
@@ -106,6 +107,15 @@ async function handle(request: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/sale-planner/run" && request.method === "POST")
       return runSalePlan(request, env);
+    if (path === "/api/sale-assistant/skus" && request.method === "GET")
+      return assistantSkus(request, env);
+    if (path === "/api/sale-assistant/context" && request.method === "GET")
+      return assistantContext(request, env);
+    if (path === "/api/sale-assistant/turn" && request.method === "POST") {
+      if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
+        return fail(429, "Vui lòng thử lại sau ít phút.");
+      return assistantTurn(request, env);
+    }
     if (path === "/api/repository-sources" && request.method === "GET") {
       const result = await repositorySources();
       return Response.json(result);

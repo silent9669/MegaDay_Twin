@@ -679,3 +679,49 @@ numeric parameters match; otherwise 409. When no ID was received, Worker can
 recover the matching active goal. This handles sequential retries, not a
 transactional idempotency guarantee for simultaneous independent requests.
 Scenario runs use 1,000 samples and seed 20261111. No fixture fallback or ad execution.
+
+## SKU goal assistant and calculation evidence
+
+The authenticated Worker adds:
+
+- `GET /api/sale-assistant/skus?q=...&cursor=...`: real backend SKU search,
+  `{items:[{sku,name,variant,stockAvailable}],nextCursor,dataAsOf}`.
+- `GET /api/sale-assistant/context?sku=...`: `{sku,campaigns,dataAsOf,source,
+  canPlan,notices,opening}`. SKU facts include stock, today's units, effective
+  price, contribution per unit and demand group; unknown numeric values stay
+  null. Campaigns contain all discovered memberships with `{id,name,skus}`.
+- `POST /api/sale-assistant/turn`: `{sku,messages:[{role,content}]}` returns
+  `{reply,interpretation:{draft,method,notices},context}`. Conversation is bounded;
+  user requirements are interpreted into an editable draft. Assistant messages
+  are not accepted as a source of facts or authorization. No goal or scenario
+  is saved by this endpoint. Session, same-origin writes and PM rate limit apply.
+
+`POST /api/sale-planner/run` now accepts optional `focusSku`. The gateway verifies
+membership and backend `focus_sku` capability before saving; the confirmed SKU
+participates in goal matching and retry recovery. It is stored as `params.focus_sku`.
+Python also validates membership, including direct API callers. For sell_target
+and clear_stock the quantity metric is the selected SKU's sold units. Budgets,
+loss limits and J remain campaign-wide; profit/efficiency optimize the campaign.
+`ScenarioResult.goal_sku` and `goal_units_sold` identify this quantity separately
+from the unchanged aggregate `units_sold`.
+
+`ScenarioRun.calculation_trace` is a versioned snapshot made from the actual
+simulation inputs and samples, persisted with its scenario. Legacy scenarios
+without a snapshot return null; reading an old result must not rebuild evidence
+from today's data. Trace version 1 includes:
+
+- Scenario input hash, campaign/focus SKU, quantity/economic scopes, requested
+  window, sample count and seed, data timestamp and panel version.
+- Confirmed goal, parameter values/versions, forecast references, iROAS origin
+  (estimate or prior), and import batch references where available.
+- SKU prices, costs, per-unit economics, starting stock, restocks and demand
+  inputs. Unknown stock is labelled as a modelling assumption, not real stock.
+- Equations and each action's actual distributions; expected-value substitution
+  for J = contribution − spend + terminal inventory value − shortage penalty,
+  with a reconciliation residual. Quantiles are calculated from samples;
+  adding component P10/P50/P90 values does not produce J's quantiles.
+- Explicit limitations. Batch references identify source context and are not
+  represented as complete lineage to every original CSV row.
+
+Capability version 1 additionally advertises `focus_sku` and `calculation_trace`.
+This is additive: old campaign-only planner callers remain valid.

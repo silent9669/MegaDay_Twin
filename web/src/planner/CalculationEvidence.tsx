@@ -1,0 +1,35 @@
+import type { CalculationTrace } from './calculation-trace';
+
+const n = (value: number) => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value);
+const money = (value: number) => `${n(value)} ₫`;
+const valueText = (value: unknown) => value == null ? 'Chưa cung cấp' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+
+export function ActionCalculation({ action, index }: { action: CalculationTrace['actions'][number]; index: number }) {
+  const m = action.metrics;
+  return <details className="planner-calculation" id={`calculation-${index}`}>
+    <summary>Cách tính và đối chiếu con số</summary>
+    <p><strong>Giá trị kỳ vọng của J</strong> = đóng góp − chi quảng cáo + giá trị tồn cuối kỳ − phạt thiếu hàng.</p>
+    <p className="planner-substitution">{money(m.contribution.mean)} − {money(m.spend.mean)} + {money(m.leftover_value.mean)} − {money(m.stockout_penalty.mean)} = <strong>{money(action.reconciliation.sum_components_mean)}</strong></p>
+    <p>J do bộ mô phỏng trả về: {money(action.reconciliation.objective_mean)}. Sai lệch đối chiếu: {money(action.reconciliation.residual_vnd)}.</p>
+    <p className="planner-help">Phép cộng trên dùng trung bình của cùng các mẫu. Không cộng trực tiếp P10/P50/P90 của từng thành phần để suy ra phân vị J.</p>
+    <details><summary>Chi quảng cáo theo từng giờ</summary><ol className="planner-hourly">{action.spend_hourly.map((value, i) => <li key={i}>Giờ {i + 1}: {money(value)}</li>)}</ol></details>
+    <details><summary>Đóng góp và số lượng theo SKU</summary><ul>{action.per_sku.map((sku) => <li key={sku.sku_id}><strong>{sku.sku_id}</strong>: bán kỳ vọng {n(sku.units_sold.mean)}; P10/P50/P90: {n(sku.units_sold.p10)} / {n(sku.units_sold.p50)} / {n(sku.units_sold.p90)}. Đóng góp kỳ vọng: {money(sku.contribution.mean)}.</li>)}</ul><p className="planner-help">Đóng góp theo SKU chưa trừ ngân sách quảng cáo chung của chiến dịch.</p></details>
+  </details>;
+}
+
+export function CalculationEvidence({ trace }: { trace?: CalculationTrace | null }) {
+  if (!trace || trace.version !== 1) return <p className="planner-warning">Lần tính này chưa có bản truy vết phép tính được lưu. Các phân vị vẫn là kết quả backend; chưa thể giải thích đầy đủ dữ liệu và phép tính đã tạo ra chúng.</p>;
+  return <details className="planner-evidence" id="calculation-evidence">
+    <summary>Dữ liệu và công thức đã dùng trong lần tính</summary>
+    <p>Bản ghi được lưu cùng mô phỏng, không dựng lại từ dữ liệu hiện tại. Các số đầu vào là dữ liệu/giả định của mô hình; số đầu ra là ước lượng.</p>
+    <dl><dt>Phạm vi số lượng</dt><dd>{trace.quantity_scope === 'sku' ? `SKU ${trace.focus_sku}` : 'Toàn chiến dịch'}</dd><dt>Phạm vi J, ngân sách và lỗ</dt><dd>Toàn chiến dịch {trace.campaign_id}</dd><dt>Mã dữ liệu lần tính</dt><dd>{trace.input_hash}</dd><dt>Số mẫu / seed</dt><dd>{trace.samples} / {trace.seed}</dd><dt>Dữ liệu đến</dt><dd>{trace.data_as_of ?? 'Chưa cung cấp'}</dd></dl>
+    <details><summary>Công thức và mô hình</summary>{trace.equations.map((equation) => <div className="planner-trace-item" key={equation.id}><code>{equation.formula}</code><p>{equation.explanation}</p></div>)}</details>
+    <details><summary>File nguồn và lần nhập dữ liệu</summary>{trace.sources.batches.length ? <ul>{trace.sources.batches.map((batch) => <li key={batch.batch_id}><strong>{batch.file_name}</strong> · {batch.source_type}<br />Lần nhập: {batch.batch_id} · Mốc dữ liệu: {batch.as_of ?? 'Chưa cung cấp'}<br />SHA-256: <code>{batch.file_sha256 ?? 'Chưa cung cấp'}</code></li>)}</ul> : <p>Backend chưa ghi nguồn file cho lần tính này.</p>}</details>
+    {trace.sources.batches_truncated && <p className="planner-help">Danh sách nguồn được giới hạn ở 200 lần nhập liên quan.</p>}
+    <details><summary>Dự báo và hiệu quả quảng cáo</summary><ul>{trace.sources.forecasts.map((forecast) => <li key={`${forecast.forecast_id}-${forecast.sku_id}`}><strong>{forecast.sku_id}</strong> · mô hình {forecast.model_id}<br />Dự báo: {forecast.forecast_id} · mốc {forecast.origin ?? 'Chưa cung cấp'}</li>)}</ul><p>iROAS: {trace.sources.iroas.source === 'prior' ? 'Giả định prior' : 'Ước lượng từ dữ liệu'} · {trace.sources.iroas.estimate_id ?? 'Không có mã ước lượng'} · độ tin cậy: {trace.sources.iroas.confidence ?? 'Chưa cung cấp'}.</p><p>Adstock delta: {n(trace.sources.iroas.delta)}; thang chi: {n(trace.sources.iroas.spend_scale)}.</p></details>
+    {trace.assumptions && <details><summary>Giả định ngân sách, thiếu hàng và lịch chạy</summary><p>Phạt thiếu hàng: {money(trace.assumptions.stockout_penalty_per_unit)}/đơn vị. Mất hạng: {n(trace.assumptions.rank_loss)}. Adstock đầu kỳ: {n(trace.assumptions.adstock_start)}.</p><p>Nguồn ngân sách: {trace.assumptions.budget_source}. Ngân sách theo lịch mô phỏng: {trace.assumptions.daily_budget.map(money).join(', ')}.</p><p>Giờ bắt buộc chạy (tính từ đầu kỳ): {trace.assumptions.must_run_hours.map((hour) => hour + 1).join(', ') || 'Không có'}.</p></details>}
+    <details><summary>Tham số và người thiết lập</summary><ul>{trace.sources.parameters.map((param) => <li key={`${param.key}-${param.scope}-${param.scope_id}`}><strong>{param.key}</strong> = {valueText(param.value)} · phiên bản {valueText(param.version)} · {param.scope ?? 'Chưa rõ phạm vi'} {param.scope_id ?? ''} · {param.set_by ?? 'Chưa rõ người thiết lập'}</li>)}</ul></details>
+    <details><summary>Đầu vào và giả định của từng SKU</summary>{trace.skus.map((sku) => <details key={sku.sku_id}><summary>{sku.sku_id}{sku.sku_id === trace.focus_sku ? ' · SKU đang lập mục tiêu' : ''}</summary><dl><dt>Tồn đầu kỳ</dt><dd>{sku.stock_unlimited ? 'Giả định tồn không giới hạn' : sku.stock_start == null ? 'Chưa cung cấp' : n(sku.stock_start)}</dd><dt>Giá vốn mỗi đơn vị</dt><dd>{sku.unit_cost_vnd == null ? 'Chưa cung cấp' : money(sku.unit_cost_vnd)}</dd><dt>Giá trị tồn mỗi đơn vị</dt><dd>{money(sku.leftover_value_per_unit)}</dd><dt>Giả định độ phân tán</dt><dd>k = {n(sku.dispersion_k)}; sigma = {n(sku.sigma)}</dd></dl>{sku.economics_by_day?.map((economics) => <div className="planner-trace-item" key={economics.day}><strong>Đóng góp mỗi đơn vị · {economics.day}</strong><p>{money(economics.eff_price)} − {money(economics.unit_cost)} − ({n(economics.fee_rate * 100)}% × {money(economics.eff_price)}) − {money(economics.packaging_cost)} = <strong>{money(economics.m)}</strong>.</p><p>Nguồn giá: {economics.price_source}. Thứ tự: giá bán − giá vốn − phí nền tảng − đóng gói.</p></div>)}<ol className="planner-hourly">{sku.price_hourly.map((price, i) => <li key={i}>Giờ {i + 1}: giá {money(price)}; đóng góp/đơn vị {sku.contribution_per_unit_hourly[i] == null ? 'Chưa cung cấp' : money(sku.contribution_per_unit_hourly[i])}; nhu cầu nền {sku.forecast_mean_hourly[i] == null ? 'Chưa cung cấp' : n(sku.forecast_mean_hourly[i])}.</li>)}</ol>{sku.restock.length > 0 && <p>Hàng về: {sku.restock.map((item) => `giờ ${item.hour + 1}: ${n(item.units)}`).join('; ')}.</p>}</details>)}</details>
+    <div className="planner-warning"><strong>Giới hạn của kết quả</strong><ul>{trace.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul></div>
+  </details>;
+}

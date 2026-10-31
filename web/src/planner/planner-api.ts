@@ -15,6 +15,7 @@ export type PlannerRunRequest = {
   confirmed: true;
   acknowledgedUnresolved: boolean;
   goalId?: string;
+  focusSku?: string;
 };
 export type PlannerRunResponse = { goalId: string; scenario: Envelope<ScenarioRun> };
 export type PlannerRunError = {

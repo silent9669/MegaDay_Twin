@@ -60,6 +60,12 @@ class Goal(BaseModel):
 
 def validate_goal_params(params: Mapping[str, Any]) -> None:
     """Validate the numeric constraints consumed by the simulator, without coercion."""
+    if "focus_sku" in params and (
+        not isinstance(params["focus_sku"], str)
+        or not params["focus_sku"].strip()
+        or len(params["focus_sku"]) > 150
+    ):
+        raise ValidationFailed("focus_sku phải là mã SKU hợp lệ.", key="focus_sku")
     for key in ("max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"):
         if key not in params:
             continue
@@ -118,6 +124,7 @@ def create_goal(
         created_at=now,
     )
     _validate(goal)
+    validate_focus_sku(conn, goal.scope, goal.scope_id, goal.params)
     conn.execute(
         "INSERT INTO goals (goal_id, scope, scope_id, kind, deadline, target_units, params,"
         " confirmed_by, created_at, active, version, valid_from) VALUES"
@@ -136,6 +143,24 @@ def create_goal(
         ],
     )
     return goal
+
+
+def validate_focus_sku(
+    conn: duckdb.DuckDBPyConnection, scope: str, scope_id: str, params: Mapping[str, Any]
+) -> None:
+    focus = params.get("focus_sku")
+    if focus is None:
+        return
+    validate_goal_params(params)
+    if (
+        scope != "campaign"
+        or conn.execute(
+            "SELECT 1 FROM campaign_skus WHERE campaign_id = ? AND sku_id = ?",
+            [scope_id, focus],
+        ).fetchone()
+        is None
+    ):
+        raise ValidationFailed("SKU mục tiêu không thuộc chiến dịch đã chọn.", focus_sku=focus)
 
 
 _COLS = (

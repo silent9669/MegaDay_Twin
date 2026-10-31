@@ -97,6 +97,7 @@ function AttentionCard({
         {t.compare}
         <ChevronRight aria-hidden className="size-4" />
       </Link>
+      <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} className="btn-secondary" aria-label={`Lập mục tiêu ${item.sku}`}>Lập mục tiêu {many ? item.sku : ''}</Link>
     </li>
   );
 }
@@ -127,6 +128,7 @@ function SkuTable({ items }: { items: SkuListItem[] }) {
                     {item.sku}
                   </Link>
                   <div className="text-xs text-muted">{displayName(item)}</div>
+                  <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} className="inline-flex min-h-11 items-center text-sm underline" aria-label={`Lập mục tiêu ${item.sku}`}>Lập mục tiêu</Link>
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatNumber(item.stock_available, 0)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{coverText(item)}</td>

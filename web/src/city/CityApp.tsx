@@ -37,6 +37,7 @@ import type { SourcePack } from "../studio/sources";
 import { sourceView } from "../studio/source-view";
 import { DataStudio } from "../studio/DataStudio";
 import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
+import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
 import { ShiftOverviewPage } from "../pages/ShiftOverviewPage";
 import { CompareIndexPage } from "../pages/compare/ComparePage";
 import { CityChat } from "./CityChat";
@@ -95,8 +96,8 @@ const TOUR = [
     text: "Open the assistant from any screen. It can explain the workspace, while verified decisions remain with the backend tools.",
   },
 ] as const;
-export function CityApp({ studio = false, planner = false }: { studio?: boolean; planner?: boolean }) {
-  const pageWorkspace = studio || planner;
+export function CityApp({ studio = false, planner = false, skuAssistant = false }: { studio?: boolean; planner?: boolean; skuAssistant?: boolean }) {
+  const pageWorkspace = studio || planner || skuAssistant;
   const [chatAnchor, setChatAnchor] = useState<HTMLSpanElement | null>(null);
   const connected = useAccountEvents();
   const settings = useAccountDocument<ViewSettings>("settings"),
@@ -272,7 +273,7 @@ export function CityApp({ studio = false, planner = false }: { studio?: boolean;
         </Link>
         <span className="city-route">
           /{" "}
-          {planner ? "Mục tiêu buổi sale" : studio
+          {skuAssistant ? "Trợ lý theo SKU" : planner ? "Mục tiêu buổi sale" : studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
@@ -281,7 +282,7 @@ export function CityApp({ studio = false, planner = false }: { studio?: boolean;
         <div className="city-account">
           <span className={`connection-dot ${connected ? "connected" : ""}`} />
           <span>{connected ? "Account synced" : "Connecting…"}</span>
-          <span className="city-demo-badge">{planner ? "Lập phương án" : "Sandbox"}</span>
+          <span className="city-demo-badge">{planner || skuAssistant ? "Lập phương án" : "Sandbox"}</span>
         </div>
       </header>
       <nav className="city-sidebar" aria-label="City sidebar">
@@ -314,6 +315,10 @@ export function CityApp({ studio = false, planner = false }: { studio?: boolean;
           ))}
         </div>
         <div className="city-nav-tools">
+          <Link to="/sku-assistant" title="Trợ lý theo SKU" aria-label="Trợ lý theo SKU" aria-current={skuAssistant ? "page" : undefined}>
+            <MessageCircle />
+            <span>Trợ lý theo SKU</span>
+          </Link>
           <Link to="/sale-planner" title="Mục tiêu buổi sale" aria-label="Mục tiêu buổi sale" aria-current={planner ? "page" : undefined}>
             <Target />
             <span>Mục tiêu buổi sale</span>
@@ -371,7 +376,7 @@ export function CityApp({ studio = false, planner = false }: { studio?: boolean;
         </div>
       </nav>
       <main id="city-main" className="city-main">
-        {planner ? <SaleGoalPlanner /> : studio ? (
+        {skuAssistant ? <SkuGoalAssistant /> : planner ? <SaleGoalPlanner /> : studio ? (
           <DataStudio />
         ) : (
           <>
@@ -489,6 +494,7 @@ export function CityApp({ studio = false, planner = false }: { studio?: boolean;
                         Comparisons
                       </button>
                       <Link to="/sale-planner">Mục tiêu buổi sale <ArrowRight aria-hidden size={16} /></Link>
+                      <Link to="/sku-assistant">Trợ lý theo SKU <ArrowRight aria-hidden size={16} /></Link>
                     </div>
                   )}
                   <button
@@ -674,7 +680,7 @@ export function CityApp({ studio = false, planner = false }: { studio?: boolean;
         )}
       </main>
       <footer className="city-footer">
-        <span>{planner ? "Mục tiêu được xác nhận bởi người dùng · Mô phỏng từ backend" : "Sandbox data · Motion illustrates observations"}</span>
+        <span>{planner || skuAssistant ? "Mục tiêu được xác nhận bởi người dùng · Mô phỏng từ backend" : "Sandbox data · Motion illustrates observations"}</span>
         <span>
           {sources.document
             ? `Source revision ${sources.document.revision}`

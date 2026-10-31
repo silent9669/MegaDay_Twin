@@ -4,8 +4,9 @@ import { ArrowRight, Check, RefreshCw, Target } from "lucide-react";
 import type { Dist, ScenarioRun } from "../api/types";
 import { viText } from "../lib/i18n";
 import { sameAction, violationLabel } from "../pages/compare/compareLogic";
-import { goalInterpretResponseSchema, type GoalDraft, type GoalKind } from "./goal-contract";
+import { goalInterpretResponseSchema, type GoalDraft, type GoalKind, type GoalInterpretResponse } from "./goal-contract";
 import type { PlannerContext, PlannerRunError, PlannerRunRequest, PlannerRunResponse } from "./planner-api";
+import { ActionCalculation, CalculationEvidence } from "./CalculationEvidence";
 import "./planner.css";
 
 const kinds: Record<GoalKind, string> = {
@@ -68,15 +69,23 @@ function draftIssues(draft: GoalDraft): string[] {
   return issues;
 }
 
-export function SaleGoalPlanner() {
+type PlannerProps = {
+  initialInterpretation?: GoalInterpretResponse;
+  focusSku?: string;
+  campaignIds?: string[];
+  embedded?: boolean;
+  allowRun?: boolean;
+};
+// The assistant remounts this review on a new interpretation or SKU, clearing approval/results.
+export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true }: PlannerProps = {}) {
   const [context, setContext] = useState<PlannerContext | null>(null);
   const [contextError, setContextError] = useState("");
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [text, setText] = useState("");
-  const [draft, setDraft] = useState<GoalDraft | null>(null);
-  const [method, setMethod] = useState<"ai" | "rules" | "manual">("manual");
-  const [notices, setNotices] = useState<string[]>([]);
+  const [text, setText] = useState(initialInterpretation?.draft.text ?? "");
+  const [draft, setDraft] = useState<GoalDraft | null>(initialInterpretation?.draft ?? null);
+  const [method, setMethod] = useState<"ai" | "rules" | "manual">(initialInterpretation?.method ?? "manual");
+  const [notices, setNotices] = useState<string[]>(initialInterpretation?.notices ?? []);
   const [campaignId, setCampaignId] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -86,15 +95,23 @@ export function SaleGoalPlanner() {
   const [goalId, setGoalId] = useState<string | null>(null);
   const [result, setResult] = useState<PlannerRunResponse | null>(null);
   const review = useRef<HTMLElement>(null), results = useRef<HTMLElement>(null);
+  const activeRequest = useRef<AbortController | null>(null);
+  const campaignScope = campaignIds?.join("\u0000");
+  useEffect(() => () => activeRequest.current?.abort(), []);
   useEffect(() => {
     const controller = new AbortController();
     void request<PlannerContext>("context", undefined, controller.signal).then((value) => {
-      if (!controller.signal.aborted) { setContext(value); setContextError(""); }
+      if (!controller.signal.aborted) {
+        const ids = campaignScope?.split("\u0000");
+        const scoped = ids ? { ...value, campaigns: value.campaigns.filter((campaign) => ids.includes(campaign.id)) } : value;
+        setContext(scoped); setContextError("");
+        if (focusSku && scoped.campaigns.length === 1) setCampaignId(scoped.campaigns[0]!.id);
+      }
     }).catch((e: unknown) => {
       if (!controller.signal.aborted) { setContext(null); setContextError(e instanceof Error ? e.message : "Không tải được chiến dịch."); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [reload]);
+  }, [reload, campaignScope, focusSku]);
   function invalidate() {
     setConfirmed(false); setGoalId(null); setResult(null); setError(""); setErrorDetails(null);
   }
@@ -107,34 +124,40 @@ export function SaleGoalPlanner() {
   function openReview() { requestAnimationFrame(() => review.current?.focus()); }
   async function interpret() {
     invalidate(); setAcknowledged(false); setBusy("interpret"); setDraft(null);
+    const controller = new AbortController(); activeRequest.current = controller;
     try {
-      const interpreted = goalInterpretResponseSchema.parse(await request("interpret", { text }));
+      const interpreted = goalInterpretResponseSchema.parse(await request("interpret", { text }, controller.signal));
+      if (controller.signal.aborted) return;
       setDraft({ ...interpreted.draft, text }); setMethod(interpreted.method); setNotices(interpreted.notices); openReview();
-    } catch (e) { setError(e instanceof Error ? e.message : "Chưa phân tích được mục tiêu. Bạn có thể nhập thủ công."); }
-    finally { setBusy(null); }
+    } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Chưa phân tích được mục tiêu. Bạn có thể nhập thủ công."); }
+    finally { if (!controller.signal.aborted) setBusy(null); }
   }
   const issues = draft ? draftIssues(draft) : [];
   const selected = context?.campaigns.find((c) => c.id === campaignId);
   const canConfirm = !!draft && !issues.length && (!draft.unresolved.length || acknowledged);
-  const canRun = canConfirm && confirmed && !!selected && !!context?.backendConfigured && context.canCreateGoals && !busy && !loading;
+  const canRun = allowRun && canConfirm && confirmed && !!selected && !!context?.backendConfigured && context.canCreateGoals && !busy && !loading;
   async function run() {
     if (!canRun || !draft) return;
     setBusy("run"); setError(""); setErrorDetails(null);
+    const controller = new AbortController(); activeRequest.current = controller;
     try {
-      const body: PlannerRunRequest = { campaignId, draft, confirmed: true, acknowledgedUnresolved: acknowledged, ...(goalId ? { goalId } : {}) };
-      const response = await request<PlannerRunResponse>("run", body);
+      const body: PlannerRunRequest = { campaignId, draft, confirmed: true, acknowledgedUnresolved: acknowledged, ...(goalId ? { goalId } : {}), ...(focusSku ? { focusSku } : {}) };
+      const response = await request<PlannerRunResponse>("run", body, controller.signal);
+      if (controller.signal.aborted) return;
       setGoalId(response.goalId); setResult(response);
       requestAnimationFrame(() => results.current?.focus());
     } catch (e) {
+      if (controller.signal.aborted) return;
       if (e instanceof PlannerError) {
         if (e.payload?.goalId) setGoalId(e.payload.goalId);
         setErrorDetails(e.payload?.error?.details ?? null);
       }
       setError(e instanceof Error ? e.message : "Mô phỏng chưa hoàn thành.");
-    } finally { setBusy(null); }
+    } finally { if (!controller.signal.aborted) setBusy(null); }
   }
   return (
-    <div className="sale-planner">
+    <div className={`sale-planner ${embedded ? "planner-embedded" : ""}`}>
+      {!embedded && <>
       <header className="planner-heading">
         <div><span className="planner-eyebrow">MEGADAY HQ / LẬP PHƯƠNG ÁN</span><h1><Target aria-hidden size={26} /> Mục tiêu buổi sale</h1>
           <p>Nói điều bạn muốn đạt. Kiểm tra mục tiêu, rồi so sánh phương án dựa trên dữ liệu của chiến dịch.</p></div>
@@ -145,6 +168,7 @@ export function SaleGoalPlanner() {
         <li aria-current={draft && !result ? "step" : undefined}><span>2</span> Kiểm tra & xác nhận</li>
         <li aria-current={result ? "step" : undefined}><span>3</span> So sánh phương án</li>
       </ol>
+      </>}
       <section className="planner-context" aria-label="Kết nối dữ liệu">
         <div role="status"><strong>{loading ? "Đang kiểm tra dữ liệu…" : context?.backendConfigured ? "Chiến dịch từ backend" : "Chưa kết nối backend tính toán"}</strong>
           <p>{contextError || context?.notice || (context?.backendConfigured ? `Dữ liệu đến: ${dateText(context.dataAsOf)} (giờ Việt Nam).` : "Bạn vẫn có thể soạn và kiểm tra mục tiêu. Cần kết nối backend để chạy mô phỏng.")}</p>
@@ -152,7 +176,8 @@ export function SaleGoalPlanner() {
           {context?.backendConfigured && !context.campaigns.length && <p>Chưa có chiến dịch. Import và gửi dữ liệu từ Data Studio sang backend trước.</p>}</div>
         <button type="button" disabled={loading || !!busy} onClick={() => { invalidate(); setLoading(true); setReload((n) => n + 1); }}><RefreshCw aria-hidden size={16} /> Kiểm tra lại</button>
       </section>
-      <div className="planner-layout">
+      <div className={`planner-layout ${embedded ? "planner-review-only" : ""}`}>
+        {!embedded &&
         <section className="planner-card" aria-labelledby="planner-input-title">
           <span className="planner-eyebrow">BƯỚC 1</span><h2 id="planner-input-title">Buổi sale này, bạn muốn đạt điều gì?</h2>
           <fieldset disabled={!!busy}>
@@ -164,13 +189,15 @@ export function SaleGoalPlanner() {
               <button type="button" disabled={!text.trim()} onClick={() => { invalidate(); setAcknowledged(false); setDraft(blankDraft(text)); setMethod("manual"); setNotices([]); openReview(); }}>Nhập thông số thủ công</button></div>
           </fieldset>
           <aside className="planner-scope"><strong>Phạm vi của lần lập phương án</strong><p>Một chiến dịch, trong 1–72 giờ. So sánh tiếp tục, tạm dừng, giảm ngân sách và lịch chạy quảng cáo theo bộ mô phỏng hiện có.</p><p>Chưa tối ưu ngân sách chung giữa nhiều chiến dịch; chưa tự thay đổi giá bán, voucher hoặc chạy quảng cáo.</p></aside>
-        </section>
+        </section>}
         <section ref={review} tabIndex={-1} className="planner-card planner-review" aria-labelledby="planner-review-title">
           <span className="planner-eyebrow">BƯỚC 2</span><h2 id="planner-review-title">Kiểm tra cách hệ thống hiểu</h2>
           {!draft ? <div className="planner-empty"><Target aria-hidden size={30} /><p>Thông số sẽ xuất hiện ở đây sau khi phân tích. Bạn có thể chỉnh từng giá trị trước khi xác nhận.</p></div> : <>
             <p className="planner-help">{method === "ai" ? "Bản nháp do AI diễn giải" : method === "rules" ? "Bản nháp theo quy tắc nhận diện" : "Bản nháp nhập thủ công"}. Các thông số bên dưới là nội dung được dùng để tính.</p>
+            {embedded && <details><summary>Nội dung mục tiêu đã diễn giải</summary><pre>{draft.text}</pre></details>}
             {!!notices.length && <ul className="planner-notices">{notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
             <fieldset disabled={!!busy}>
+              {focusSku && <div className="planner-warning"><strong>Mục tiêu gắn với SKU {focusSku}</strong><p>Số lượng bán/xả hàng được tính riêng cho SKU này. Lợi nhuận J, ngân sách, mức lỗ và hiệu quả chi được tính cho toàn bộ chiến dịch đã chọn; thay đổi quảng cáo có thể ảnh hưởng các SKU khác.</p><p>Xác nhận bên dưới đồng nghĩa bạn đã kiểm tra phạm vi này. Đây chưa phải phép tính lợi nhuận riêng cho SKU.</p></div>}
               <label htmlFor="sale-campaign">Chiến dịch</label><select id="sale-campaign" value={campaignId} onChange={(e) => { invalidate(); setCampaignId(e.target.value); }}><option value="">Chọn chiến dịch từ backend</option>{context?.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <label htmlFor="sale-kind">Mục tiêu chính</label><select id="sale-kind" value={draft.kind ?? ""} onChange={(e) => edit({ kind: (e.target.value || null) as GoalKind | null })}><option value="">Chọn mục tiêu</option>{Object.entries(kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
               <div className="planner-fields">
@@ -222,13 +249,16 @@ function PlannerResults({ result, campaignName }: { result: PlannerRunResponse; 
         {option.violation_details?.map((v, j) => <p key={j}>{v}</p>)}{option.goal_note && <p>{option.goal_note}</p>}
         <Metric title="Chỉ số kinh tế J" dist={option.objective} currency field={`results[${i}].objective`} />
         <Metric title="Chi quảng cáo" dist={option.spend} currency field={`results[${i}].spend`} />
-        <Metric title="Sản phẩm bán" dist={option.units_sold} field={`results[${i}].units_sold`} />
+        {option.goal_sku && option.goal_units_sold && <Metric title={`Sản phẩm bán · ${option.goal_sku}`} dist={option.goal_units_sold} field={`results[${i}].goal_units_sold`} />}
+        <Metric title={option.goal_sku ? "Sản phẩm bán · toàn chiến dịch" : "Sản phẩm bán"} dist={option.units_sold} field={`results[${i}].units_sold`} />
         {option.p_target != null && <p>Xác suất đạt số lượng mục tiêu: <strong>{number(option.p_target * 100)}%</strong></p>}
         <details className="planner-components"><summary>Thành phần kinh tế và tồn kho</summary><Metric title="Đóng góp" dist={option.contribution} currency field={`results[${i}].contribution`} /><Metric title="Giá trị tồn cuối kỳ" dist={option.leftover_value} currency field={`results[${i}].leftover_value`} /><Metric title="Tồn cuối kỳ" dist={option.leftover_units} field={`results[${i}].leftover_units`} />{option.lost_units && <Metric title="Nhu cầu chưa đáp ứng" dist={option.lost_units} field={`results[${i}].lost_units`} />}{option.stockout_hour_p50 && <p>Hết hàng P50: {dateText(option.stockout_hour_p50)}</p>}</details>
         {option.duplicate_of && <p className="planner-help">Kết quả trùng với phương án: {option.duplicate_of}.</p>}
+        {scenario.calculation_trace?.version === 1 && scenario.calculation_trace.actions.find((action) => action.key === option.key) && <ActionCalculation action={scenario.calculation_trace.actions.find((action) => action.key === option.key)!} index={i} />}
       </article>;
     })}</div>
     {!scenario.results.length && <p>Chưa có kết quả mô phỏng để so sánh. Kiểm tra nguồn dữ liệu và thông báo từ backend.</p>}
+    <CalculationEvidence trace={scenario.calculation_trace} />
     <details className="planner-evidence" id="planner-evidence"><summary>Nguồn dữ liệu và tham số của lần tính</summary><dl>
       <dt>Mã mô phỏng</dt><dd>{scenario.scenario_id}</dd><dt>Mục tiêu</dt><dd>{result.goalId}</dd>
       <dt>Dữ liệu đến</dt><dd>{dateText(rec?.inputs_ref.data_as_of ?? meta?.data_as_of)} (giờ Việt Nam)</dd>

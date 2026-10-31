@@ -130,7 +130,14 @@ def test_goal_planner_capabilities(api: TestClient) -> None:
     body = ok(api.get(f"{V1}/goal-planner/capabilities", headers=VIEWER))["data"]
     assert body == {
         "version": 1,
-        "constraints": ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"],
+        "constraints": [
+            "max_spend_vnd",
+            "max_loss_vnd",
+            "sell_target_prob",
+            "min_marginal_return",
+            "focus_sku",
+            "calculation_trace",
+        ],
     }
     assert api.get(f"{V1}/goal-planner/capabilities").status_code in (401, 403)
 
@@ -213,3 +220,29 @@ def test_goals_roles_versions(api: TestClient) -> None:
     err(api.post(f"{V1}/goals", json={**body, "scope_id": "CD999"}, headers=LEAD), 404,
         "NOT_FOUND")  # fmt: skip
     err(api.get(f"{V1}/goals/goal-khong-co", headers=VIEWER), 404, "NOT_FOUND")
+
+
+def test_focused_goal_requires_campaign_membership_before_any_write(api: TestClient) -> None:
+    body = {
+        "scope": "campaign",
+        "scope_id": "CD002",
+        "kind": "sell_target",
+        "target_units": 10,
+        "deadline": "2026-11-12T00:00:00+07:00",
+        "params": {"focus_sku": "NOICHIEN2L"},
+    }
+    saved = ok(api.post(f"{V1}/goals", json=body, headers=LEAD), 201)["data"]
+    assert saved["params"]["focus_sku"] == "NOICHIEN2L"
+    before = ok(api.get(f"{V1}/goals", params={"scope_id": "CD002"}, headers=VIEWER))["data"]
+    for focus in ["MISSING", "", None, False, 5, "x" * 151]:
+        invalid = {**body, "params": {"focus_sku": focus}}
+        err(api.post(f"{V1}/goals", json=invalid, headers=LEAD), 400, "VALIDATION_ERROR")
+        err(
+            api.put(f"{V1}/goals/campaign/CD002", json=invalid, headers=LEAD),
+            400,
+            "VALIDATION_ERROR",
+        )
+    after = ok(api.get(f"{V1}/goals", params={"scope_id": "CD002"}, headers=VIEWER))["data"]
+    assert after == before
+    capabilities = ok(api.get(f"{V1}/goal-planner/capabilities", headers=VIEWER))["data"]
+    assert {"focus_sku", "calculation_trace"} <= set(capabilities["constraints"])

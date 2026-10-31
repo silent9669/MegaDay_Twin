@@ -13,16 +13,17 @@ const draft: GoalDraft = { text: "Bán đủ 200 sản phẩm, chi tối đa 3 t
 const payload = { campaignId: "CD002", draft, confirmed: true, acknowledgedUnresolved: false };
 const request = (body: unknown = payload) => new Request("https://app.test/api/sale-planner/run", { method: "POST", body: JSON.stringify(body) });
 afterEach(() => vi.unstubAllGlobals());
-function mockBackend(options: { failSimulation?: boolean; oldBackend?: boolean; lead?: boolean } = {}) {
+function mockBackend(options: { failSimulation?: boolean; oldBackend?: boolean; lead?: boolean; focusSupported?: boolean; traceOverride?: Record<string, unknown> | null; scenarioHash?: string | null } = {}) {
   const writes: { path: string; body: Record<string, unknown> }[] = [];
   let saved: Record<string, unknown> | null = null;
   const fetch = vi.fn(async (url: URL | string, init?: RequestInit) => {
     const path = new URL(url).pathname;
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : null;
     if (body) writes.push({ path, body });
-    if (path.endsWith("/goal-planner/capabilities")) return Response.json(options.oldBackend ? { data: { version: 0 } } : { data: { version: 1, constraints: ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"] } });
+    if (path.endsWith("/goal-planner/capabilities")) return Response.json(options.oldBackend ? { data: { version: 0 } } : { data: { version: 1, constraints: ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return", ...(options.focusSupported === false ? [] : ["focus_sku", "calculation_trace"])] } });
     if (path.endsWith("/me")) return Response.json({ data: { can_edit_goals: options.lead !== false, can_run_scenarios: true } });
     if (path.endsWith("/campaigns")) return Response.json({ data: [{ campaign_id: "CD002", name: "Sale campaign" }], meta: { data_as_of: "2026-11-11T18:00:00+07:00" }, next_cursor: null });
+    if (path.endsWith("/campaigns/CD002")) return Response.json({ data: { skus: ["SKU1", "SKU2"] } });
     if (path.endsWith("/goals/goal-1")) return Response.json({ data: saved });
     if (path.endsWith("/goals")) {
       if (body) { saved = { ...body, goal_id: "goal-1", active: true }; return Response.json({ data: saved }); }
@@ -30,13 +31,45 @@ function mockBackend(options: { failSimulation?: boolean; oldBackend?: boolean; 
     }
     if (path.endsWith("/scenarios/run")) return options.failSimulation
       ? Response.json({ error: { code: "BLOCKING_DATA_ISSUE", message: "Thiếu giá vốn", details: { reasons: ["SKU1 thiếu giá vốn"] } } }, { status: 422 })
-      : Response.json({ data: { scenario_id: "scn-1", request: body, results: [], recommendation: null }, meta: {} });
+      : Response.json({ data: { scenario_id: "scn-1", request: body, results: [], recommendation: null,
+        input_hash: options.scenarioHash === undefined ? "input-hash-1" : options.scenarioHash,
+        calculation_trace: options.traceOverride === undefined ? { version: 1, campaign_id: "CD002",
+          focus_sku: (saved?.params as Record<string, unknown> | undefined)?.focus_sku ?? null, input_hash: "input-hash-1" } : options.traceOverride,
+      }, meta: {} });
     throw Error(`Unexpected backend path: ${path}`);
   });
   vi.stubGlobal("fetch", fetch);
   return { fetch, writes, options, setSaved: (value: Record<string, unknown>) => { saved = value; } };
 }
 describe("confirmed sale planner gateway", () => {
+  it("rejects missing or mismatched SKU traces while preserving the saved goal for retry", async () => {
+    const valid = { version: 1, input_hash: "input-hash-1", campaign_id: "CD002", focus_sku: "SKU1" };
+    for (const traceOverride of [null, { ...valid, version: 2 }, { ...valid, focus_sku: "SKU2" },
+      { ...valid, campaign_id: "OTHER" }, { ...valid, input_hash: "stale-hash" }]) {
+      const state = mockBackend({ traceOverride });
+      const result = await runSalePlan(request({ ...payload, focusSku: "SKU1" }), env);
+      expect(result.status).toBe(502);
+      expect(await result.json()).toMatchObject({ goalId: "goal-1", stage: "simulation", error: { code: "CALCULATION_TRACE_MISMATCH" } });
+      expect(state.writes).toHaveLength(2);
+    }
+    mockBackend({ scenarioHash: "" });
+    expect((await runSalePlan(request({ ...payload, focusSku: "SKU1" }), env)).status).toBe(502);
+    mockBackend({ traceOverride: null, scenarioHash: null });
+    expect((await runSalePlan(request(), env)).status).toBe(200);
+  });
+  it("requires focus capabilities and actual membership before storing an SKU goal", async () => {
+    const older = mockBackend({ focusSupported: false });
+    expect((await runSalePlan(request({ ...payload, focusSku: "SKU1" }), env)).status).toBe(409);
+    expect(older.writes).toHaveLength(0);
+    const state = mockBackend();
+    expect((await runSalePlan(request({ ...payload, focusSku: "OTHER" }), env)).status).toBe(422);
+    expect(state.writes).toHaveLength(0);
+    expect((await runSalePlan(request({ ...payload, focusSku: "SKU1" }), env)).status).toBe(200);
+    expect(state.writes[0]!.body.params).toMatchObject({ focus_sku: "SKU1", max_spend_vnd: 3000000 });
+    expect((await runSalePlan(request({ ...payload, focusSku: "SKU1", goalId: "goal-1" }), env)).status).toBe(200);
+    expect(state.writes.filter((w) => w.path.endsWith("/goals"))).toHaveLength(1);
+    expect((await runSalePlan(request({ ...payload, focusSku: "SKU2", goalId: "goal-1" }), env)).status).toBe(409);
+  });
   it("never substitutes demo outcomes when backend is unavailable", async () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
     expect(await (await plannerContext({})).json()).toMatchObject({ backendConfigured: false, canCreateGoals: false, campaigns: [] });

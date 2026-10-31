@@ -33,6 +33,7 @@ from app.economics.goals import (
     GoalKind,
     create_goal,
     get_goal,
+    validate_focus_sku,
     validate_goal_params,
     validate_target_units,
 )
@@ -455,6 +456,8 @@ class GoalPlannerCapabilities(BaseModel):
             "max_loss_vnd",
             "sell_target_prob",
             "min_marginal_return",
+            "focus_sku",
+            "calculation_trace",
         ]
     )
 
@@ -494,10 +497,17 @@ def _save_goal(
     validate_target_units(target, required=body.kind == "sell_target")
     validate_goal_params(cons)
     validate_goal_params(body.params)
-    for key in ("max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"):
+    for key in (
+        "max_spend_vnd",
+        "max_loss_vnd",
+        "sell_target_prob",
+        "min_marginal_return",
+        "focus_sku",
+    ):
         if key in cons and key in body.params and cons[key] != body.params[key]:
             raise ValidationFailed(f"Ràng buộc {key} xuất hiện với hai giá trị khác nhau.", key=key)
     params = {**cons, **body.params}
+    validate_focus_sku(conn, scope, scope_id, params)
     if body.reason:
         params["reason"] = body.reason
     prev = conn.execute(

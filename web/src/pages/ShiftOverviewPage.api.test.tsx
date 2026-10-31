@@ -118,9 +118,11 @@ describe('Tổng quan ca · real API shapes', () => {
     const cards = within(attention).getAllByRole('listitem');
     expect(cards[0]).toHaveTextContent('Nồi chiên không dầu mini 2L');
     expect(cards[0]).toHaveTextContent('Còn 83 sp · hết khoảng 17:00');
-    expect(within(cards[0] as HTMLElement).getByRole('link')).toHaveAttribute('href', '/sku/NOICHIEN2L/compare');
+    expect(within(cards[0] as HTMLElement).getByRole('link', { name: /^So sánh/ })).toHaveAttribute('href', '/sku/NOICHIEN2L/compare');
+    expect(within(cards[0] as HTMLElement).getByRole('link', { name: 'Lập mục tiêu NOICHIEN2L' })).toHaveAttribute('href', '/sku-assistant?sku=NOICHIEN2L');
     expect(cards[1]).toHaveTextContent('Áo giữ nhiệt nam(2 phân loại)');
-    expect(within(cards[1] as HTMLElement).getByRole('link')).toHaveAttribute('href', '/sku/AOGIUNHIET-M/compare');
+    expect(within(cards[1] as HTMLElement).getByRole('link', { name: /^So sánh/ })).toHaveAttribute('href', '/sku/AOGIUNHIET-M/compare');
+    expect(within(cards[1] as HTMLElement).getByRole('link', { name: 'Lập mục tiêu AOGIUNHIET-M' })).toHaveAttribute('href', '/sku-assistant?sku=AOGIUNHIET-M');
     expect(within(attention).queryByText(/Câu đối/)).not.toBeInTheDocument();
 
     expect(await screen.findByText('Vai trò: Vận hành (u-ops-1)')).toBeInTheDocument();

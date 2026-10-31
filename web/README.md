@@ -238,6 +238,40 @@ Browser QA dùng API giả lập; ảnh/kết quả ở `qa/runs/sale-planner/`.
 Ảnh review (số minh họa từ API giả lập): [desktop](../docs/images/sale-planner-desktop.png),
 [mobile](../docs/images/sale-planner-mobile.png).
 
+## Trợ lý mục tiêu theo SKU và minh bạch con số
+
+Từ HQ chọn **Lập mục tiêu** của một SKU, hoặc mở `/sku-assistant?sku=...`.
+Danh sách và ngữ cảnh được đọc từ backend thật. Hội thoại hỏi mục tiêu, hỗ trợ
+câu trả lời ngắn và tạo bản nháp để chỉnh/xác nhận qua form có sẵn. Đổi SKU
+hủy phản hồi đang chờ và xóa bản nháp/kết quả của SKU trước. Hội thoại chỉ giữ
+trong phiên giao diện; mục tiêu đã xác nhận lưu trên backend như luồng planner.
+
+Nếu một SKU thuộc nhiều chiến dịch, người dùng chọn chiến dịch. Mục tiêu bán
+đủ/xả hàng xét lượng bán trực tiếp của SKU đó; J, ngân sách và giới hạn lỗ vẫn
+tính cho **toàn chiến dịch**. Chưa có phân bổ ngân sách quảng cáo hoặc lợi nhuận
+riêng SKU. Không tự tạo chiến dịch hoặc thực thi thay đổi quảng cáo.
+
+Kết quả mới có bản truy vết được lưu cùng mô phỏng: bấm chỉ số để mở phân vị,
+mở **Cách tính và đối chiếu con số** để xem số thay vào công thức J; mở **Dữ liệu
+và công thức đã dùng trong lần tính** để xem file/batch, dự báo, tham số, giá
+vốn/phí và giả định từng SKU. Snapshot cũ không bị thay bằng dữ liệu mới. Kết
+quả trước khi có trace hiển thị thiếu bằng chứng; không dựng lời giải thích giả.
+Nguồn chưa truy vết được tới từng dòng CSV được nêu rõ trong giới hạn.
+
+Cần backend có migration 5 và capability `focus_sku`, `calculation_trace`, cùng
+cấu hình kết nối/lead của planner. Chạy migration theo quy trình backend trước
+khi dùng; gateway từ chối chạy theo SKU trên backend cũ. AI diễn giải vẫn dùng
+cấu hình Ask your PM và có fallback quy tắc. Không có AI thật trong kiểm thử.
+
+Browser QA: Vite cổng 5186, `node qa/studio/sku-assistant.mjs` (có thể đặt
+`STUDIO_QA_CHANNEL=msedge`). Script dùng API giả lập, kiểm tra xác nhận, phạm vi
+SKU/chiến dịch, phản hồi muộn sau đổi SKU, số liệu/bằng chứng và desktop/mobile.
+Ảnh/kết quả nằm ở `qa/runs/sku-assistant/`.
+Ảnh review: [hội thoại desktop](../docs/images/sku-assistant-desktop.png),
+[đối chiếu số trên mobile](../docs/images/sku-evidence-mobile.png) dùng API giả lập;
+[phân rã giá vốn/phí](../docs/images/sku-evidence-real.png) dùng kết quả Python
+thật trên DB thử `nho` riêng, phát lại qua HTTP giả lập trong browser.
+
 ## Cấu trúc
 
 ```

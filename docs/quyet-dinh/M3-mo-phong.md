@@ -212,6 +212,29 @@ Chạy `run_simulation` trực tiếp trên DB riêng, dựng như `eval/demo_wh
   để làm kết quả mô phỏng thật. Kết nối và kiểm thử production là bước triển
   khai riêng. Không thay đổi DB schema hoặc cơ chế gán nhãn sản phẩm.
 
+### Trợ lý theo SKU và bằng chứng tính toán
+
+- Chọn SKU ở HQ mở hội thoại có ngữ cảnh từ backend. Không dùng fixture của
+  màn tổng quan làm bằng chứng số liệu cho trợ lý. Nhiều chiến dịch cùng chứa
+  SKU thì người dùng phải chọn; không tự đoán một chiến dịch là toàn bộ phạm vi.
+- Hội thoại tạo bản nháp, hỏi thông tin còn thiếu; người dùng chỉnh thông số và
+  xác nhận trước khi lưu/chạy. Đổi SKU hủy hội thoại và kết quả đang xem, không
+  để phản hồi cũ ghi đè ngữ cảnh mới. Chưa có backend thì báo rõ, không bịa số.
+- `focus_sku` giới hạn sản lượng cho sell_target/clear_stock. Lợi nhuận, hiệu quả
+  và giới hạn chi/lỗ vẫn là của cả chiến dịch; không tự phân bổ chi quảng cáo
+  thành "lợi nhuận riêng SKU". Giao diện ghi rõ trước khi xác nhận.
+- Lưu snapshot phép tính từ lần chạy thực tế, không yêu cầu AI viết một lời
+  giải thích sau đó rồi coi là bằng chứng. Snapshot dùng để đối chiếu J và các
+  thành phần, dữ liệu dự báo, tham số, giá vốn/phí, tồn kho và nguồn nhập.
+- Lưu đủ thành phần thực tế của phép tính (gồm đóng góp theo SKU theo từng giờ),
+  không lấy giá trị trung bình của margin nhân tổng lượng để giả là phép tính
+  chính xác khi giá hoặc phí thay đổi theo thời gian.
+- Phân vị là bất định mô hình, không phải cam kết xác suất ngoài thực tế đã
+  hiệu chuẩn. Đối chiếu cộng/trừ chỉ áp dụng kỳ vọng; không cộng các phân vị.
+- Bản ghi cũ thiếu trace phải hiển thị thiếu bằng chứng; không dựng lại bằng dữ
+  liệu hiện tại. Nguồn ở mức lô/file có giới hạn được nêu rõ, chưa tuyên bố
+  truy vết toàn bộ từng dòng CSV hoặc giải thích đầy đủ sai số dự báo.
+
 ### What-if cho sân khấu (số mới)
 
 - **Nên dùng:** "Chỉ tiêu 97 sp": đổi từ "Chỉ chạy khung giờ" sang "Giảm ngân sách 30%". Đạt 81% so với 57%. Tốn **2,33 tr**. Runner-up là "Chạy tiếp", cũng đạt, nên p = 1,00 có nghĩa thật.
