@@ -1,3 +1,4 @@
+import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
 import { readSource } from "../studio/read-source";
 import { Button } from "../components/ui/button";
 import { config } from "../lib/config";
@@ -61,10 +62,14 @@ export function ProductDetails({
     [pack, product.sku, linked.sku],
   );
   const economics = <ProductEconomics product={product} pack={pack} stock={stock} worksheet={worksheet} revision={revision} />;
-  if (product.mode === "model") return <>{economics}<ModelDetails sku={product.sku} /></>;
+  const scenario = linked.sku
+    ? <SaleGoalPlanner key={linked.sku} embedded focusSku={linked.sku} campaignIds={linked.campaignIds} suggestAndPreview />
+    : <Button variant="outline" disabled>Suggest</Button>;
+  if (product.mode === "model") return <>{economics}{scenario}<ModelDetails sku={product.sku} /></>;
   return (
     <section className="hq-details">
       {economics}
+      {scenario}
       <header>
         <h3>Source records</h3>
         <Button variant="outline"

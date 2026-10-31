@@ -15,6 +15,7 @@ import type { StudioModelEnv } from "./server/model-json";
 import { explainCampaign } from "./server/campaign-explain";
 import { backendConnection, backendFetch, type BackendService } from "./server/backend-fetch";
 import { plannerContext, runSalePlan, activeSalePlan, applySalePlan } from "./server/sale-planner";
+import { suggestGoal } from "./server/goal-suggest";
 import { interpretGoal } from "./server/goal-interpret";
 import { assistantSkus, assistantContext, assistantTurn } from "./server/sku-assistant";
 import type { SourcePack } from "./src/studio/sources";
@@ -135,6 +136,11 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return activeSalePlan(request, env);
     if (path === "/api/sale-planner/apply" && request.method === "POST")
       return applySalePlan(request, env);
+    if (path === "/api/sale-planner/suggest" && request.method === "POST") {
+      if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
+        return fail(429, "Try again shortly.");
+      return suggestGoal(request, env);
+    }
     if (path === "/api/sale-planner/interpret" && request.method === "POST") {
       if (env.PM_LIMITER && !(await env.PM_LIMITER.limit({ key: "admin" })).success)
         return fail(429, "Vui lòng thử lại sau ít phút.");

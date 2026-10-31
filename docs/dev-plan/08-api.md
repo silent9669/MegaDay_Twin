@@ -675,6 +675,12 @@ same-origin mutation guard. Backend identity remains server-configured through
 - `POST /api/sale-planner/interpret`: `{text}` (1–4,000 characters) returns
   `{draft, method:"ai"|"rules", notices}`. Uses the PM rate limit. No goal or
   scenario is created. AI failure produces an explicit rules fallback.
+- `POST /api/sale-planner/suggest`: `{campaignId,draft,focusSku?}` returns
+  `{draft,method:"ai",notices}`. Uses `OPENAI_MODEL_DECISION` and the existing
+  OpenAI secret, with server-loaded campaign inventory, budget, active constraints
+  and data clock. Fills missing fields while preserving entered values, including
+  zero. Notices describe editable assumptions; invalid output or model failure
+  returns an error and leaves the form intact. This route never saves or simulates.
 - `GET /api/sale-planner/active?campaignId=...`: returns
   `{campaignId,activeGoal,baseGoal:{goal_id,version}|null}` for review.
 - `POST /api/sale-planner/run`: `{campaignId,draft,confirmed:true,
@@ -688,6 +694,12 @@ same-origin mutation guard. Backend identity remains server-configured through
   draft or client numerical results are accepted at apply time. A changed baseline
   or stale inputs returns 409 and requires a fresh preview. Uncertain network
   outcomes retain the preview ID for an idempotent retry.
+
+In SKU Details, Suggest fills the goal and immediately requests an isolated scenario
+preview for the resolved SKU and selected campaign. Applying remains a separate click.
+The goal editor uses Preview simulation and Apply goal buttons without checkboxes.
+Excluded requirements remain visible before preview; each button supplies the
+existing confirmation fields. Editing parameters clears prior preview results.
 
 Errors contain `{error:{code,message,details?},goalId:null,previewId:null|string,
 stage:"validation"|"preview"|"apply"}`. Missing data or a failed preview cannot

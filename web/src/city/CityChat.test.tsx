@@ -155,7 +155,8 @@ describe("account chat", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Review goal" }));
     await waitFor(() => expect(screen.getByLabelText("Campaign")).toHaveValue("C1"));
     expect(document.data.sessions[0]!.context).toEqual({ screen: "sale-planner", campaignId: "C1" });
-    expect(screen.getByRole("button", { name: "Preview simulation" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Preview simulation" })).toBeEnabled());
+    expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith("/run"))).toBe(false);
     expect(screen.queryByText(/Goal for SKU/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Message Milo" }), { target: { value: "Đổi ngân sách" } });
     expect(screen.queryByRole("button", { name: "Preview simulation" })).not.toBeInTheDocument();
@@ -172,7 +173,7 @@ describe("account chat", () => {
     expect(JSON.parse(String(call[1]?.body)).context).toEqual({ screen: 'hq', sku: 'SKU-A' });
     await waitFor(() => expect(screen.getByLabelText('Campaign')).toHaveValue('C1'));
     expect(screen.getByLabelText('Target units')).toHaveValue(100);
-    expect(screen.getByRole('button', { name: 'Preview simulation' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Preview simulation' })).toBeEnabled());
     expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/run'))).toBe(false);
     fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Actually 150' } });
     expect(screen.queryByRole('button', { name: 'Preview simulation' })).not.toBeInTheDocument();
