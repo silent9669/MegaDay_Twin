@@ -136,7 +136,8 @@ def restore_archive(raw: bytes, root: Path) -> None:
         if json.loads(archive.read("snapshot.json")) != {"version": 1}:
             raise ValueError("Unsupported snapshot version")
         # Validate/decompress all members before touching live files.
-        with tempfile.TemporaryDirectory(dir=root.parent) as temp:
+        # The container user owns /state, not its parent (/).
+        with tempfile.TemporaryDirectory(dir=root) as temp:
             staged = Path(temp)
             for item in entries:
                 dest = staged / item.filename

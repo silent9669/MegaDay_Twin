@@ -89,6 +89,11 @@ def start(image):
             if api("health")["data"]["status"] == "ok":
                 return cid
         except (OSError, AssertionError):
+            running = subprocess.check_output(
+                ["docker", "inspect", "--format", "{{.State.Running}}", cid], text=True
+            ).strip()
+            if running != "true":
+                break
             time.sleep(2)
     subprocess.run(["docker", "logs", "--tail", "100", cid], check=False)
     subprocess.run(["docker", "rm", "-f", cid], check=False)
