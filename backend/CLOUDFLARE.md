@@ -74,7 +74,7 @@ It uses a local HTTP storage double, not a Cloudflare account or paid AI calls.
 
 After deployment, sign into the real site and verify:
 
-1. `/api/sale-planner/context` (check the current web route) reports a usable backend;
+1. `/api/sale-planner/context` reports a usable backend;
    `/api/v1/health` returns Python `db=ok`. Public `/healthz` only checks the web/D1.
 2. CD002 shows its historical data and no auto-applied goal on first boot.
 3. Preview and Apply a goal explicitly, then calculate in HQ.

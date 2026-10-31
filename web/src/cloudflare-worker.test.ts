@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import worker from "../worker";
 import { login, passwordHash, session } from "../server/auth";
 import { createHmac, scryptSync } from "node:crypto";
@@ -24,6 +24,32 @@ async function authenticated() {
   return { env, cookie: response.headers.get("set-cookie")!.split(";")[0]! };
 }
 describe("repository-owned deployment", () => {
+  it("only calls the private Python service after login and derives identity on the server", async () => {
+    const { env, cookie } = await authenticated();
+    const backend = { fetch: vi.fn(async (request: Request) => {
+      expect(request.headers.get("X-User")).toBe("admin");
+      expect(request.headers.get("X-Role")).toBe("lead");
+      expect(request.headers.has("Cookie")).toBe(false);
+      return Response.json({ data: { db: "ok" } });
+    }) };
+    const configured = { ...env, DECISION_BACKEND: backend };
+    const anonymous = await worker.fetch(new Request(origin + "/api/v1/health"), configured);
+    expect(anonymous.status).toBe(401);
+    expect(backend.fetch).not.toHaveBeenCalled();
+    const response = await worker.fetch(new Request(origin + "/api/v1/health", {
+      headers: { Cookie: cookie, "X-User": "spoofed", "X-Role": "operator" },
+    }), configured);
+    expect(response.status).toBe(200);
+    expect(backend.fetch).toHaveBeenCalledTimes(1);
+    const status = await worker.fetch(new Request(origin + "/api/data-backend/status", {
+      headers: { Cookie: cookie },
+    }), configured);
+    expect(await status.json()).toEqual({ configured: true });
+    expect((await worker.fetch(new Request(origin + "/api/v1/live/control", {
+      method: "POST", headers: { Cookie: cookie, Origin: "https://attacker.test" }, body: "{}",
+    }), configured)).status).toBe(403);
+    expect(backend.fetch).toHaveBeenCalledTimes(1);
+  });
   it("permits the zone-injected Cloudflare analytics script without allowing arbitrary scripts", async () => {
     const response = await worker.fetch(new Request(origin + "/login"), base);
     const policy = response.headers.get("content-security-policy")!;
