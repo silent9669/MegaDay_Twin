@@ -134,7 +134,7 @@ jobs:
 
   promote-cloudflare:
     needs: [changes, ci]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.web == 'true'
+    if: ${{ !cancelled() && needs.ci.result == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
