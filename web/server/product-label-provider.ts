@@ -8,7 +8,7 @@ export interface ProductLabelProvider {
   classify(input: LabelInput, signal: AbortSignal): Promise<unknown>;
 }
 const outputSchema = z.toJSONSchema(z.object({ labels: z.array(z.object({
-  productId: z.string(), group: z.enum(["Trendy", "Seasonal", "Normal"]).nullable(),
+  productId: z.string(), group: z.enum(["Trendy", "Seasonal", "Normal"]),
   reason: z.string().max(240), confidence: z.number(),
 }).strict()) }).strict());
 
@@ -34,6 +34,7 @@ export function getProductLabelProvider(env: StudioModelEnv): ProductLabelProvid
             const raw = await modelJSON(env, model, DEMAND_PROMPT, batch, outputSchema, AbortSignal.any([signal, AbortSignal.timeout(30000)]));
             const result = validateLabelResponse(raw, batch);
             if (result.length !== products.length) throw Error("Incomplete product labels.");
+            if (result.some(label => label.group === null)) throw Error("A best-fit label is required for every product.");
             labels.push(...result);
           } catch (error) { failure = error; }
         }
