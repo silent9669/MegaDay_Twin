@@ -394,7 +394,7 @@ export function CityApp({ studio = false }: { studio?: boolean }) {
               </h1>
               <span>
                 {district === "warehouse"
-                  ? `${feed.stock.length} source inventory codes`
+                  ? `${feed.stock.filter(row => (row.stock ?? 0) > 0).length} products in stock`
                   : district === "ads"
                     ? `${viewSettings.platforms.length} platform${viewSettings.platforms.length === 1 ? "" : "s"}`
                     : ""}

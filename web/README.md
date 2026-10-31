@@ -166,14 +166,18 @@ bindings in `cloudflare.config.ts` (never use `VITE_*` for credentials):
   Falls back to `OPENAI_MODEL` if supplied. Recognized tables work without AI.
 - `OPENAI_MODEL_DECISION`: defaults to `gpt-6-luna`, configured independently. No automatic chat-model fallback for product classification.
 
-New accounts start with an empty Data Studio. Existing saved sources are preserved.
+New accounts start empty. A one-time migration removes untouched repository demo tables
+from older accounts by exact filename/hash and demo provenance; uploaded/edited
+tables are preserved. **Delete table** and **Delete all data** remove saved tables
+and their SQLite records after confirmation. Removing inventory also removes its label run.
 
 Data Studio → **Import ZIP** extracts UTF-8 CSV/JSON on the Worker and previews
 recognized tables, general tables and proposed mappings. Select one file per business source type and any general tables, review
-column mappings and sample rows, then **Load tables to workspace**. The existing
-revision-checked autosave persists the selected tables to AccountWorkspace. SQLite
+column mappings and sample rows, then **Load tables to workspace**. Loading ZIP tables saves immediately to AccountWorkspace with revision checks.
+Cell edits retain revision-checked autosave. SQLite
 `studio_tables` stores the schema/catalog and `studio_rows` stores records, atomically
-with the source document revision; no user or model SQL is executed. The
+with the source document revision. Unchanged table rows are not rewritten; no
+user or model SQL is executed. The
 map uses the saved inventory. Other source types retain their current data.
 The demo clock only filters repository demo inventory, not uploaded snapshots.
 
@@ -181,13 +185,17 @@ The demo clock only filters repository demo inventory, not uploaded snapshots.
 model }`. It does not save anything. Limits: 20 MiB upload and extracted data,
 100 archive entries, 24 CSV/JSON files. Paths with traversal are rejected;
 answer-key/hidden files and unsupported types are excluded. Known contracts
-are parsed deterministically. Unknown flat CSV/JSON tables send headers only (without contact
-columns) to the model. Every mapping must use existing columns and satisfy a
+are parsed deterministically. One model call reviews every table using its schema,
+diagnostic codes and at most two sample rows (12 columns, 80 characters per value,
+contact fields removed). The same call maps unknown flat CSV/JSON headers.
+Review results are shown before loading; missing model configuration is explicit.
+A sample review does not certify all records. Every mapping must use existing columns and satisfy a
 supported table contract; row values are never model-generated. Unmapped tables remain general tables. JSON objects and arrays of records are
 supported (nested values remain JSON); spreadsheets are not supported. Existing direct CSV/JSON and folder import remain available.
 
 Map → **Warehouse** → **Open workspace** → **Label data** classifies saved
-inventory products only. Enter market and assessment date. **Evidence** accepts
+products with positive latest stock only. Search by name/code; **Label settings**
+contains market, assessment date and **Evidence**, which accepts
 product code, observation date, source and observation. Each model batch gets
 only evidence for its products. No web search is performed; metadata and manual
 evidence do not imply measured demand. Labels are `Trendy`, `Seasonal`, `Normal`,
@@ -204,8 +212,8 @@ a 120-second timeout. At most 2,000 candidates and 100 evidence records are
 accepted. Long jobs can time out; there is no background queue. Results retain
 assessment context, model/prompt version and source fingerprint in account
 storage. Invalid/duplicate/unknown results are rejected. Concurrent calls are
-leased, changed sources reject late results, and a completed identical request
-is reused. Changed assessment context can start a new run. Legacy five-group
+leased, changed sources reject late results, and completed/partial identical requests
+are reused without another model call or source write. Changed assessment context can start a new run. Legacy five-group
 results are stale and must be regenerated. Failures never erase source data.
 
 Successful/partial runs atomically add a read-only `Demand label` column to the

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildLabelInput, extractLabelProducts, validateLabelResponse, type LabelInput } from "./product-labels";
 import { makeSource, type SourcePack } from "./sources";
+import { sourceView } from "./source-view";
 import demo from "../../server/repository-sources.json";
 
 async function candidates() {
@@ -11,6 +12,10 @@ async function candidates() {
   ] } satisfies SourcePack;
 }
 describe("external label product contract", () => {
+  it("labels only the latest positive stock, excluding sold-out, negative and unknown quantities", async () => {
+    const source = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế,Thời điểm cập nhật\nA,Old cup,5,2026-10-30\nA,Cup,0,2026-10-31\nB,Lamp,2,2026-10-31\nC,Bag,,2026-10-31\nD,Box,-1,2026-10-31", "upload");
+    expect((await buildLabelInput({ schema: "hackathon.sources.v1", files: [source] }, 1)).products.map(p => p.reference)).toEqual(["B"]);
+  });
   it("extracts named candidates without inventing cross-source SKU matches or exposing notes/contacts", async () => {
     const products = extractLabelProducts(await candidates());
     expect(products).toHaveLength(4);
@@ -52,7 +57,7 @@ describe("external label product contract", () => {
   });
   it("extracts the actual six-file demo within bounded request limits", async () => {
     const input: LabelInput = await buildLabelInput(demo as SourcePack, 1);
-    expect(input.products.length).toBe(299);
+    expect(input.products.length).toBe(sourceView(demo as SourcePack, 24).stock.filter(row => (row.stock ?? 0) > 0).length);
     expect(input.products.every(p => p.source === "inventory")).toBe(true);
     expect(input.products.length).toBeLessThanOrEqual(2000);
     expect(input.products.every((p) => p.name.trim() && p.reference.trim())).toBe(true);

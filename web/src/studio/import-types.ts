@@ -3,6 +3,7 @@ export type ImportTable = {
   file: string;
   source: Source;
   rowCount: number;
+  review?: string[];
   method: "recognized" | "model" | "general";
   columns: { source: string; target: string }[];
 };

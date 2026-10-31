@@ -12,6 +12,19 @@ const response: LabelResponse = {
 };
 beforeEach(() => request.mockReset());
 describe("warehouse demand labels", () => {
+  it("shows stocked products only and keeps label settings collapsed", async () => {
+    request.mockResolvedValue(response);
+    render(<ProductLabels sourceRevision={1} blocked={false} inventory={[
+      { code: "A", name: "Cup", stock: 2, asOf: "" },
+      { code: "B", name: "Sold out", stock: 0, asOf: "" },
+      { code: "C", name: "Unknown", stock: null, asOf: "" },
+    ]} />);
+    await screen.findByText("Cup");
+    expect(screen.queryByText("Sold out")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+    expect(screen.getByText("Label settings").closest("details")).not.toHaveAttribute("open");
+    expect(screen.queryByRole("button", { name: "Refresh product labels" })).not.toBeInTheDocument();
+  });
   it("reveals and highlights a Milo source selection after searching and paging", async () => {
     request.mockResolvedValue(response);
     const inventory = Array.from({ length: 10 }, (_, index) => ({ code: `SKU-${index}`, name: `Product ${index}`, stock: index, asOf: "2026-10-31" }));
@@ -24,7 +37,7 @@ describe("warehouse demand labels", () => {
     view.rerender(<ProductLabels sourceRevision={1} blocked={false} inventory={inventory} selectedCode="SKU-1" />);
     await waitFor(() => expect(screen.getByLabelText("Search products")).toHaveValue("SKU-1"));
     expect(screen.getByText("SKU-1").closest("tr")).toHaveClass("stock-highlight");
-    expect(screen.getByText("1 / 1")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Product label pages" })).not.toBeInTheDocument();
     expect(request.mock.calls.every(([, options]) => options?.method !== "POST")).toBe(true);
   });
   it("requires an explicit button click and sends assessment context", async () => {
