@@ -32,8 +32,20 @@ it("reviews current saved tables and preserves general-table identity", async ()
   const onLoad = vi.fn(async () => {});
   render(<ArchiveImport sources={[source]} blocked={false} onLoad={onLoad} />);
   fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
-  await waitFor(() => expect(onLoad).toHaveBeenCalledWith([source], true));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("No safe changes needed"));
+  expect(onLoad).not.toHaveBeenCalled();
   expect(requestJSON).toHaveBeenCalledWith("/api/studio/import?review=1", expect.objectContaining({ body: expect.any(File) }));
+});
+it("automatically saves repaired tables and exposes remaining issues", async () => {
+  const source = await makeSource("cost.csv", "tên sp,giá vốn\nCup,45k", "upload");
+  const fixed = await makeSource("cost.csv", "tên sp,giá vốn\nCup,45000", "upload");
+  vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: source.name, source: fixed, rowCount: 1, method: "recognized", columns: [], repairs: ["Normalized 1 VND amount."], remainingIssues: ["Missing timezone"] }], skipped: [], model: "test" });
+  const onLoad = vi.fn(async () => {});
+  render(<ArchiveImport sources={[source]} blocked={false} onLoad={onLoad} />);
+  fireEvent.click(screen.getByRole("button", { name: "Review & fix with AI" }));
+  await waitFor(() => expect(onLoad).toHaveBeenCalledWith([fixed], true));
+  expect(screen.getByRole("status")).toHaveTextContent("AI fixes saved");
+  expect(screen.getByText(/Needs review: Missing timezone/)).toBeInTheDocument();
 });
 it("keeps all saved tables when review skips a table or fails", async () => {
   const source = await makeSource("notes.csv", "event,month\nTet,2", "upload");
