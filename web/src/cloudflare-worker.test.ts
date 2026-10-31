@@ -27,9 +27,10 @@ describe("repository-owned deployment", () => {
   it("permits the zone-injected Cloudflare analytics script without allowing arbitrary scripts", async () => {
     const response = await worker.fetch(new Request(origin + "/login"), base);
     const policy = response.headers.get("content-security-policy")!;
-    expect(policy).toContain("script-src 'self' https://static.cloudflareinsights.com;");
-    expect(policy).toContain("connect-src 'self' ws: wss: https://cloudflareinsights.com;");
+    expect(policy).toContain("script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com;");
+    expect(policy).toContain("connect-src 'self' blob: ws: wss: https://cloudflareinsights.com;");
     expect(policy).not.toContain("'unsafe-inline'; style-src");
+    expect(policy).not.toContain("'unsafe-eval'");
     expect(policy).toContain("frame-ancestors 'none'");
   });
   it("checks D1 without requiring a session", async () => {
