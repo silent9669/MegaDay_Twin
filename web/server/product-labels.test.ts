@@ -290,11 +290,11 @@ describe("label route boundaries", () => {
       makeSource("custom.csv", "event,month\nTet,2", "upload"),
     ]);
     const upstream = vi.fn<typeof fetch>(async (_url, init) => {
-      const form = init?.body as FormData;
+      const form = await new Response(init?.body, { headers: init?.headers }).formData();
       const forwarded = form.getAll("files") as File[];
       expect(forwarded).toHaveLength(1);
       expect(forwarded[0]!.name).toBe("ton_kho_google_sheet.csv");
-      expect(await forwarded[0]!.text()).toBe("Mã nội bộ,Tên hàng,Tồn thực tế\r\nA,Cup,17");
+      expect(await forwarded[0]!.text()).toBe("Mã nội bộ,Tên hàng,Tồn thực tế\r\nA,Cup,17\r\n");
       return Response.json({ accepted: true });
     });
     vi.stubGlobal("fetch", upstream);

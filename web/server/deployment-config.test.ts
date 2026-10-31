@@ -3,6 +3,14 @@ import { afterEach, expect, it, vi } from "vitest";
 
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
+it("connects production model views to the API even when local fixtures are enabled", async () => {
+  vi.stubEnv("VITE_USE_FIXTURES", "true");
+  const { default: viteConfig } = await import("../vite.config");
+  const config = typeof viteConfig === "function"
+    ? await viteConfig({ command: "build", mode: "cloudflare" }) : await viteConfig;
+  expect(config.define?.["import.meta.env.VITE_USE_FIXTURES"]).toBe('"false"');
+});
+
 it("allows bounded CPU time for full-shop replay saves", async () => {
   const { default: config } = await import("../cloudflare.config");
   expect(config.worker.limits?.cpuMs).toBe(120000);

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { needsDeployment, promote, waitForBuild, verifyProduction } = require('./deployment.cjs');
+const { deploymentChanges, promote, waitForBuild, verifyProduction } = require('./deployment.cjs');
 
 const context = { repo: { owner: 'example', repo: 'demo' }, sha: 'current', ref: 'refs/heads/main' };
 const build = (overrides = {}) => ({
@@ -14,7 +14,7 @@ test('a docs merge still deploys web changes pending since the production commit
     assert.equal(options.basehead, 'cloudflare-production...current');
     return { data: { files: [{ filename: 'web/src/App.tsx' }, { filename: 'README.md' }] } };
   } } } };
-  assert.equal(await needsDeployment(github, context), true);
+  assert.equal((await deploymentChanges(github, context)).deploy, true);
 });
 
 for (const [name, files, expected] of [
@@ -33,12 +33,12 @@ for (const [name, files, expected] of [
     const github = { rest: { repos: {
       compareCommitsWithBasehead: async () => ({ data: { files } }),
     } } };
-    assert.equal(await needsDeployment(github, context), expected);
+    assert.equal((await deploymentChanges(github, context)).deploy, expected);
   });
 }
 
 test('manual dispatch verifies production even when no changes are pending', async () => {
-  assert.equal(await needsDeployment({}, { ...context, eventName: 'workflow_dispatch' }), true);
+  assert.equal((await deploymentChanges({}, { ...context, eventName: 'workflow_dispatch' })).deploy, true);
 });
 
 test('promotes the exact main commit without force', async () => {
@@ -132,4 +132,24 @@ for (const [path, response] of [
 
 test('fails on network errors instead of reporting deployment success', async () => {
   await assert.rejects(verifyProduction(async () => { throw new Error('network unavailable'); }), /network/);
+});
+
+for (const [filename, backend] of [
+  ['web/src/App.tsx', false], ['web/worker.ts', false],
+  ['backend/app/main.py', true], ['web/decision-backend/worker.ts', true],
+  ['web/package-lock.json', true], ['mock-data/out/demo/orders.csv', true],
+  ['.github/workflows/deploy-backend.yml', true], ['scripts/hosted-smoke.py', true],
+  ['README.md', false],
+]) {
+  test(`backend rebuild selection: ${filename}`, async () => {
+    const github = { rest: { repos: { compareCommitsWithBasehead: async () => ({ data: { files: [{ filename }] } }) } } };
+    assert.equal((await deploymentChanges(github, context)).backend, backend);
+  });
+}
+test('backend moves and incomplete diffs still rebuild', async () => {
+  for (const files of [undefined, Array.from({length:300},()=>({filename:'README.md'})),
+    [{filename:'archive/old.py',previous_filename:'backend/app/old.py'}]]) {
+    const github = { rest: { repos: { compareCommitsWithBasehead: async () => ({ data: { files } }) } } };
+    assert.equal((await deploymentChanges(github, context)).backend, true);
+  }
 });
