@@ -23,22 +23,22 @@ const trace: CalculationTrace = {
 describe('calculation evidence', () => {
   it('uses supplied component values and warns not to add quantiles', () => {
     render(<ActionCalculation action={trace.actions[0]!} index={0} />);
-    expect(screen.getByText(/100.000 ₫ − 30.000 ₫ \+ 10.000 ₫ − 5.000 ₫/)).toBeInTheDocument();
-    expect(screen.getByText(/Sai lệch đối chiếu: 0 ₫/)).toBeInTheDocument();
-    expect(screen.getByText(/Không cộng trực tiếp P10\/P50\/P90/)).toBeInTheDocument();
+    expect(screen.getByText(/100,000 ₫ − 30,000 ₫ \+ 10,000 ₫ − 5,000 ₫/)).toBeInTheDocument();
+    expect(screen.getByText(/Reconciliation residual: 0 ₫/)).toBeInTheDocument();
+    expect(screen.getByText(/Component P10\/P50\/P90 values cannot be added/)).toBeInTheDocument();
   });
   it('shows immutable source references and actual per-day contribution arithmetic without filling missing values with zero', () => {
     render(<CalculationEvidence trace={trace} />);
     expect(screen.getByText('don_hang.csv')).toBeInTheDocument();
     expect(screen.getByText('immutable-hash')).toBeInTheDocument();
-    expect(screen.getByText('Toàn chiến dịch C1')).toBeInTheDocument();
-    expect(screen.getByText('7.000 ₫')).toBeInTheDocument();
-    expect(screen.getByText(/đóng góp\/đơn vị Chưa cung cấp/)).toBeInTheDocument();
+    expect(screen.getByText('Whole campaign C1')).toBeInTheDocument();
+    expect(screen.getByText('7,000 ₫')).toBeInTheDocument();
+    expect(screen.getByText(/contribution\/unit Not provided/)).toBeInTheDocument();
     expect(screen.getByText('Không truy vết từng dòng CSV.')).toBeInTheDocument();
   });
   it('does not invent an explanation for a legacy result without a trace', () => {
     render(<CalculationEvidence trace={null} />);
-    expect(screen.getByText(/chưa có bản truy vết phép tính được lưu/)).toBeInTheDocument();
-    expect(screen.queryByText('Công thức và mô hình')).not.toBeInTheDocument();
+    expect(screen.getByText(/No saved calculation trace is available/)).toBeInTheDocument();
+    expect(screen.queryByText('Formulas and models')).not.toBeInTheDocument();
   });
 });

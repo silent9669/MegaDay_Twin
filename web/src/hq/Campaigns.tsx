@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
 import { inspect, type SourcePack } from "../studio/sources";
 import { analyzeWithAI } from "../city/analysis-context";
 import { useHQSelection } from "./selection";
@@ -35,7 +34,7 @@ export function Campaigns({
     <section className="hq-campaigns">
       <header className="hq-product-toolbar">
         <h2>Campaigns</h2>
-        <Link to="/sale-planner">Sale planner</Link>
+        <button onClick={() => selection?.tab("goals")}>Plan a goal</button>
         <input
           aria-label="Search campaigns"
           placeholder="Search campaigns"

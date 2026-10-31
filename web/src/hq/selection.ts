@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { TrackedProduct } from "./types";
 export type HQTab =
-  "overview" | "details" | "comparisons" | "activity" | "campaigns";
+  "overview" | "details" | "comparisons" | "activity" | "campaigns" | "goals";
 export const HQSelection = createContext<{
   product: TrackedProduct | null;
   open: (product: TrackedProduct, tab: HQTab) => void;

@@ -4,7 +4,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router";
-export function HQRoute({ tab }: { tab: string }) {
+export function HQRoute({ tab, model = false }: { tab: string; model?: boolean }) {
   const { hash } = useLocation();
   const { sku, id } = useParams(),
     [search] = useSearchParams();
@@ -15,6 +15,7 @@ export function HQRoute({ tab }: { tab: string }) {
     params.set("sku", sku);
     params.set("mode", "model");
   }
+  if (model && params.has("sku")) params.set("mode", "model");
   if (id) params.set("campaign", id);
   return <Navigate to={`/city-demo?${params}${hash}`} replace />;
 }

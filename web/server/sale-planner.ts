@@ -49,7 +49,7 @@ export async function plannerContext(env: PlannerEnv): Promise<Response> {
   const api = plannerBackend(env);
   const context: PlannerContext = {
     backendConfigured: !!api, canCreateGoals: false, referenceTime: new Date().toISOString(), dataAsOf: null, campaigns: [],
-    notice: api ? null : "Backend mô phỏng chưa kết nối. Bạn vẫn có thể soạn và chỉnh mục tiêu; chưa thể tính phương án từ dữ liệu thật.",
+    notice: api ? null : "You can draft and review goals. Connect the decision backend to simulate with real data.",
   };
   if (api) {
     try {
@@ -57,7 +57,7 @@ export async function plannerContext(env: PlannerEnv): Promise<Response> {
       if (!supportsPlanner(capability)) throw new BackendFailure(409, "BACKEND_UPGRADE_REQUIRED", "Backend cần cập nhật để áp dụng đầy đủ ràng buộc mục tiêu.");
       context.canCreateGoals = (me.data as { can_edit_goals?: boolean; can_run_scenarios?: boolean } | undefined)?.can_edit_goals === true &&
         (me.data as { can_run_scenarios?: boolean } | undefined)?.can_run_scenarios === true;
-      if (!context.canCreateGoals) context.notice = "Tài khoản backend cần quyền đặt mục tiêu và chạy mô phỏng (lead).";
+      if (!context.canCreateGoals) context.notice = "The backend account needs lead permission to create goals and run simulations.";
       let cursor: string | null = null;
       for (let page = 0; page < 20; page++) {
         const result = await api(`campaigns?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
@@ -66,13 +66,13 @@ export async function plannerContext(env: PlannerEnv): Promise<Response> {
         context.dataAsOf = (result.meta as { data_as_of?: string | null } | undefined)?.data_as_of ?? context.dataAsOf;
         cursor = typeof result.next_cursor === "string" ? result.next_cursor : null;
         if (!cursor) break;
-        if (page === 19) context.notice = "Đang hiển thị 2.000 chiến dịch đầu tiên; cần thu hẹp dữ liệu để xem thêm.";
+        if (page === 19) context.notice = "Showing the first 2,000 campaigns. Narrow the data to see more.";
       }
     } catch (error) {
       context.canCreateGoals = false;
       context.notice = error instanceof BackendFailure
-        ? error.status === 404 ? "Backend cần cập nhật tính năng mục tiêu sale trước khi chạy." : error.message
-        : "Không đọc được danh sách chiến dịch từ backend.";
+        ? error.status === 404 ? "Update the backend goal-planning capabilities before running." : error.message
+        : "Could not read campaigns from the decision backend.";
     }
   }
   return Response.json(context, { headers: { "Cache-Control": "no-store" } });

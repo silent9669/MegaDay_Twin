@@ -90,12 +90,12 @@ describe("account chat", () => {
     expect(document.data.sessions[0]!.context).toEqual({ screen: 'hq', sku: 'SKU-A' });
     const call = vi.mocked(fetch).mock.calls.find(([path]) => path === '/api/pm/chat')!;
     expect(JSON.parse(String(call[1]?.body)).context).toEqual({ screen: 'hq', sku: 'SKU-A' });
-    await waitFor(() => expect(screen.getByLabelText('Chiến dịch')).toHaveValue('C1'));
-    expect(screen.getByLabelText('Số sản phẩm mục tiêu')).toHaveValue(100);
-    expect(screen.getByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('Campaign')).toHaveValue('C1'));
+    expect(screen.getByLabelText('Target units')).toHaveValue(100);
+    expect(screen.getByRole('button', { name: 'Save goal and run simulation' })).toBeDisabled();
     expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/run'))).toBe(false);
     fireEvent.change(screen.getByRole('textbox', { name: 'Message Milo' }), { target: { value: 'Actually 150' } });
-    expect(screen.queryByRole('button', { name: 'Lưu mục tiêu và chạy mô phỏng' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save goal and run simulation' })).not.toBeInTheDocument();
     let finish!: () => void;
     waitForReply = () => new Promise((resolve) => { finish = resolve; });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));

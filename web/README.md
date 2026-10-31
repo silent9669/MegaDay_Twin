@@ -259,7 +259,7 @@ Archive contents stay local and are never committed.
 
 ## Mục tiêu buổi sale (Task 1)
 
-Mở `/sale-planner` từ sidebar hoặc MegaDay HQ. Nhập mong muốn, phân tích,
+Mở tab **Goals** trong MegaDay HQ. Nhập mong muốn, phân tích,
 chỉnh thông số và chọn chiến dịch, sau đó xác nhận để lưu mục tiêu đang áp dụng
 và chạy mô phỏng. Bản đầu hỗ trợ **một chiến dịch, 1–72 giờ tròn**; bốn mục tiêu
 là lợi nhuận, số lượng bán, xả hàng và hiệu quả chi. Ngân sách là tổng cho cả kỳ.
@@ -345,7 +345,9 @@ Theme: token CSS trên `:root` và `[data-theme='dark']`, map vào Tailwind bằ
 
 ### HQ product workspace
 
-HQ contains Overview, SKU Details, Comparisons, Campaigns and Activity Logs.
+HQ contains Overview, SKU Details, Comparisons, Campaigns, Goals and Activity Logs.
+Goals supports the active SKU or a whole campaign, with explicit review before simulation.
+The old `/sku-assistant` and `/sale-planner` links redirect into HQ.
 Track a product from Overview; the active product scopes the other tabs. Tracked
 products, saved worksheet inputs and activity are revisioned in the account's
 `hq` document. Unsaved worksheet inputs and notes stay separate per product while

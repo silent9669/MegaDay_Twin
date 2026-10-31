@@ -1,6 +1,4 @@
 import { AdsStats } from "./AdsStats";
-import { SaleGoalPlanner } from "../planner/SaleGoalPlanner";
-import { SkuGoalAssistant } from "../planner/SkuGoalAssistant";
 import { HQWorkspace } from "../hq/HQWorkspace";
 import { useAssistant } from "./assistant-context";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,9 +23,7 @@ import {
   PanelLeftOpen,
   Plus,
   Radio,
-  RotateCcw,
   Settings2,
-  Target,
   Warehouse,
   X,
 } from "lucide-react";
@@ -53,7 +49,6 @@ import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
 import { Tutorial } from "./Tutorial";
 import { usePanelResize } from "./usePanelResize";
 import { TOUR, TOUR_KEY } from "./tutorial-steps";
-import type { Landmark } from "./map-labels";
 import { Brand, BrandMark } from "./Brand";
 const DISTRICTS = [
   { id: "hq", name: "MegaDay HQ", icon: Building2 },
@@ -61,8 +56,8 @@ const DISTRICTS = [
   { id: "ads", name: "Ads Platform", icon: Megaphone },
   { id: "homes", name: "Residential district", icon: Home },
 ] as const;
-export function CityApp({ studio = false, planner = false, skuAssistant = false }: { studio?: boolean; planner?: boolean; skuAssistant?: boolean }) {
-  const pageWorkspace = studio || planner || skuAssistant;
+export function CityApp({ studio = false }: { studio?: boolean }) {
+  const pageWorkspace = studio;
   const [mobile, setMobile] = useState(
     () => matchMedia("(max-width: 1023px)").matches,
   );
@@ -276,7 +271,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
         </Link>
         <span className="city-route">
           /{" "}
-          {skuAssistant ? "Product assistant" : planner ? "Sale planner" : studio
+          {studio
             ? "Data Studio"
             : district
               ? DISTRICTS.find((d) => d.id === district)?.name
@@ -324,14 +319,6 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
           ))}
         </div>
         <div className="city-nav-tools">
-          <Link to="/sku-assistant" title="Product assistant" aria-label="Product assistant" aria-current={skuAssistant ? "page" : undefined}>
-            <MessageCircle />
-            <span>Product assistant</span>
-          </Link>
-          <Link to="/sale-planner" title="Sale planner" aria-label="Sale planner" aria-current={planner ? "page" : undefined}>
-            <Target />
-            <span>Sale planner</span>
-          </Link>
           <Link
             to="/mock-data"
             title="Data Studio"
@@ -386,7 +373,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
       </nav>
       {error && !settingsOpen && <p role="alert" className="city-save-error">{error}</p>}
       <main id="city-main" className="city-main">
-        {skuAssistant ? <SkuGoalAssistant /> : planner ? <SaleGoalPlanner /> : studio ? (
+        {studio ? (
           <DataStudio />
         ) : (
           <>
@@ -442,39 +429,6 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
                 </Link>
               </section>
             )}
-            <div className="city-camera">
-              <select aria-label="Explore landmarks" defaultValue="" onChange={e => {
-                const place = e.currentTarget.value as Landmark;
-                enter(null); worldRef.current?.focusLandmark(place); e.currentTarget.value = "";
-              }}>
-                <option value="" disabled>Explore</option>
-                <option value="river">River & bridge</option>
-                <option value="bitexco">Bitexco</option>
-                <option value="landmark81">Landmark 81</option>
-                <option value="benthanh">Ben Thanh Market</option>
-              </select>
-              <button
-                aria-label="Reset camera"
-                title="Reset camera"
-                onClick={() => worldRef.current?.focus(district)}
-              >
-                <RotateCcw />
-              </button>
-              <button
-                aria-label="Zoom in"
-                title="Zoom in"
-                onClick={() => worldRef.current?.zoom(0.85)}
-              >
-                <Plus />
-              </button>
-              <button
-                aria-label="Zoom out"
-                title="Zoom out"
-                onClick={() => worldRef.current?.zoom(1.15)}
-              >
-                <Minus />
-              </button>
-            </div>
             {workspace && district && (!mobile || !chatOpen) && (
               <Sheet open disablePointerDismissal={!mobile} onOpenChange={open => { if (!open) { finishTour(); enter(null); } }} modal={mobile}>
                 <SheetContent
@@ -596,7 +550,7 @@ export function CityApp({ studio = false, planner = false, skuAssistant = false 
         )}
       </main>
       <footer className="city-footer">
-        <span>{planner || skuAssistant ? "User-confirmed goals · Backend simulations" : "Sandbox data · Motion illustrates observations"}</span>
+        <span>Sandbox data · Motion illustrates observations</span>
         <span>
           {sources.document
             ? `Source revision ${sources.document.revision}`

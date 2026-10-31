@@ -99,7 +99,7 @@ function AttentionCard({
         {t.compare}
         <ChevronRight aria-hidden className="size-4" />
       </Link>
-      <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} className="btn-secondary" aria-label={`Plan goal ${item.sku}`}>Plan goal {many ? item.sku : ''}</Link>
+      <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} onClick={e=>{if(hq){e.preventDefault();hq.open({sku:item.sku,name:displayName(item),mode:'model'},'goals');}}} className="btn-secondary" aria-label={`Plan goal ${item.sku}`}>Plan goal {many ? item.sku : ''}</Link>
     </li>
   );
 }
@@ -131,7 +131,7 @@ function SkuTable({ items }: { items: SkuListItem[] }) {
                     {item.sku}
                   </Link>
                   <div className="text-xs text-muted">{displayName(item)}</div>
-                  <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} className="inline-flex min-h-11 items-center text-sm underline" aria-label={`Plan goal ${item.sku}`}>Plan goal</Link>
+                  <Link to={`/sku-assistant?sku=${encodeURIComponent(item.sku)}`} onClick={e=>{if(hq){e.preventDefault();hq.open({sku:item.sku,name:displayName(item),mode:'model'},'goals');}}} className="inline-flex min-h-11 items-center text-sm underline" aria-label={`Plan goal ${item.sku}`}>Plan goal</Link>
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatNumber(item.stock_available, 0)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{coverText(item)}</td>

@@ -1,3 +1,4 @@
+import { Goals } from "./Goals";
 import { Campaigns } from "./Campaigns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -52,6 +53,7 @@ const tabs: [HQTab, string][] = [
   ["details", "SKU Details"],
   ["comparisons", "Comparisons"],
   ["campaigns", "Campaigns"],
+  ["goals", "Goals"],
   ["activity", "Activity Logs"],
 ];
 export function HQWorkspace({
@@ -420,11 +422,13 @@ export function HQWorkspace({
                 )}
                 <div className="hq-overview-links">
                   <Link to="/mock-data">Data Studio</Link>
-                  <Link to="/sale-planner">Sale planner</Link>
-                  <Link to="/sku-assistant">Product goals</Link>
+                  <button onClick={() => changeTab("goals")}>Plan a goal</button>
                 </div>
               </>
             )}
+          </TabsContent>
+          <TabsContent value="goals">
+            <Goals key={activeKey} product={active} />
           </TabsContent>
           <TabsContent value="campaigns">
             <Campaigns pack={pack} revision={revision} />
