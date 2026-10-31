@@ -153,7 +153,7 @@ jobs:
       cancel-in-progress: false
     environment:
       name: production
-      url: https://hackathon.dangphuc.me
+      url: https://megadaytwin.dangphuc.me
     defaults:
       run:
         working-directory: web
@@ -193,4 +193,4 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Check login, access gate and existing database
         if: steps.latest.outputs.deploy == 'true'
-        run: npm run test:smoke -- https://hackathon.dangphuc.me
+        run: npm run test:smoke -- https://megadaytwin.dangphuc.me

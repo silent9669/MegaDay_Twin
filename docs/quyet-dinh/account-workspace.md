@@ -13,12 +13,10 @@ Chat messages save before generation, and assistant replies save server-side.
 A stale session tail is rejected rather than overwritten. Browser drafts remain
 local until submitted.
 
-Deploy this repository's build to the existing `megaday-hackathon` Worker to
-retain its write-only OpenAI and authentication secrets. Keep the deployed
+Deploy this repository's build to Worker `megadaytwin` with the
+`megadaytwin.dangphuc.me` custom domain and D1 `megadaytwin-db`. Keep the
 scrypt password format and `megaday_session` cookie valid; local PBKDF2 hashes
-also work. Point `hackathon.dangphuc.me` directly at this Worker. Keep the prior
-`hackathon` gateway and D1 database for rollback. Rollback versions and steps are
-in `web/README.md`; no database or secret is deleted during release.
+also work. Rollback versions and steps are in `web/README.md`.
 
 CI now generates the ignored source fallback before typechecking and uses
 Chromium to test the rendered login, private chat access and D1 health. Static

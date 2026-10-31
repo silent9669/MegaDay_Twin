@@ -3,11 +3,11 @@ import { bindings, defineConfig, exports } from "cf/config";
 export default defineConfig({
   accountId: "1177b93da7312e51a226b6ecffb1e251",
   worker: {
-    name: "megaday-hackathon",
+    name: "megadaytwin",
     entrypoint: "./worker.ts",
     compatibilityDate: "2026-10-30",
     compatibilityFlags: ["nodejs_compat"],
-    domains: ["hackathon.dangphuc.me"],
+    domains: ["megadaytwin.dangphuc.me"],
     workersDev: false,
     previewUrls: false,
     assets: {
@@ -18,7 +18,7 @@ export default defineConfig({
     env: {
       ASSETS: bindings.assets(),
       WORKSPACE: bindings.durableObject({
-        worker: "megaday-hackathon",
+        worker: "megadaytwin",
         exportName: "AccountWorkspace",
       }),
       ADMIN_PASSWORD_HASH: bindings.secret(),
@@ -33,8 +33,8 @@ export default defineConfig({
         simple: { limit: 20, period: 60 },
       }),
       DB: bindings.d1({
-        name: "hackathon-db",
-        id: "37eca8be-2aba-4aa1-bdb9-9fbf9e1ec79f",
+        name: "megadaytwin-db",
+        id: "983d0ef9-dcc6-45d7-bf05-55f908e1189e",
       }),
     },
   },

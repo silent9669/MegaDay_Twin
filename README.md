@@ -171,8 +171,8 @@ node scripts/demo.mjs jump 13                           # nhảy dữ liệu t�
 cd backend; uv run python -m eval.rehearsal --base-url http://localhost:8000   # diễn tập 2 lượt, ĐẠT/LỖI từng cảnh
 ```
 
-Bản demo Cloudflare: <https://hackathon.dangphuc.me>. Deploy dùng `cf` CLI,
-Worker `megaday-hackathon` và D1 `hackathon-db`; hiện frontend dùng dữ liệu mẫu,
+Bản demo Cloudflare: <https://megadaytwin.dangphuc.me>. Deploy dùng `cf` CLI,
+Worker `megadaytwin` và D1 `megadaytwin-db`; hiện frontend dùng dữ liệu mẫu,
 backend Python/DuckDB chưa deploy. Mỗi push vào `main` tự deploy sau khi mọi
 kiểm tra CI thành công. Cấu hình và lệnh ở [web/README.md](web/README.md#cloudflare).
 

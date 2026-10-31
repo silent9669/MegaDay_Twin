@@ -39,7 +39,7 @@ unknown, negative stock is flagged and notes never become instructions.
 ## Account persistence and sync
 
 One shared admin workspace is stored in a SQLite-backed Cloudflare Durable Object
-owned by Worker `megaday-hackathon`. Sources, settings and sandbox clock are independent
+owned by Worker `megadaytwin`. Sources, settings and sandbox clock are independent
 revisioned documents. Writes require a signed HttpOnly session and same-origin
 request, validate input server-side and use compare-and-swap revisions. A stale
 write returns 409. Sources are chunked below SQLite's row limit and committed in
@@ -87,7 +87,7 @@ Run frontend lint, typecheck, unit tests and both builds. Browser checks cover
 desktop/mobile compact navigation, six-source bootstrap/import/export/diagnostics,
 two-session realtime updates, optimistic conflicts, reload persistence, chat
 Markdown and responsive containment. Hash all six original inputs before/after.
-Deploy this repo to Worker `megaday-hackathon`, retaining its existing secrets; the custom domain points directly to it. The old `hackathon` gateway remains available for rollback. No external repository or CITY_UI binding is needed by the new deployment.
+Deploy this repo to Worker `megadaytwin`; the custom domain points directly to it. No external repository or CITY_UI binding is needed by the deployment.
 
 Chat verification: `NODE_OPTIONS=--no-experimental-webstorage npm test` passes
 123 tests on local Node 26 (the option avoids Node's experimental storage global
