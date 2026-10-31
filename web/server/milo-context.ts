@@ -10,13 +10,31 @@ export type MiloSelection = { screen?: string; sku?: string; campaignId?: string
 type Storage = { fetch(request: Request): Promise<Response> };
 const text = z.string().max(500);
 const optionalNumber = z.number().finite().nullable().optional();
+const activeGoalParamsSchema = z.object({
+  max_spend_vnd: z.number().finite().nonnegative().optional(),
+  max_loss_vnd: z.number().finite().nonnegative().optional(),
+  sell_target_prob: z.number().finite().positive().max(1).optional(),
+  min_marginal_return: z.number().finite().nonnegative().optional(),
+  focus_sku: text.optional(),
+  planner_start: text.optional(),
+  planner_parent_goal_id: text.optional(),
+  planner_parent_goal_version: z.number().int().positive().optional(),
+  planner_parent_goal_kind: text.optional(),
+});
+const goalBriefSchema = z.object({ goal_id: text, kind: text, label: text, deadline: text,
+  target_units: optionalNumber, version: z.number().int().positive().optional(),
+  params: activeGoalParamsSchema.optional(), created_at: text.optional(), confirmed_by: text.optional(),
+  detail_verified: z.boolean().optional(),
+});
+const activeGoalSchema = goalBriefSchema.extend({ scope: z.literal("campaign"), scope_id: text,
+  active: z.literal(true), version: z.number().int().positive(), params: activeGoalParamsSchema,
+});
 const campaignSchema = z.object({
   campaign_id: text, name: text, skus: z.array(text).max(2000),
   context_basis: z.enum(["selected", "sole-sku-membership-read-only"]).optional(),
   daily_budget_vnd: optionalNumber, spend_today_vnd: optionalNumber,
   status: text.nullable().optional(), status_at: text.nullable().optional(),
-  goal: z.object({ goal_id: text, kind: text, label: text, deadline: text,
-    target_units: optionalNumber }).nullable().optional(),
+  goal: goalBriefSchema.nullable().optional(),
 });
 const distribution = z.object({ mean: z.number().finite(), p10: z.number().finite(), p50: z.number().finite(), p90: z.number().finite() });
 const finiteSeries = z.array(z.number().finite()).max(168);
@@ -35,7 +53,7 @@ const traceSchema = z.object({
   quantity_scope: z.enum(["sku", "campaign"]), economic_scope: z.literal("campaign"),
   start: text, horizon_hours: z.number().finite(), samples: z.number().finite(), seed: z.number().finite(),
   data_as_of: text.nullable(),
-  goal: z.object({ kind: text, target_units: optionalNumber }),
+  goal: z.object({ kind: text, target_units: optionalNumber, params: activeGoalParamsSchema.optional() }),
   skus: z.array(traceSkuSchema).max(2000).optional(),
   assumptions: z.object({ stockout_penalty_per_unit: z.number().finite(), rank_loss: z.number().finite(),
     adstock_start: z.number().finite(), budget_source: text, daily_budget: finiteSeries, must_run_hours: finiteSeries }).optional(),
@@ -154,6 +172,18 @@ export async function buildMiloContext(
       campaign = { ...data, skus: data.skus.slice(0, 20), context_basis: "sole-sku-membership-read-only" };
       if (data.skus.length > 20) notices.push("Chiến dịch có hơn 20 SKU; số tiền vẫn ở phạm vi toàn chiến dịch.");
     } catch { notices.push("Chưa đọc được ngân sách của chiến dịch liên kết. Không tự đặt một mức ngân sách thay thế."); }
+  }
+  const selectedCampaign = campaign as z.infer<typeof campaignSchema> | null;
+  if (api && selectedCampaign?.goal) {
+    try {
+      const detail = activeGoalSchema.parse((await api(`goals/${encodeURIComponent(selectedCampaign.goal.goal_id)}`)).data);
+      if (detail.scope_id !== selectedCampaign.campaign_id || detail.goal_id !== selectedCampaign.goal.goal_id)
+        throw Error("active goal scope mismatch");
+      campaign = { ...selectedCampaign, goal: goalBriefSchema.parse({ ...detail, detail_verified: true }) };
+    } catch {
+      campaign = { ...selectedCampaign, goal: null };
+      notices.push("Mục tiêu đang áp dụng chưa được xác minh hoặc vừa thay đổi. Cần tải lại kế hoạch trước khi đối chiếu hay áp dụng; không dùng ràng buộc cũ làm mục tiêu hiện tại.");
+    }
   }
   if (selection.scenarioId && api) {
     try {

@@ -186,8 +186,8 @@ Chạy `run_simulation` trực tiếp trên DB riêng, dựng như `eval/demo_wh
 
 ### Task 1 — nhập mục tiêu buổi sale
 
-- Thêm luồng nhập mô tả → diễn giải thành thông số có thể sửa → xác nhận → lưu
-  mục tiêu đang áp dụng và mô phỏng. Một chiến dịch, thời gian 1–72 giờ tròn,
+- Luồng hiện tại: nhập mô tả → diễn giải thành thông số có thể sửa → mô phỏng thử
+  → đối chiếu với mục tiêu hiện tại → xác nhận áp dụng riêng. Một chiến dịch, thời gian 1–72 giờ tròn,
   dùng bộ hành động và dữ liệu hiện có; chưa phân bổ ngân sách đa chiến dịch,
   chưa thay giá/voucher hay tự thực thi quảng cáo.
 - AI chỉ diễn giải mong muốn. Số liệu do simulator trả về; không có AI/key thì
@@ -205,12 +205,14 @@ Chạy `run_simulation` trực tiếp trên DB riêng, dựng như `eval/demo_wh
 - J có giá trị tồn cuối kỳ, không gọi là lợi nhuận kế toán. Kết quả cho mở từng
   chỉ số xem phân vị, trường dữ liệu và nguồn/tham số; không tuyên bố đã truy vết
   toàn bộ phép tính xuống từng dòng CSV.
-- Gateway kiểm tra capability phiên bản backend và quyền lead trước khi tạo
-  mục tiêu. Mô phỏng lỗi sau lưu vẫn giữ goal ID; retry kiểm tra nội dung rồi
-  tái sử dụng. Sửa mục tiêu hoặc đổi chiến dịch hủy xác nhận và kết quả cũ.
+- Gateway yêu cầu capability `preview_apply`. Operator có thể tạo mục tiêu nháp
+  không hoạt động và scenario what-if; chỉ lead được áp dụng sau khi đối chiếu
+  phiên bản. Mô phỏng lỗi không thay mục tiêu hoặc đề xuất đang áp dụng. Sửa
+  mục tiêu hoặc đổi chiến dịch hủy xác nhận và kết quả cũ. Migration 6 lưu bản
+  thử; apply kiểm tra phiên bản/dữ liệu và ghi transaction, retry không áp dụng lại.
 - Không có backend thì cho soạn mục tiêu nhưng khóa chạy; không dùng fixture
   để làm kết quả mô phỏng thật. Kết nối và kiểm thử production là bước triển
-  khai riêng. Không thay đổi DB schema hoặc cơ chế gán nhãn sản phẩm.
+  khai riêng. Không thay đổi cơ chế gán nhãn sản phẩm.
 
 ### Trợ lý theo SKU và bằng chứng tính toán
 

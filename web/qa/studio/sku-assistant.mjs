@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const base = process.env.STUDIO_QA_URL || 'http://127.0.0.1:5179';
-assert(['127.0.0.1', 'localhost'].includes(new URL(base).hostname), 'Local QA only');
+assert(['127.0.0.1','localhost'].includes(new URL(base).hostname),'Local QA only');
 const out = new URL('../../../qa/runs/sku-assistant/', import.meta.url);
 await mkdir(out, { recursive: true });
 const sources = JSON.parse(await readFile(new URL('../../server/repository-sources.json', import.meta.url), 'utf8'));
@@ -30,7 +30,7 @@ const trace = {
 const browser = await chromium.launch({ headless: true, channel: process.env.STUDIO_QA_CHANNEL });
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
-  const docs = { hq: { tracked: [], active: null, worksheets: {}, activity: [] }, sources, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] }, sandbox: { hour: 1, event: 'observe' }, chats: { preferredModel: '', sessions: [] } };
+  const docs = { hq: {tracked:[],active:null,worksheets:{},activity:[]}, sources, settings: { signals: false, motion: false, quality: 'balanced', platforms: ['shopee'] }, sandbox: { hour: 1, event: 'observe' }, chats: { preferredModel: '', sessions: [] } };
   await context.route('**/api/workspace/*', (route) => {
     const key = new URL(route.request().url()).pathname.split('/').pop();
     if (route.request().method() === 'PUT') docs[key] = route.request().postDataJSON().data;
@@ -55,24 +55,29 @@ try {
     throw Error(`Unexpected legacy assistant mutation: ${url}`);
   });
   await context.route('**/api/sale-planner/**', (route) => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { backendConfigured: true, canCreateGoals: true, campaigns, dataAsOf: timestamp, referenceTime: timestamp, notice: null } });
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/active')) return route.fulfill({ json: { campaignId: url.searchParams.get('campaignId'), activeGoal: null, baseGoal: null } });
+    if (route.request().method() === 'GET') return route.fulfill({ json: { backendConfigured: true, canCreateGoals: true, canPreview: true, canApply: true, campaigns, dataAsOf: timestamp, referenceTime: timestamp, notice: null } });
     const body = route.request().postDataJSON(); runs.push(body);
-    return route.fulfill({ json: { goalId: 'goal-qa', scenario: { data: {
+    return route.fulfill({ json: { previewId: 'preview-qa', goalId: 'goal-qa', baseGoal: null,
+      effectiveGoal: { goal_id: 'goal-qa', scope: 'campaign', scope_id: body.campaignId, kind: draft.kind, deadline: draft.deadline, target_units: 100, params: { focus_sku: 'SKU1', max_spend_vnd: 2000000 }, active: false, version: 1 },
+      changes: [], notices: ['Chưa đạt mục tiêu SKU, chưa thể áp dụng.'], canApply: false, appliedGoalId: null, scenario: { data: {
       scenario_id: 'scenario-qa', blocked: false, cache_hit: false, input_hash: trace.input_hash,
       request: { campaign_id: body.campaignId, goal_id: 'goal-qa', start: draft.start, horizon_hours: 12, samples: 1000, seed: 123 }, recommendation: null,
       results: [{ key: 'continue', action: { kind: 'continue' }, feasible: true, goal_eligible: false, violations: [], objective: dist(20000), contribution: dist(50000), spend: dist(30000), units_sold: dist(103), goal_units_sold: dist(3), goal_sku: 'SKU1', leftover_units: dist(0), leftover_value: dist(0), p_target: 0 }], calculation_trace: trace,
     } } } });
   });
   await context.addInitScript(()=>localStorage.setItem('megaday.city.tour.v4','complete'));
-  const login = await context.request.post(base+'/api/auth/login',{headers:{Origin:base},data:{username:'admin',password:(await readFile('/tmp/megaday-qa-password','utf8')).trim()}});
-  assert(login.ok(),'Local login failed');
+  const login=await context.request.post(base+'/api/auth/login',{headers:{Origin:base},data:{username:'admin',password:(await readFile('/tmp/megaday-qa-password','utf8')).trim()}});assert(login.ok(),'Local login failed');
   const page = await context.newPage();
   await page.routeWebSocket('**/api/workspace/events', (socket) => socket.onMessage((message) => { if (message === 'ping') socket.send('pong'); }));
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/sku-assistant?sku=SKU1`);
-  await page.getByText('Product facts & Milo', {exact:true}).click();
-  await page.getByRole('heading', { name: 'Bình giữ nhiệt QA', exact: true }).waitFor();
-  await page.getByRole('button', {name:'Discuss with Milo',exact:true}).click();
+  await page.getByText('Product facts & Milo',{exact:true}).click();
+  await page.getByRole('heading',{name:'Bình giữ nhiệt QA',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Discuss with Milo',exact:true}).click();
+  assert.equal(new URL(page.url()).pathname, '/city-demo');
+  assert.equal(new URL(page.url()).searchParams.get('hq'), 'goals');
   assert.equal(runs.length, 0);
   await page.getByLabel('Message Milo', { exact: true }).fill('Bán 100 sản phẩm, ngân sách 2 triệu.');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
@@ -83,16 +88,18 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'Review goal', exact: true }).click();
-  const campaign = page.getByLabel('Campaign', { exact: true });
+  const campaign = page.getByRole('dialog',{name:'Milo',exact:true}).getByLabel('Campaign', { exact: true });
   await campaign.waitFor();
   assert.equal(await campaign.inputValue(), '', 'Multiple campaign memberships must never auto-select');
   assert.equal(runs.length, 0);
   await campaign.selectOption('CD1');
-  await page.getByRole('checkbox', { name: /I confirm these parameters/ }).check();
-  await page.getByRole('button', { name: 'Save goal and run simulation', exact: true }).click();
+  await page.getByRole('checkbox', { name: /I confirm these parameters for a preview/ }).check();
+  await page.getByRole('button', { name: 'Preview simulation', exact: true }).click();
   await page.getByRole('heading', { name: 'Options for Chiến dịch QA' }).waitFor();
   assert.equal(runs[0].focusSku, 'SKU1');
   assert.equal(runs[0].confirmed, true);
+  assert.equal(runs[0].expectedGoal, null);
+  assert.equal(await page.getByRole('button', { name: 'Apply goal', exact: true }).isDisabled(), true);
   await page.getByText('Units sold · SKU1 (expected)', { exact: true }).waitFor();
   await page.getByText('Units sold · whole campaign (expected)', { exact: true }).waitFor();
   await page.getByText('Calculation and reconciliation', { exact: true }).click();
@@ -123,17 +130,12 @@ try {
   assert.equal(await page.getByRole('heading', { name: 'Options for Chiến dịch QA' }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Review goal', exact: true }).count(), 0);
   backendMissing = true;
-  await page.getByRole('button', {name:'Close chat',exact:true}).click();
-  await page.reload();
-  await page.getByText('Product facts & Milo',{exact:true}).click();
-  await page.getByText('Backend chưa kết nối.', { exact: true }).first().waitFor();
+  await page.getByRole('button',{name:'Close chat',exact:true}).click();
+  await page.reload();await page.getByText('Product facts & Milo',{exact:true}).click();
+  await page.getByText('Backend chưa kết nối.',{exact:true}).first().waitFor();
   assert.equal(await page.getByRole('button',{name:'Discuss with Milo',exact:true}).count(),0);
-  const hq = page.getByRole('dialog', { name: 'MegaDay HQ', exact: true });
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await hq.getByRole('tab', {name:'Goals',exact:true}).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: fileURLToPath(new URL(`hq-goals-${width}.png`, out)) });
-  }
+  const hq=page.getByRole('dialog',{name:'MegaDay HQ',exact:true});
+  for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await hq.getByRole('tab',{name:'Goals',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:fileURLToPath(new URL(`hq-goals-${width}.png`,out))});}
   assert.deepEqual(errors, []);
   const results = ['SKU-specific context; no auto-mutation', 'Multiple campaigns require explicit choice', 'Reviewed goal sends focusSku and confirmed=true', 'Selected-SKU units distinct from campaign aggregate', 'J numeric substitution and source evidence expand', 'Switching SKU cancels pending replies and clears old plan', 'No fake backend fallback, page errors or horizontal overflow at 1440/768/390/320px'];
   await writeFile(new URL('results.json', out), JSON.stringify({ mode: 'real browser with stub APIs', results }, null, 2));

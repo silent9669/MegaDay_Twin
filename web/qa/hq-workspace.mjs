@@ -22,7 +22,8 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   assert((await page.request.put(base+'/api/workspace/settings',{data:{revision:settings.revision,data:{...settings.data,appearance:'morning'}}})).ok());
   await page.addInitScript(()=>localStorage.setItem('megaday.city.tour.v4','complete'));
   await page.route('**/api/pm/models',route=>route.fulfill({json:{configured:true,models:['gpt-4.1'],defaultModel:'gpt-4.1'}}));
-  await page.route('**/api/sale-planner/context', route=>route.fulfill({json:{backendConfigured:true,canCreateGoals:true,referenceTime:'2026-10-31T00:00:00Z',dataAsOf:'2026-10-31T00:00:00Z',notice:null,campaigns:[{id:'QA-C1',name:'Morning essentials'}]}}));
+  await page.route('**/api/sale-planner/context', route=>route.fulfill({json:{backendConfigured:true,canCreateGoals:true,canPreview:true,canApply:true,referenceTime:'2026-10-31T00:00:00Z',dataAsOf:'2026-10-31T00:00:00Z',notice:null,campaigns:[{id:'QA-C1',name:'Morning essentials'}]}}));
+  await page.route('**/api/sale-planner/active?*',route=>route.fulfill({json:{campaignId:new URL(route.request().url()).searchParams.get('campaignId'),activeGoal:null,baseGoal:null}}));
   await page.route('**/api/sale-assistant/context?*', route=>{const sku=new URL(route.request().url()).searchParams.get('sku');return route.fulfill({json:{sku:{sku,name:sku,variant:'',stockAvailable:83,soldTodayUnits:2,priceEffectiveVnd:600000,contributionPerUnitVnd:45000,demandGroup:'on_dinh'},campaigns:[{id:'QA-C1',name:'Morning essentials',skus:[sku]}],dataAsOf:'2026-10-31T00:00:00Z',source:{id:'qa',kind:'sku',label:'QA backend'},canPlan:true,notices:[],opening:'Review this product with Milo.'}});});
   let requests=0;
   await page.route('**/api/pm/chat',async route=>{requests++;const body=route.request().postDataJSON();const doc=await(await page.request.get(base+'/api/workspace/chats')).json();const session=doc.data.sessions.find(s=>s.id===body.sessionId);assert(session.messages.at(-1).analysis);assert(session.messages.at(-1).attachments?.[0]?.dataUrl.startsWith('data:image/jpeg;base64,'));session.messages.push({id:crypto.randomUUID(),role:'assistant',content:'QA mocked reply: comparison uses your assumptions.'});await page.request.put(base+'/api/workspace/chats',{data:{revision:doc.revision,data:doc.data}});await route.fulfill({json:{reply:'QA mocked reply: comparison uses your assumptions.'}});});
@@ -59,7 +60,7 @@ for(const [engineName,engine] of Object.entries({chromium,webkit})){
   await page.getByLabel('Goal description',{exact:true}).fill('Sell 100 units');
   await page.getByRole('button',{name:'Enter parameters manually',exact:true}).click();
   await page.getByText('Goal for SKU QA-A',{exact:true}).waitFor();
-  assert(await page.getByRole('button',{name:'Save goal and run simulation',exact:true}).isDisabled());
+  assert(await page.getByRole('button',{name:'Preview simulation',exact:true}).isDisabled());
   await page.getByLabel('Goal quantity scope').selectOption('campaign');
   assert.equal(await page.getByLabel('Goal description',{exact:true}).inputValue(),'');
   assert.equal(await page.getByText('Goal for SKU QA-A',{exact:true}).count(),0);

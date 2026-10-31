@@ -3,11 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { assistantContext, assistantSkus, assistantTurn } from "./sku-assistant";
 import type { AssistantTurnResponse } from "../src/planner/assistant-contract";
 const env = { DATA_BACKEND_URL: "https://backend.test/api/v1", DATA_BACKEND_USER: "lead", DATA_BACKEND_ROLE: "lead" };
-const caps = ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return", "focus_sku", "calculation_trace"];
+const caps = ["max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return", "focus_sku", "calculation_trace", "preview_apply"];
 const facts = { sku: "SKU1", name: "Bình nước", variant: "Xanh", stock_available: 51, sold_today_units: 7,
   price_effective_vnd: 200000, contribution_per_unit_vnd: 50000, demand_group: "on_dinh", as_of: "2026-11-11T08:00:00+07:00",
   source: { id: "snapshot-SKU1", kind: "warehouse", label: "SKU snapshot", data_as_of: "2026-11-11T08:00:00+07:00" } };
-function backend(options: { noCampaign?: boolean; old?: boolean; lead?: boolean; mismatch?: boolean } = {}) {
+function backend(options: { noCampaign?: boolean; old?: boolean; lead?: boolean; canRun?: boolean; mismatch?: boolean } = {}) {
   const fetch = vi.fn(async (target: URL | string, init?: RequestInit) => {
     if (init?.method && init.method !== "GET") throw Error("Assistant must never write to backend");
     const url = new URL(target), path = url.pathname;
@@ -19,7 +19,7 @@ function backend(options: { noCampaign?: boolean; old?: boolean; lead?: boolean;
       next_cursor: options.noCampaign || url.searchParams.get("cursor") ? null : "second-page",
     });
     if (path.endsWith("/goal-planner/capabilities")) return Response.json({ data: { version: 1, constraints: options.old ? [] : caps } });
-    if (path.endsWith("/me")) return Response.json({ data: { can_edit_goals: options.lead !== false, can_run_scenarios: true } });
+    if (path.endsWith("/me")) return Response.json({ data: { can_edit_goals: options.lead !== false, can_run_scenarios: options.canRun !== false } });
     throw Error(`Unexpected URL ${target}`);
   });
   vi.stubGlobal("fetch", fetch);
@@ -59,12 +59,19 @@ describe("SKU goal assistant with real backend context", () => {
     expect(request.searchParams.get("cursor")).toBe("next&q=bad");
   });
   it("makes no claim that an unknown, unlinked, outdated or unauthorized SKU can simulate", async () => {
-    for (const options of [{ old: true }, { lead: false }, { noCampaign: true }]) {
+    for (const options of [{ old: true }, { canRun: false }, { noCampaign: true }]) {
       backend(options);
       expect(await (await assistantContext(contextRequest(), env)).json()).toMatchObject({ canPlan: false });
     }
     backend({ mismatch: true });
     expect((await assistantContext(contextRequest(), env)).status).toBe(502);
+  });
+  it("allows operators to preview while keeping goal application a separate lead permission", async () => {
+    backend({ lead: false });
+    const result = await (await assistantContext(contextRequest(), env)).json();
+    expect(result.canPlan).toBe(true);
+    expect(result.notices.join(" ")).toContain("áp dụng mục tiêu cần tài khoản có quyền lead");
+    expect(result.notices.join(" ")).toContain("Mô phỏng thử giữ nguyên mục tiêu đang áp dụng");
   });
   it("understands bounded short answers from user context and asks for missing calendar fields", async () => {
     const fetch = backend();

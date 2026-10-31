@@ -6,7 +6,7 @@ import type { Dist, ScenarioRun } from "../api/types";
 import { viText } from "../lib/i18n";
 import { sameAction, violationLabel } from "../pages/compare/compareLogic";
 import { goalInterpretResponseSchema, type GoalDraft, type GoalKind, type GoalInterpretResponse } from "./goal-contract";
-import type { PlannerContext, PlannerRunError, PlannerRunRequest, PlannerRunResponse } from "./planner-api";
+import type { PlannerContext, PlannerRunError, PlannerRunRequest, PlannerRunResponse, PlannerActiveContext, PlannerApplyResponse, PlannerGoal } from "./planner-api";
 import { ActionCalculation, CalculationEvidence } from "./CalculationEvidence";
 import "./planner.css";
 
@@ -36,7 +36,7 @@ function blankDraft(text: string): GoalDraft {
     minMarginalReturn: null, unresolved: [] };
 }
 class PlannerError extends Error {
-  constructor(message: string, readonly payload?: Partial<PlannerRunError>) { super(message); }
+  constructor(message: string, readonly payload?: Partial<PlannerRunError>, readonly status?: number) { super(message); }
 }
 async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   // Intentionally bypasses the fixture-aware API client: results must be from the backend.
@@ -45,7 +45,7 @@ async function request<T>(path: string, body?: unknown, signal?: AbortSignal): P
     ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new PlannerError(payload?.error?.message || `Could not complete request (${response.status}).`, payload ?? undefined);
+  if (!response.ok) throw new PlannerError(payload?.error?.message || `Could not complete request (${response.status}).`, payload ?? undefined, response.status);
   if (!payload) throw new PlannerError("The server returned invalid data.");
   return payload as T;
 }
@@ -76,9 +76,10 @@ type PlannerProps = {
   campaignIds?: string[];
   embedded?: boolean;
   allowRun?: boolean;
+  hideHeading?: boolean;
 };
 // The assistant remounts this review on a new interpretation or SKU, clearing approval/results.
-export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true }: PlannerProps = {}) {
+export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, embedded = false, allowRun = true, hideHeading = false }: PlannerProps = {}) {
   const id = useId();
   const [context, setContext] = useState<PlannerContext | null>(null);
   const [contextError, setContextError] = useState("");
@@ -91,11 +92,16 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
   const [campaignId, setCampaignId] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
-  const [busy, setBusy] = useState<"interpret" | "run" | null>(null);
+  const [busy, setBusy] = useState<"interpret" | "run" | "apply" | null>(null);
   const [error, setError] = useState("");
   const [errorDetails, setErrorDetails] = useState<Record<string, unknown> | null>(null);
-  const [goalId, setGoalId] = useState<string | null>(null);
   const [result, setResult] = useState<PlannerRunResponse | null>(null);
+  const [active, setActive] = useState<PlannerActiveContext | null>(null);
+  const [activeError, setActiveError] = useState("");
+  const [activeLoading, setActiveLoading] = useState(false);
+  const [activeReload, setActiveReload] = useState(0);
+  const [applyConfirmed, setApplyConfirmed] = useState(false);
+  const [applied, setApplied] = useState<PlannerApplyResponse | null>(null);
   const review = useRef<HTMLElement>(null), results = useRef<HTMLElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const campaignScope = campaignIds?.join("\u0000");
@@ -107,15 +113,31 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
         const ids = campaignScope?.split("\u0000");
         const scoped = ids ? { ...value, campaigns: value.campaigns.filter((campaign) => ids.includes(campaign.id)) } : value;
         setContext(scoped); setContextError("");
-        if (focusSku && scoped.campaigns.length === 1) setCampaignId(scoped.campaigns[0]!.id);
+        if (campaignScope && scoped.campaigns.length === 1) {
+          setActive(null); setActiveError(""); setActiveLoading(true); setActiveReload((n) => n + 1);
+          setCampaignId(scoped.campaigns[0]!.id);
+        }
       }
     }).catch((e: unknown) => {
       if (!controller.signal.aborted) { setContext(null); setContextError(e instanceof Error ? e.message : "Could not load campaigns."); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [reload, campaignScope, focusSku]);
+  useEffect(() => {
+    const controller = new AbortController();
+    if (campaignId) void request<PlannerActiveContext>(`active?campaignId=${encodeURIComponent(campaignId)}`, undefined, controller.signal)
+      .then((value) => {
+        if (value.campaignId !== campaignId) throw Error("Returned goal does not match the selected campaign.");
+        if (!controller.signal.aborted) setActive(value);
+      }).catch((e: unknown) => { if (!controller.signal.aborted) setActiveError(e instanceof Error ? e.message : "Could not load the active goal."); })
+      .finally(() => { if (!controller.signal.aborted) setActiveLoading(false); });
+    return () => controller.abort();
+  }, [campaignId, activeReload]);
+  function reloadActive() {
+    setActive(null); setActiveError(""); setActiveLoading(!!campaignId); setActiveReload((n) => n + 1);
+  }
   function invalidate() {
-    setConfirmed(false); setGoalId(null); setResult(null); setError(""); setErrorDetails(null);
+    setConfirmed(false); setResult(null); setApplyConfirmed(false); setApplied(null); setError(""); setErrorDetails(null);
   }
   function changeText(value: string) {
     invalidate(); setAcknowledged(false); setText(value); setDraft(null); setNotices([]);
@@ -137,46 +159,79 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
   const issues = draft ? draftIssues(draft) : [];
   const selected = context?.campaigns.find((c) => c.id === campaignId);
   const canConfirm = !!draft && !issues.length && (!draft.unresolved.length || acknowledged);
-  const canRun = allowRun && canConfirm && confirmed && !!selected && !!context?.backendConfigured && context.canCreateGoals && !busy && !loading;
+  const canRun = allowRun && canConfirm && confirmed && !!selected && !!context?.backendConfigured && context.canPreview === true && !!active && !activeLoading && !busy && !loading;
   async function run() {
     if (!canRun || !draft) return;
     setBusy("run"); setError(""); setErrorDetails(null);
     const controller = new AbortController(); activeRequest.current = controller;
     try {
-      const body: PlannerRunRequest = { campaignId, draft, confirmed: true, acknowledgedUnresolved: acknowledged, ...(goalId ? { goalId } : {}), ...(focusSku ? { focusSku } : {}) };
+      const body: PlannerRunRequest = { campaignId, draft, confirmed: true, acknowledgedUnresolved: acknowledged, expectedGoal: active!.baseGoal, ...(focusSku ? { focusSku } : {}) };
       const response = await request<PlannerRunResponse>("run", body, controller.signal);
       if (controller.signal.aborted) return;
-      setGoalId(response.goalId); setResult(response);
+      setResult(response); setApplyConfirmed(false); setApplied(null);
       requestAnimationFrame(() => results.current?.focus());
     } catch (e) {
       if (controller.signal.aborted) return;
       if (e instanceof PlannerError) {
-        if (e.payload?.goalId) setGoalId(e.payload.goalId);
         setErrorDetails(e.payload?.error?.details ?? null);
+        if (e.status === 409) {
+          setResult(null); setConfirmed(false); reloadActive();
+        }
       }
       setError(e instanceof Error ? e.message : "Simulation did not complete.");
+    } finally { if (!controller.signal.aborted) setBusy(null); }
+  }
+  async function apply() {
+    if (!result?.canApply || !applyConfirmed || applied || busy || context?.canApply !== true) return;
+    setBusy("apply"); setError(""); setErrorDetails(null);
+    const controller = new AbortController(); activeRequest.current = controller;
+    try {
+      const response = await request<PlannerApplyResponse>("apply", { previewId: result.previewId, confirmed: true,
+        expectedGoal: result.baseGoal ? { goal_id: result.baseGoal.goal_id, version: result.baseGoal.version } : null }, controller.signal);
+      if (controller.signal.aborted) return;
+      setApplied(response); setApplyConfirmed(false); reloadActive();
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      setError(e instanceof Error ? e.message : "Could not apply the goal.");
+      if (e instanceof PlannerError) {
+        setErrorDetails(e.payload?.error?.details ?? null);
+        if (e.status === 409) {
+          setResult(null); setConfirmed(false); setApplyConfirmed(false); reloadActive();
+        }
+      }
     } finally { if (!controller.signal.aborted) setBusy(null); }
   }
   return (
     <div className={`sale-planner ${embedded ? "planner-embedded" : ""}`}>
       {!embedded && <>
+      {!hideHeading &&
       <header className="planner-heading">
-        <div><span className="planner-eyebrow">MEGADAY HQ / PLANNING</span><h1><Target aria-hidden size={26} /> Sale goals</h1>
+        <div><span className="planner-eyebrow">MEGADAY HQ / PLANNING</span><h1><Target aria-hidden size={26} /> Sale planning</h1>
           <p>Review your goal, then compare options using campaign data.</p></div>
         <Link to="/mock-data">Check data <ArrowRight aria-hidden size={16} /></Link>
-      </header>
+      </header>}
       <ol className="planner-steps" aria-label="Planning steps">
         <li aria-current={!draft ? "step" : undefined}><span>1</span> Describe goal</li>
         <li aria-current={draft && !result ? "step" : undefined}><span>2</span> Review & confirm</li>
-        <li aria-current={result ? "step" : undefined}><span>3</span> Compare options</li>
+        <li aria-current={result && !applied ? "step" : undefined}><span>3</span> Preview simulation</li>
+        <li aria-current={applied ? "step" : undefined}><span>4</span> Apply goal</li>
       </ol>
       </>}
       <section className="planner-context" aria-label="Data connection">
         <div role="status"><strong>{loading ? "Checking data…" : context?.backendConfigured ? "Connected campaigns" : "Decision backend not connected"}</strong>
           <p>{contextError || context?.notice || (context?.backendConfigured ? `Data as of: ${dateText(context.dataAsOf)} (Vietnam time).` : "You can draft and review goals. Connect the decision backend to run simulations.")}</p>
-          {context?.backendConfigured && !context.canCreateGoals && <p>This account cannot create goals or run simulations.</p>}
+          {context?.backendConfigured && !context.canPreview && <p>Preview simulation is unavailable. Check backend capabilities and permissions.</p>}
           {context?.backendConfigured && !context.campaigns.length && <p>No campaigns. Import and send data to the backend from Data Studio first.</p>}</div>
-        <button type="button" disabled={loading || !!busy} onClick={() => { invalidate(); setLoading(true); setReload((n) => n + 1); }}><RefreshCw aria-hidden size={16} /> Refresh</button>
+        <button type="button" disabled={loading || !!busy} onClick={() => { invalidate(); setLoading(true); setReload((n) => n + 1); reloadActive(); }}><RefreshCw aria-hidden size={16} /> Refresh</button>
+      </section>
+      <section className="planner-card planner-campaign-selection">
+              <label htmlFor={`${id}-sale-campaign`}>Campaign</label><select disabled={loading || !!busy} id={`${id}-sale-campaign`} value={campaignId} onChange={(e) => { invalidate(); setActive(null); setActiveError(""); setActiveLoading(!!e.target.value); setCampaignId(e.target.value); }}><option value="">Choose a connected campaign</option>{context?.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              {campaignId && <section className="planner-active-goal" aria-label="Active goal">
+                <h3>Active goal</h3>
+                {activeLoading ? <p role="status">Checking the campaign goal…</p> : activeError ? <><p role="alert">{activeError}</p><button type="button" onClick={reloadActive}>Reload active goal</button></> : active ? <GoalSummary goal={active.activeGoal} /> : <p>The active goal has not been verified.</p>}
+                <p className="planner-help">Preview simulations preserve this goal. {focusSku ? "SKU goals must respect campaign limits; stricter constraints are retained." : "Review the changes before applying."}</p>
+                {!initialInterpretation && !focusSku && <button type="button" onClick={() => openMilo({ screen: "sale-planner", campaignId })}>Discuss campaign with Milo</button>}
+              </section>}
       </section>
       <div className={`planner-layout ${embedded ? "planner-review-only" : ""}`}>
         {(!embedded || !initialInterpretation) &&
@@ -200,7 +255,6 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
             {!!notices.length && <ul className="planner-notices">{notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
             <fieldset disabled={!!busy}>
               {focusSku && <div className="planner-warning"><strong>Goal for SKU {focusSku}</strong><p>Sales and clearance quantities apply to this SKU. Economic value J, budget, expected loss and ad efficiency apply to the whole selected campaign; ad changes can affect other SKUs.</p><p>Confirm that you have reviewed this scope. This is not a SKU-only profit calculation.</p></div>}
-              <label htmlFor={`${id}-sale-campaign`}>Campaign</label><select id={`${id}-sale-campaign`} value={campaignId} onChange={(e) => { invalidate(); setCampaignId(e.target.value); }}><option value="">Choose a connected campaign</option>{context?.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <label htmlFor={`${id}-sale-kind`}>Primary goal</label><select id={`${id}-sale-kind`} value={draft.kind ?? ""} onChange={(e) => edit({ kind: (e.target.value || null) as GoalKind | null })}><option value="">Choose a goal</option>{Object.entries(kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
               <div className="planner-fields">
                 <label>Start (Vietnam time)<input type="datetime-local" step={3600} value={localDate(draft.start)} onChange={(e) => edit({ start: isoDate(e.target.value) })} /></label>
@@ -214,18 +268,52 @@ export function SaleGoalPlanner({ initialInterpretation, focusSku, campaignIds, 
               <label>Minimum marginal return<input type="number" min={0} step="any" value={draft.minMarginalReturn ?? ""} placeholder="Backend default" onChange={(e) => edit({ minMarginalReturn: e.target.value ? Number(e.target.value) : null })} /><span className="planner-help">Only applies to Improve ad efficiency. Leave blank for the backend default, or for any other goal.</span></label>
               {draft.unresolved.length > 0 && <div className="planner-warning"><strong>Unresolved or unsupported requirements</strong><ul>{draft.unresolved.map((item, i) => <li key={i}>{item}</li>)}</ul><p>Revise and reinterpret the goal, or confirm only the reviewed parameters.</p><label className="planner-check"><input type="checkbox" checked={acknowledged} onChange={(e) => { invalidate(); setAcknowledged(e.target.checked); }} /><span>I have reviewed and agree to exclude requirements not represented by these parameters from this simulation.</span></label></div>}
               {!!issues.length && <ul className="planner-validation" aria-label="Required information">{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
-              <div className="planner-confirm"><label className="planner-check"><input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(e) => setConfirmed(e.target.checked)} /><span>I confirm these parameters. Running will save a new active campaign goal and create a simulation.</span></label><p>Edits require confirmation again. This does not execute ad changes.</p></div>
-              {goalId && !result && <p className="planner-saved" role="status"><Check aria-hidden size={16} /> Saved goal {goalId}. Retry will simulate with this saved goal.</p>}
-              <button className="planner-primary planner-run" type="button" disabled={!canRun} onClick={() => void run()}>{busy === "run" ? "Running simulation…" : goalId && !result ? "Retry simulation" : "Save goal and run simulation"}<ArrowRight aria-hidden size={16} /></button>
+              <div className="planner-confirm"><label className="planner-check"><input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(e) => setConfirmed(e.target.checked)} /><span>I confirm these parameters for a preview. The active goal and recommendation remain unchanged.</span></label><p>Edits require confirmation again. Previewing does not apply a goal or execute ads.</p></div>
+              <button className="planner-primary planner-run" type="button" disabled={!canRun} onClick={() => void run()}>{busy === "run" ? "Previewing…" : "Preview simulation"}<ArrowRight aria-hidden size={16} /></button>
               {!selected && <p className="planner-help">Choose a connected campaign to run.</p>}
             </fieldset>
           </>}
         </section>
       </div>
-      {error && <div className="planner-error" role="alert"><strong>{error}</strong>{errorDetails && <details><summary>Data details to review</summary><pre>{JSON.stringify(errorDetails, null, 2)}</pre></details>}{goalId && <p>The goal was saved. You can retry the simulation.</p>}</div>}
-      {result && <section ref={results} tabIndex={-1} className="planner-card planner-results" aria-labelledby={`${id}-planner-results-title`}><PlannerResults id={id} result={result} campaignName={selected?.name ?? campaignId} /></section>}
+      {error && <div className="planner-error" role="alert"><strong>{error}</strong>{errorDetails && <details><summary>Data details to review</summary><pre>{JSON.stringify(errorDetails, null, 2)}</pre></details>}</div>}
+      {result && <section ref={results} tabIndex={-1} className="planner-card planner-results" aria-labelledby={`${id}-planner-results-title`}>
+        <PlannerResults id={id} result={result} campaignName={selected?.name ?? campaignId} />
+        <section className="planner-apply" aria-labelledby={`${id}-planner-apply-title`}><span className="planner-eyebrow">STEP 4 / EXPLICIT APPLICATION</span><h2 id={`${id}-planner-apply-title`}>Review before applying</h2>
+          <div className="planner-goal-comparison"><div><h3>Active at preview time</h3><GoalSummary goal={result.baseGoal} /></div><div><h3>Preview goal</h3><GoalSummary goal={result.effectiveGoal} /></div></div>
+          {result.changes.length > 0 ? <div className="planner-change-table"><table role="table"><caption>Proposed changes</caption><thead role="rowgroup"><tr role="row"><th scope="col">Parameter</th><th scope="col">Before</th><th scope="col">After</th></tr></thead><tbody role="rowgroup">{result.changes.map((change, i) => <tr role="row" key={`${change.field}-${i}`}><th scope="row" role="rowheader">{changeLabel(change.field)}</th>{([['Before', change.before], ['After', change.after]] as const).map(([label, value]) => <td role="cell" key={label}><span className="planner-change-mobile-label" aria-hidden="true">{label}</span><span className={typeof value === 'number' ? 'planner-change-number' : undefined}>{changeValue(change.field, value)}</span></td>)}</tr>)}</tbody></table></div> : <p>No parameter changes from the base goal were reported.</p>}
+          {!!result.notices.length && <ul className="planner-notices">{result.notices.map((notice, i) => <li key={i}>{notice}</li>)}</ul>}
+          {applied ? <p className="planner-saved" role="status"><Check aria-hidden size={16} /> Applied goal {applied.goal.goal_id}. This does not execute ads.</p> : <>
+            {!result.canApply && <p className="planner-warning">This preview cannot be applied. Review unmet conditions, revise the goal and preview again.</p>}
+            {context?.canApply !== true && <p className="planner-warning">This account cannot apply goals.</p>}
+            <label className="planner-check"><input type="checkbox" checked={applyConfirmed} disabled={!result.canApply || context?.canApply !== true || !!busy} onChange={(e) => setApplyConfirmed(e.target.checked)} /><span>I have reviewed the changes and want to replace the active campaign goal with this goal.</span></label>
+            <button type="button" className="planner-primary" disabled={!result.canApply || !applyConfirmed || context?.canApply !== true || !!busy} onClick={() => void apply()}>{busy === "apply" ? "Applying goal…" : "Apply goal"}</button>
+            <p className="planner-help">If someone changes the active goal, review and preview again. Separate previews do not reserve shares of a common budget.</p>
+          </>}
+        </section>
+      </section>}
     </div>
   );
+}
+
+function changeLabel(field: string): string {
+  const key = field.replace(/^params\./, "");
+  return ({ kind: "Priority", target_units: "Target units", deadline: "Deadline", max_spend_vnd: "Maximum budget", max_loss_vnd: "Maximum expected loss", sell_target_prob: "Minimum target probability", min_marginal_return: "Minimum ad efficiency", focus_sku: "Focused product", planner_start: "Start", parent_goal_id: "Base campaign goal" } as Record<string, string>)[key] ?? key.replaceAll("_", " ");
+}
+function changeValue(field: string, value: unknown): string {
+  if (value == null) return "Not set";
+  if (field.endsWith("kind") && typeof value === "string") return kinds[value as GoalKind] ?? value;
+  if (typeof value === "number") return field.endsWith("_vnd") ? money(value) : field.endsWith("_prob") ? `${number(value * 100)}%` : number(value);
+  if (typeof value === "string") return field === "deadline" || field.endsWith("planner_start") ? dateText(value) : value;
+  return JSON.stringify(value);
+}
+function GoalSummary({ goal }: { goal: PlannerGoal | null }) {
+  if (!goal) return <p>No active goal.</p>;
+  return <dl className="planner-goal-summary"><dt>Priority</dt><dd>{goal.label ?? kinds[goal.kind as GoalKind] ?? goal.kind}</dd>
+    {goal.target_units !== null && <><dt>Target units</dt><dd>{number(goal.target_units)} units</dd></>}
+    <dt>Deadline</dt><dd>{dateText(goal.deadline)}</dd>
+    {(["focus_sku", "max_spend_vnd", "max_loss_vnd", "sell_target_prob", "min_marginal_return"] as const).map((key) => goal.params[key] != null ? <div className="planner-goal-line" key={key}><dt>{changeLabel(key)}</dt><dd>{changeValue(key, goal.params[key])}</dd></div> : null)}
+    <dt>Version</dt><dd>{goal.version}</dd>
+  </dl>;
 }
 
 function Metric({ title, dist, currency = false, field, evidenceId }: { evidenceId: string; title: string; dist: Dist; currency?: boolean; field: string }) {

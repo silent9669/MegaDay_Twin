@@ -458,6 +458,7 @@ class GoalPlannerCapabilities(BaseModel):
             "min_marginal_return",
             "focus_sku",
             "calculation_trace",
+            "preview_apply",
         ]
     )
 
@@ -552,7 +553,11 @@ def _save_goal(
 
 @router.post("/goals", response_model=Envelope[GoalOut], status_code=201, summary="Đặt mục tiêu")
 def post_goal(body: GoalIn, conn: Conn, user: Lead, request: Request) -> Envelope[GoalOut]:
-    g = _save_goal(conn, request, user, body.scope, body.scope_id, body)
+    from app.api.scenarios import live_write_lock
+    from app.simulator.locks import RUN_LOCK
+
+    with live_write_lock(request), RUN_LOCK:
+        g = _save_goal(conn, request, user, body.scope, body.scope_id, body)
     return Envelope[GoalOut](data=goal_out(g), meta=Meta(computed_at=g.created_at))
 
 
@@ -567,5 +572,9 @@ def put_goal(
     user: Lead,
     request: Request,
 ) -> Envelope[GoalOut]:
-    g = _save_goal(conn, request, user, scope, scope_id, body)
+    from app.api.scenarios import live_write_lock
+    from app.simulator.locks import RUN_LOCK
+
+    with live_write_lock(request), RUN_LOCK:
+        g = _save_goal(conn, request, user, scope, scope_id, body)
     return Envelope[GoalOut](data=goal_out(g), meta=Meta(computed_at=g.created_at))
