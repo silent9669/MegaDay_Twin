@@ -331,7 +331,9 @@ export async function makeSource(
   origin: string,
   commit?: string,
 ): Promise<Source> {
-  const result = inspect(name, text);
+  return sourceFromInspection(name, inspect(name, text), origin, commit);
+}
+async function sourceFromInspection(name: string, result: ReturnType<typeof inspect>, origin: string, commit?: string): Promise<Source> {
   const sanitized =
     result.payload === undefined
       ? Papa.unparse({ fields: result.columns, data: result.rows })
@@ -374,9 +376,12 @@ export async function validatePack(input: unknown): Promise<SourcePack> {
     const bytes = new TextEncoder().encode(text).length;
     size += bytes;
     if (bytes > MAX_TABLE_BYTES || size > MAX_SOURCE_BYTES) throw Error("Sources exceed 48 MiB, or one table exceeds 32 MiB.");
-    const source = await makeSource(
+    // Replay imports already need the row count. Reuse this inspection instead
+    // of parsing and checking every large CSV a second time for replay metadata.
+    const parsed = inspect(entry.name, text);
+    const source = await sourceFromInspection(
         entry.name,
-        text,
+        parsed,
         typeof entry.origin === "string" ? entry.origin : "upload",
         typeof entry.commit === "string" && /^[a-f0-9]{40}$/.test(entry.commit)
           ? entry.commit
@@ -384,7 +389,7 @@ export async function validatePack(input: unknown): Promise<SourcePack> {
       );
     if (entry.replay !== undefined) {
       const replay = z.object({ date: z.iso.date(), hours: z.array(z.number().int().min(-1).max(23)), lagHours: z.number().int().min(0).max(24) }).strict().parse(entry.replay);
-      if (!["orders", "ads", "inventory"].includes(source.kind) || replay.hours.length !== inspect(source.name, text).rows.length) throw Error("Replay must match every business table row.");
+      if (!["orders", "ads", "inventory"].includes(source.kind) || replay.hours.length !== parsed.rows.length) throw Error("Replay must match every business table row.");
       source.replay = replay;
     }
     files.push(source);

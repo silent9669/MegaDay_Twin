@@ -22,6 +22,31 @@ const snapshot = {
   },
 };
 describe("Milo evidence", () => {
+  it("filters replay rows without renumbering original source citations", async () => {
+    const source = { ...snapshot.data.files[0]!, replay: { date: "2026-11-11", lagHours: 1, hours: Array.from({ length: 40 }, (_, i) => i % 2 ? 5 : -1) } };
+    const storage = { fetch: vi.fn(async (request: Request) => Response.json(request.url.endsWith("/sources")
+      ? { ...snapshot, data: { ...snapshot.data, files: [source] } }
+      : { revision: 1, data: { hour: 2, startedAt: null } })) };
+    const read = workspaceReader(storage, "https://test");
+    const catalog = JSON.parse(await read("workspace_catalog", "{}"));
+    expect(catalog.files[0].records).toBe(20);
+    const page = JSON.parse(await read("read_source_rows", JSON.stringify({ file: "stock.csv", query: "", offset: 0 })));
+    expect(page.rows).toHaveLength(20);
+    expect(page.rows[1]).toEqual({ record: 3, value: { sku: "A2", stock: "2" } });
+    expect(page.totalRecords).toBe(20);
+  });
+  it("streams quoted CSV cells and caps oversized rows while keeping pagination", async () => {
+    const text = 'sku,note\nA,"line one\nline two"\nB,' + "x".repeat(21000) + '\nC,end';
+    const storage = { fetch: async () => Response.json({ ...snapshot, data: { ...snapshot.data, files: [{ ...snapshot.data.files[0], text }] } }) };
+    const read = workspaceReader(storage, "https://test");
+    const first = JSON.parse(await read("read_source_rows", JSON.stringify({ file: "stock.csv", query: "", offset: 0 })));
+    expect(first.rows[0].value.note).toBe("line one\nline two");
+    expect(first.matchingRecords).toBe(3);
+    expect(first.nextOffset).toBe(1);
+    const second = JSON.parse(await read("read_source_rows", JSON.stringify({ file: "stock.csv", query: "", offset: 1 })));
+    expect(second.rows[0]).toMatchObject({ record: 2, truncated: true });
+    expect(second.nextOffset).toBe(2);
+  });
   it("reads all uploaded records through pagination, with stable revision and citations", async () => {
     const storage = {
       fetch: vi.fn(async (request: Request) =>

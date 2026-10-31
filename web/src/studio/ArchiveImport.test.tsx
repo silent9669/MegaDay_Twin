@@ -6,6 +6,24 @@ import { requestJSON } from "./account";
 import { makeSource } from "./sources";
 vi.mock("./account", () => ({ requestJSON: vi.fn() }));
 beforeEach(() => vi.mocked(requestJSON).mockReset());
+it("keeps successful workspace import distinct from an optional backend replay failure", async () => {
+  const source = { ...await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "upload"), replay: { date: "2026-11-11", hours: [0], lagHours: 0 } };
+  vi.mocked(requestJSON).mockResolvedValueOnce({ tables: [{ file: "stock.csv", source, rowCount: 1, method: "recognized", columns: [] }], skipped: [], model: null }).mockRejectedValueOnce(Error("Service unavailable"));
+  const onLoad = vi.fn(async () => {});
+  render(<ArchiveImport sources={[]} blocked={false} onLoad={onLoad} />);
+  fireEvent.change(screen.getByLabelText("Upload ZIP archive"), { target: { files: [new File(["zip"], "live_11_11.zip")] } });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Tables are saved");
+  expect(screen.getByRole("status")).toHaveTextContent("1 tables loaded");
+  expect(onLoad).toHaveBeenCalledOnce();
+});
+it("identifies the save stage when extraction succeeds but persistence fails", async () => {
+  const source = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "upload");
+  vi.mocked(requestJSON).mockResolvedValueOnce({ tables: [{ file: "stock.csv", source, rowCount: 1, method: "recognized", columns: [] }], skipped: [], model: null });
+  render(<ArchiveImport sources={[]} blocked={false} onLoad={vi.fn().mockRejectedValue(Error("Service temporarily unavailable"))} />);
+  fireEvent.change(screen.getByLabelText("Upload ZIP archive"), { target: { files: [new File(["zip"], "live_11_11.zip")] } });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not save the imported tables");
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
 it("extracts and auto-loads a ZIP without a second click, guarding duplicate drops", async () => {
   const source = await makeSource("stock.csv", "Mã nội bộ,Tên hàng,Tồn thực tế\nA,Cup,2", "upload");
   vi.mocked(requestJSON).mockResolvedValue({ tables: [{ file: "stock.csv", source, rowCount: 1, method: "recognized", columns: [] }], skipped: [], model: null });
