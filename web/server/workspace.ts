@@ -123,7 +123,7 @@ export class AccountWorkspace {
       if (previous?.sourceRevision === sources.revision && previous.sourceFingerprint === fingerprint) {
         if (previous.status === "running" && Date.parse(previous.startedAt) + LABEL_LEASE_MS > Date.now())
           return fail(409, "Labeling is already running. Refresh its status shortly.", "LABEL_RUN_ACTIVE");
-        if (previous.status === "completed" && previous.provider === candidate.provider)
+        if (previous.status === "completed" && previous.provider === candidate.provider && JSON.stringify(previous.context) === JSON.stringify(candidate.context))
           return Response.json({ acquired: false, run: previous });
       }
       // Start time comes from this object, not from the caller's clock.
@@ -131,7 +131,7 @@ export class AccountWorkspace {
     } else {
       if (!previous || previous.id !== candidate.id || previous.status !== "running" ||
           previous.provider !== candidate.provider || previous.sourceRevision !== candidate.sourceRevision ||
-          previous.sourceFingerprint !== candidate.sourceFingerprint || candidate.status === "running")
+          previous.sourceFingerprint !== candidate.sourceFingerprint || JSON.stringify(previous.context) !== JSON.stringify(candidate.context) || candidate.status === "running")
         return fail(409, "A newer labeling run superseded this result.", "LABEL_RUN_SUPERSEDED");
       candidate.startedAt = previous.startedAt;
       candidate.completedAt = new Date().toISOString();

@@ -49,7 +49,7 @@
   align-items: flex-start;
   gap: 12px;
 }
-.product-label-panel h2 {
+.product-label-panel h3#product-label-title {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -66,20 +66,9 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-.data-studio .product-label-panel button {
+.product-label-panel button {
   min-height: 44px;
   white-space: normal;
-}
-.product-label-note {
-  color: #486047;
-  font-size: 13px;
-  max-width: 90ch;
-}
-.product-label-warning {
-  padding: 10px 12px;
-  border-left: 3px solid #9c7a43;
-  background: #faf2dc;
-  color: #72551f;
 }
 .product-label-search {
   display: flex;
@@ -98,31 +87,9 @@
   font: inherit;
   min-width: 0;
 }
-.product-label-panel :is(button, input):focus-visible {
+.product-label-panel :is(button, input, select, textarea, summary):focus-visible {
   outline: 2px solid #42633a;
   outline-offset: 2px;
-}
-.product-label-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.product-label-list li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-  padding: 14px 0;
-  border-top: 1px solid #e1e8d7;
-}
-.product-label-list h3 {
-  font-size: 15px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.product-label-list small {
-  font-size: 12px;
-  color: #486047;
-  overflow-wrap: anywhere;
 }
 .product-demand-label {
   display: inline-block;
@@ -131,17 +98,6 @@
   background: #eaf0e2;
   color: #304f39;
   font-weight: 600;
-}
-.product-label-panel footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  border-top: 1px solid #e1e8d7;
-  padding-top: 12px;
-}
-.product-label-panel footer > span {
-  margin-right: auto;
 }
 @media (max-width: 600px) {
   .product-label-panel {
@@ -152,10 +108,6 @@
   }
   .product-label-actions button {
     flex: 1;
-  }
-  .product-label-list li {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
   }
 }
 .studio-header {
@@ -1189,7 +1141,6 @@
   }
 }
 
-
 .archive-import {
   flex-shrink: 0;
   padding: 18px 20px;
@@ -1215,3 +1166,18 @@
 .archive-preview { overflow: auto; max-height: 220px; }
 .archive-preview table { border-collapse: collapse; font-size: 12px; }
 .archive-preview th, .archive-preview td { padding: 8px; text-align: left; border-bottom: 1px solid #d9e2ce; white-space: nowrap; }
+
+.label-context { display: flex; flex-wrap: wrap; gap: 12px; border: 0; padding: 12px 0; min-width: 0; }
+.label-context legend { font-weight: 600; padding: 0; }
+.label-context label { display: grid; gap: 4px; flex: 1 1 180px; min-width: 0; }
+.label-context input, .label-context select, .label-context textarea { width: 100%; min-width: 0; border: 1px solid #b9c9b2; border-radius: 5px; padding: 8px; background: #fff; color: #304136; }
+.label-context textarea { min-height: 80px; }
+.label-evidence { margin: 10px 0; }
+.label-evidence summary { cursor: pointer; padding: 6px 0; }
+.label-evidence li { border-top: 1px solid #d9e2ce; padding: 10px 0; }
+.district-workspace-body .product-label-panel { margin: 16px 0; color: #304136; }
+.product-label-panel button { cursor: pointer; border: 1px solid #d6dfce; border-radius: 6px; padding: 8px 12px; background: #fbfcf6; color: #486047; }
+.product-label-panel button:disabled { opacity: .45; cursor: not-allowed; }
+.product-label-panel .product-label-actions button { display: inline-flex; align-items: center; gap: 7px; }
+.product-label-pagination { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.product-label-panel .warehouse-table p { max-width: 360px; white-space: normal; }

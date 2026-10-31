@@ -45,14 +45,15 @@ describe("external label product contract", () => {
   });
   it("allows a provider to echo every valid escaped source identifier", async () => {
     const name = '\\'.repeat(300);
-    const pack: SourcePack = { schema: "hackathon.sources.v1", files: [await makeSource("cost.csv", `tên sp,giá vốn\n${name},1`, "upload")] };
+    const pack: SourcePack = { schema: "hackathon.sources.v1", files: [await makeSource("inventory.csv", `Mã nội bộ,Tên hàng,Tồn thực tế\n${name},Cup,1`, "upload")] };
     const input = await buildLabelInput(pack, 1);
     expect(input.products[0]!.id.length).toBeGreaterThan(600);
     expect(validateLabelResponse({ labels: [{ productId: input.products[0]!.id, group: null, reason: "Needs identity review" }] }, input)).toHaveLength(1);
   });
   it("extracts the actual six-file demo within bounded request limits", async () => {
     const input: LabelInput = await buildLabelInput(demo as SourcePack, 1);
-    expect(input.products.length).toBeGreaterThan(300);
+    expect(input.products.length).toBe(299);
+    expect(input.products.every(p => p.source === "inventory")).toBe(true);
     expect(input.products.length).toBeLessThanOrEqual(2000);
     expect(input.products.every((p) => p.name.trim() && p.reference.trim())).toBe(true);
     expect(new Set(input.products.map((p) => p.id)).size).toBe(input.products.length);

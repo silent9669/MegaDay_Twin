@@ -1,4 +1,4 @@
-import { inspect, type SourcePack } from "./sources";
+import { inspect, normalize, type SourcePack } from "./sources";
 export type StockRow = {
   code: string;
   name: string;
@@ -8,23 +8,27 @@ export type StockRow = {
 export function sourceView(pack: SourcePack | null, hour: number) {
   const inventory = pack?.files.find((f) => f.kind === "inventory");
   const latest = new Map<string, StockRow>();
-  if (inventory)
-    for (const row of inspect(inventory.name, inventory.text).rows) {
-      const asOf = String(row["Thời điểm cập nhật"] ?? row["Ngày"] ?? "");
+  if (inventory) {
+    const parsed = inspect(inventory.name, inventory.text);
+    const column = (name: string) => parsed.columns.find(c => normalize(c) === normalize(name)) ?? name;
+    for (const row of parsed.rows) {
+      const asOf = String(row[column("Thời điểm cập nhật")] ?? row[column("Ngày")] ?? "");
       const rowHour = asOf.includes(":") ? Number(asOf.slice(11, 13)) : 0;
-      if (rowHour > hour) continue;
-      const code = String(row["Mã nội bộ"] ?? "");
+      if (inventory.commit && rowHour > hour) continue;
+      const code = String(row[column("Mã nội bộ")] ?? "").trim();
+      if (!code) continue;
       const previous = latest.get(code);
       if (previous && previous.asOf > asOf) continue;
-      const raw = String(row["Tồn thực tế"] ?? "").trim(),
+      const raw = String(row[column("Tồn thực tế")] ?? "").trim(),
         value = raw ? Number(raw) : NaN;
       latest.set(code, {
         code,
-        name: String(row["Tên hàng"] ?? code),
+        name: String(row[column("Tên hàng")] ?? code),
         stock: Number.isFinite(value) && value >= 0 ? value : null,
         asOf,
       });
     }
+  }
   const orders = pack?.files.find((f) => f.kind === "orders"),
     ads = pack?.files.find((f) => f.kind === "ads"),
     campaigns = pack?.files.find((f) => f.kind === "campaigns");

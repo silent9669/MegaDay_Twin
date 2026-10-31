@@ -30,9 +30,9 @@ const pack: SourcePack = {
   })),
 };
 const request = (sourceRevision?: number) => new Request(origin + "/api/product-labels",
-  sourceRevision === undefined ? {} : { method: "POST", body: JSON.stringify({ sourceRevision }) });
+  sourceRevision === undefined ? {} : { method: "POST", body: JSON.stringify({ sourceRevision, context: { market: "Vietnam", asOf: "2026-10-31", evidence: [] } }) });
 const labels = (input: LabelInput) => ({
-  labels: input.products.map((product) => ({ productId: product.id, group: "on_dinh", reason: "Provider evidence", confidence: 0.8 })),
+  labels: input.products.map((product) => ({ productId: product.id, group: "Normal", reason: "Provider evidence", confidence: 0.8 })),
 });
 async function setup() {
   const database = new DatabaseSync(":memory:");
@@ -70,7 +70,7 @@ async function setup() {
 describe("product label workflow", () => {
   it("stays honestly unconfigured and never writes fake labels", async () => {
     const { workspace } = await setup();
-    expect(getProductLabelProvider({ PRODUCT_LABEL_API_KEY: "must-not-enable-it" })).toBeNull();
+    expect(getProductLabelProvider({ OPENAI_API_KEY: "must-not-enable-without-decision-model" })).toBeNull();
     const response = await productLabels(request(), workspace, null);
     expect(await response.json()).toMatchObject({ configured: false, provider: null, sourceRevision: 1, run: null, stale: false });
     const disabled = await productLabels(request(1), workspace, null);
@@ -85,7 +85,7 @@ describe("product label workflow", () => {
     expect(first.status).toBe(200);
     const result = await first.json() as LabelResponse;
     expect(result.run?.status).toBe("completed");
-    expect(result.run?.results).toHaveLength(3);
+    expect(result.run?.results).toHaveLength(1);
     expect(result.run?.provider).toBe("test-adapter-v1");
     const second = await productLabels(request(1), reconstruct(), provider);
     expect((await second.json() as LabelResponse).run?.id).toBe(result.run?.id);
@@ -115,6 +115,22 @@ describe("product label workflow", () => {
       expect(await response.json()).toMatchObject({ run: { status: "failed", results: [] } });
     },
   );
+  it("reclassifies when the assessment changes and rejects future or unrelated evidence", async () => {
+    const { workspace } = await setup();
+    const provider = { id: "test", classify: vi.fn(async (input: LabelInput) => labels(input)) };
+    await productLabels(request(1), workspace, provider);
+    const post = (context: unknown) => new Request(origin + "/api/product-labels", {
+      method: "POST", body: JSON.stringify({ sourceRevision: 1, context }),
+    });
+    const context = { market: "Thailand", asOf: "2026-10-31", evidence: [] };
+    expect((await productLabels(post(context), workspace, provider)).status).toBe(200);
+    expect(provider.classify).toHaveBeenCalledTimes(2);
+    for (const evidence of [
+      { productCode: "Internal1", observedAt: "2026-11-01", source: "Report", observation: "future" },
+      { productCode: "Other", observedAt: "2026-10-30", source: "Report", observation: "unrelated" },
+    ]) expect((await productLabels(post({ ...context, evidence: [evidence] }), workspace, provider)).status).toBe(422);
+    expect(provider.classify).toHaveBeenCalledTimes(2);
+  });
   it("redacts provider errors and lets a failed job retry", async () => {
     const { workspace } = await setup();
     const provider = { id: "test", classify: vi.fn(async (input: LabelInput) => labels(input)) };
@@ -208,6 +224,8 @@ describe("label route boundaries", () => {
   };
   it("requires auth and same-origin writes", async () => {
     expect((await worker.fetch(request(), base)).status).toBe(401);
+    expect((await worker.fetch(new Request(origin + "/api/studio/import", { method: "POST" }), base)).status).toBe(401);
+    expect((await worker.fetch(new Request(origin + "/api/studio/import", { method: "POST", headers: { Cookie: cookie(), Origin: "https://other.test" } }), base)).status).toBe(403);
     const response = await worker.fetch(new Request(origin + "/api/product-labels", {
       method: "POST", headers: { Cookie: cookie(), Origin: "https://other.test" }, body: "{}",
     }), base);
