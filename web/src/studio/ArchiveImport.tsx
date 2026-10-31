@@ -28,8 +28,8 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
       sources.some(source => sourceKey(source) === sourceKey(table.source) && source.hash === table.source.hash));
     if (!unchanged) await onLoad(tables.map(table => table.source), reviewing.current);
     setNeedsSelection(false);
-    const unresolved = tables.reduce((sum, table) => sum + (table.remainingIssues?.length ?? 0) + (table.review?.length ?? 0), 0);
-    const reviewStatus = unresolved ? `${unresolved} issue${unresolved === 1 ? " needs" : "s need"} input` : "No repairs needed";
+    const unresolved = tables.reduce((sum, table) => sum + (table.remainingIssues?.length ?? 0), 0);
+    const reviewStatus = unresolved ? `${unresolved} issue${unresolved === 1 ? " needs" : "s need"} input` : unchanged && tables.some(table => table.review?.length) ? "Review AI notes" : "No repairs needed";
     setNotice(reviewing.current
       ? unchanged ? `AI checked ${tables.length} tables · ${reviewStatus}` : `AI fixes saved · ${tables.length} tables${unresolved ? ` · ${reviewStatus}` : ""}`
       : `${tables.length} tables loaded · ${tables.reduce((sum, table) => sum + table.rowCount, 0).toLocaleString()} records`);
@@ -87,7 +87,7 @@ export const ArchiveImport = forwardRef<ArchiveImportHandle, {
         {table.method === "model" && <p>{table.columns.filter(c => c.source !== c.target).map(c => `${c.source} → ${c.target}`).join(" · ")}</p>}
         {!!table.repairs?.length && <p>{table.repairs.join(" ")}</p>}
         {!!table.remainingIssues?.length && <p>Needs review: {table.remainingIssues.join(" ")}</p>}
-        {!!table.review?.length && <p>{table.review.join(" · ")}</p>}
+        {!!table.review?.length && <p>AI notes: {table.review.join(" · ")}</p>}
       </div>)}
       {analysis.skipped.map(item => <p key={item.file}>{item.file}: {item.reason}</p>)}
       {needsSelection && <button disabled={blocked || !!busy || !selected.length} onClick={async () => {
